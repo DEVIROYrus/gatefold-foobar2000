@@ -24,7 +24,7 @@
   #define AppVersion "1.0.0"
 #endif
 #ifndef RepoUrl
-  #define RepoUrl "https://github.com/OWNER/gatefold-foobar2000"
+  #define RepoUrl "https://github.com/DEVIROYrus/gatefold-foobar2000"
 #endif
 #ifndef Compression
   #define Compression "lzma2/ultra64"
