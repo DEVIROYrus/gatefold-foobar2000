@@ -1,0 +1,65 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+
+jobs:
+  theme:
+    name: Theme — static checks and end-to-end tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - run: npm ci
+      - name: Syntax, version, translations
+        run: node tools/check.mjs
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Playwright
+        run: |
+          pip install playwright==1.48.0
+          python -m playwright install --with-deps chromium
+      - name: End-to-end (headless Chromium, mocked foobar2000 bridge)
+        run: python tests/e2e.py
+
+  installer:
+    name: Installer — builds
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch and verify bundled software
+        shell: pwsh
+        env: { GITHUB_TOKEN: '${{ github.token }}' }
+        run: |
+          $lock = Get-Content installer/deps.lock.json | ConvertFrom-Json
+          ./installer/fetch-deps.ps1 -Fb2kVersion $lock.foobar2000 -ComponentTag $lock.foo_ui_webview2
+      - name: Inno Setup 6.6
+        shell: pwsh
+        run: choco upgrade innosetup -y --no-progress
+      - name: Compile
+        shell: pwsh
+        run: |
+          $v = (Get-Content package.json | ConvertFrom-Json).version
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /Qp "/DAppVersion=$v" "/DRepoUrl=${{ github.server_url }}/${{ github.repository }}" installer/gatefold.iss
+      - name: Silent install smoke test
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem dist/Gatefold-Setup-*.exe | Select-Object -First 1
+          $p = Start-Process $exe.FullName -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/LOG=setup.log' -Wait -PassThru
+          Get-Content setup.log -Tail 40
+          if ($p.ExitCode -ne 0) { throw "setup exit code $($p.ExitCode)" }
+          $prof = Join-Path $env:APPDATA 'foobar2000-v2'
+          foreach ($f in 'webview-ui\default\index.html', 'webview-ui\default\js\i18n.js', 'user-components-x64\foo_ui_webview2\foo_ui_webview2.dll') {
+            if (-not (Test-Path (Join-Path $prof $f))) { throw "missing $f" } else { "ok  $f" }
+          }
+          if (-not (Test-Path "$env:ProgramFiles\foobar2000\foobar2000.exe")) { throw 'foobar2000 was not installed' }
+          (Get-Item "$env:ProgramFiles\foobar2000\foobar2000.exe").VersionInfo.FileVersion
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer-preview
+          path: dist/Gatefold-Setup-*.exe
+          retention-days: 14

@@ -1,0 +1,22 @@
+name: Bug report / Сообщение об ошибке
+description: Something doesn't work / Что-то не работает
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened? / Что произошло?
+      description: Steps, what you expected, what you saw. Screenshots help. / Шаги, что ожидали, что получили. Скриншоты помогают.
+    validations: { required: true }
+  - type: input
+    id: versions
+    attributes:
+      label: Versions / Версии
+      placeholder: Gatefold 1.0.0 · foobar2000 2.26.1 · foo_ui_webview2 2.0.0 · Windows 11 24H2
+    validations: { required: true }
+  - type: textarea
+    id: console
+    attributes:
+      label: Console lines / Строки консоли
+      description: View → Console, lines starting with [Gatefold]
+      render: text
