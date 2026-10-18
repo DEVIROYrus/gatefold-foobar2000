@@ -53,6 +53,9 @@ Download `Gatefold-Setup.exe` from [Releases](../../releases) and run it. It ins
 
 To go back, choose *Default User Interface* again. Your old layout is kept.
 
+### Updating
+When a new release is out, an **Update available** button appears at the bottom of the sidebar (and in **Settings → Updates**). One click shows what changed and installs it: the theme archive is downloaded from this repository's Releases, checked against `SHA256SUMS.txt`, the current version is backed up to `%profile%\gatefold\backup\<version>`, and the interface reloads. **Restore previous version** in Settings puts the backup back. If a release needs a newer foo_ui_webview2, the button offers the installer instead, which updates everything. Checking can be turned off; nothing is installed without your click.
+
 ## Privacy
 
 Gatefold has **no telemetry** and no accounts. The only network requests it makes are the ones its features need, and every one goes through foobar2000:
@@ -63,6 +66,7 @@ Gatefold has **no telemetry** and no accounts. The only network requests it make
 | Artist photos | Deezer, MusicBrainz / Wikidata | The Artists screen (can be turned off) |
 | Lyrics | LRCLIB | Tracks without lyrics in tags or files |
 | YouTube | youtube-nocookie.com player; Google API when you use your own key | Only on the YouTube screen |
+| Update check | api.github.com, github.com (release downloads) | Every 12 hours and when you press *Check now* (can be turned off) |
 
 Everything downloaded is kept on your computer: in the theme's cache, or next to your music if you choose to save covers or lyrics there.
 

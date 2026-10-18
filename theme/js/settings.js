@@ -3,6 +3,7 @@ const KEY = 'aurora.settings.v1';
 
 export const DEFAULTS = {
   // appearance
+  updateCheck: true,       // look for a new Gatefold release on GitHub (at most every 12 h)
   language: 'auto',        // 'auto' (system) | 'ru' | 'en' — read by i18n.js before anything renders
   ytSearch: 'off',         // YouTube search: 'off' (links only) | 'api' (YouTube Data API v3, own key) | 'web' (unofficial, parses the results page)
   ytApiKey: '',

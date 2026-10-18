@@ -806,3 +806,68 @@ body.batch-on #toasts { bottom: calc(var(--bar-h) + 84px); }
 .st-input:focus { border-color: color-mix(in oklab, var(--accent) 60%, transparent); background: var(--surface); }
 #view-settings .st-group .row.st-note { min-height: 0; padding: 10px 0 12px; }
 #view-settings .st-group .row.st-note small { color: var(--text-3); font-size: var(--fs-sm); line-height: 1.4; }
+
+/* ================= tooltips (js/tooltip.js) ================= */
+.gf-tip { position: fixed; left: 0; top: -999px; z-index: 10000; max-width: min(340px, calc(100vw - 16px)); padding: 6px 10px; border-radius: 8px;
+  font: 500 var(--fs-sm)/1.35 var(--font-ui, system-ui); color: var(--text); white-space: pre-line; pointer-events: none;
+  background: color-mix(in oklab, var(--surface-2, var(--surface)) 94%, transparent); border: 1px solid var(--line-2, var(--line));
+  box-shadow: 0 10px 28px -10px rgb(0 0 0 / .55), 0 2px 6px -2px rgb(0 0 0 / .35); backdrop-filter: blur(10px);
+  opacity: 0; transform: translateY(3px) scale(.98); transition: opacity 120ms var(--ease, ease), transform 140ms var(--ease, ease); }
+.gf-tip[data-side='above'] { transform: translateY(-3px) scale(.98); }
+.gf-tip.on { opacity: 1; transform: none; }
+.gf-tip::after { content: ''; position: absolute; left: calc(var(--nose, 50%) - 5px); width: 10px; height: 10px; transform: rotate(45deg);
+  background: inherit; border: inherit; border-width: 0; }
+.gf-tip[data-side='below']::after { top: -5px; border-top-width: 1px; border-left-width: 1px; border-style: solid; border-color: var(--line-2, var(--line)); border-right-color: transparent; border-bottom-color: transparent; }
+.gf-tip[data-side='above']::after { bottom: -5px; border-bottom-width: 1px; border-right-width: 1px; border-style: solid; border-color: var(--line-2, var(--line)); border-left-color: transparent; border-top-color: transparent; }
+@media (prefers-reduced-motion: reduce) { .gf-tip { transition: none; } }
+
+/* immersive fullscreen: the bar gets its own backdrop so long lyrics never run under the controls */
+body.fullscreen #playerbar { background: linear-gradient(to top, color-mix(in oklab, var(--bg) 94%, transparent) 55%, color-mix(in oklab, var(--bg) 0%, transparent)); }
+
+/* ================= updates (js/update-ui.js) ================= */
+.upd-pill { display: flex; align-items: center; gap: 10px; width: 100%; margin: 0 0 8px; padding: 9px 10px 9px 12px; border-radius: 12px; cursor: pointer; text-align: left;
+  color: var(--text); font: inherit; border: 1px solid color-mix(in oklab, var(--accent) 45%, transparent);
+  background: linear-gradient(135deg, color-mix(in oklab, var(--accent) 22%, transparent), color-mix(in oklab, var(--accent) 8%, transparent));
+  transition: background 160ms var(--ease), transform 120ms var(--ease); animation: updIn 420ms var(--ease) both; }
+.upd-pill[hidden] { display: none; }
+.upd-pill:hover { background: linear-gradient(135deg, color-mix(in oklab, var(--accent) 32%, transparent), color-mix(in oklab, var(--accent) 14%, transparent)); }
+.upd-pill:active { transform: scale(.98); }
+.upd-pill .upd-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.upd-pill b { font-size: var(--fs-sm); font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.upd-pill small { font-size: var(--fs-xs); color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.upd-pill svg { flex: none; color: var(--accent); }
+.upd-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 0 color-mix(in oklab, var(--accent) 60%, transparent); animation: updPulse 2.4s ease-out infinite; }
+.upd-pill.busy .upd-dot { animation-duration: .9s; }
+body.side-collapsed .upd-pill { justify-content: center; padding: 10px 0; }
+body.side-collapsed .upd-pill .upd-txt, body.side-collapsed .upd-pill svg { display: none; }
+@keyframes updPulse { 0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--accent) 55%, transparent); } 70%, 100% { box-shadow: 0 0 0 8px transparent; } }
+@keyframes updIn { from { opacity: 0; transform: translateY(6px); } }
+
+.upd-veil { position: fixed; inset: 0; z-index: 9000; display: grid; place-items: center; padding: 24px; background: rgb(0 0 0 / .45); backdrop-filter: blur(6px);
+  opacity: 0; pointer-events: none; transition: opacity 180ms var(--ease); }
+.upd-veil.on { opacity: 1; pointer-events: auto; }
+.upd-sheet { position: relative; width: min(560px, 100%); max-height: min(720px, calc(100vh - 48px)); display: flex; flex-direction: column; border-radius: 18px;
+  background: var(--surface); border: 1px solid var(--line-2, var(--line)); box-shadow: 0 30px 80px -20px rgb(0 0 0 / .6);
+  transform: translateY(10px) scale(.98); transition: transform 220ms var(--ease); }
+.upd-veil.on .upd-sheet { transform: none; }
+.upd-x { position: absolute; top: 12px; right: 12px; }
+.upd-body { padding: 24px 24px 18px; overflow: auto; display: flex; flex-direction: column; gap: 14px; }
+.upd-head { display: flex; gap: 14px; align-items: center; padding-right: 36px; }
+.upd-head h3 { margin: 2px 0 2px; font-size: var(--fs-xl); font-weight: 700; letter-spacing: -.01em; }
+.upd-head .sub { color: var(--text-3); font-size: var(--fs-sm); }
+.upd-badge { flex: none; width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; color: var(--on-accent);
+  background: linear-gradient(135deg, var(--accent), var(--accent-2, var(--accent))); }
+.upd-notes { max-height: 300px; overflow: auto; padding: 12px 14px; border-radius: 12px; background: var(--hover); font-size: var(--fs-sm); line-height: 1.5; color: var(--text-2); }
+.upd-notes h5 { margin: 10px 0 4px; font-size: var(--fs-sm); color: var(--text); } .upd-notes h5:first-child { margin-top: 0; }
+.upd-notes p { margin: 4px 0; } .upd-notes ul { margin: 4px 0; padding-left: 18px; } .upd-notes li { margin: 2px 0; }
+.upd-notes code { font-size: .92em; padding: 0 4px; border-radius: 4px; background: var(--press); }
+.upd-notes a { color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.upd-progress .upd-stage { font-size: var(--fs-sm); color: var(--text-2); }
+.upd-progress .progress { margin: 6px 0 0; }
+.upd-err { padding: 10px 12px; border-radius: 10px; font-size: var(--fs-sm); line-height: 1.4; color: oklch(0.8 0.12 25); background: color-mix(in oklab, oklch(0.62 0.2 25) 16%, transparent); }
+:root[data-scheme='light'] .upd-err { color: oklch(0.48 0.17 25); }
+.upd-acts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.upd-acts .upd-gap { flex: 1; }
+.upd-acts .btn[disabled] { opacity: .55; pointer-events: none; }
+.upd-fine { margin: 0; color: var(--text-3); font-size: var(--fs-xs); line-height: 1.45; }
+.toast a.link { color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }

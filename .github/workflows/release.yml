@@ -15,6 +15,12 @@ jobs:
       - run: npm ci
       - name: Checks (the tag must match the theme version)
         run: node tools/check.mjs
+      - name: Point the in-app updater at this repository
+        shell: pwsh
+        run: |
+          $f = 'theme/js/version.js'
+          (Get-Content $f -Raw) -replace "REPO = '[^']*'", "REPO = '${{ github.repository }}'" | Set-Content -NoNewline -Encoding UTF8 $f
+          Select-String -Path $f -Pattern 'REPO'
       - name: Fetch and verify bundled software
         id: deps
         shell: pwsh
@@ -32,6 +38,7 @@ jobs:
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /Qp "/DAppVersion=$v" "/DRepoUrl=${{ github.server_url }}/${{ github.repository }}" installer/gatefold.iss
           New-Item -ItemType Directory -Force stage/gatefold | Out-Null
           Copy-Item -Recurse theme/* stage/gatefold/
+          # one top folder (gatefold/…), forward slashes, deflate — what js/updater.js reads
           Compress-Archive -Path stage/gatefold -DestinationPath "dist/gatefold-theme-$v.zip"
       # Code signing: once the project is accepted by SignPath Foundation (free for open source),
       # upload dist/Gatefold-Setup-*.exe with actions/upload-artifact and submit it with
@@ -46,6 +53,7 @@ jobs:
           @"
           $section
 
+          <!-- gatefold:end -->
           **Bundled:** foobar2000 ${{ steps.deps.outputs.fb2k }} (official unmodified installer) · foo_ui_webview2 ${{ steps.deps.outputs.fuw2 }} · WebView2 bootstrapper
 
           SHA-256 — see SHA256SUMS.txt. Bundled third-party checksums:
