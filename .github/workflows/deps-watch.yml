@@ -1,0 +1,32 @@
+name: Watch bundled software
+on:
+  schedule: [{ cron: '17 6 * * 1' }]   # Mondays
+  workflow_dispatch:
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Latest foobar2000 stable and foo_ui_webview2 release
+        shell: pwsh
+        env: { GITHUB_TOKEN: '${{ github.token }}' }
+        run: |
+          $page = (Invoke-WebRequest -UseBasicParsing 'https://www.foobar2000.org/download').Content
+          $fb = [regex]::Matches($page, 'foobar2000-x64_v(\d+\.\d+(?:\.\d+)?)\.exe') | ForEach-Object { $_.Groups[1].Value } | Sort-Object { [version]$_ } -Descending | Select-Object -First 1
+          $rel = Invoke-RestMethod -Headers @{ Authorization = "Bearer $env:GITHUB_TOKEN" } 'https://api.github.com/repos/NereaFantasia/foo_ui_webview2/releases/latest'
+          $lock = Get-Content installer/deps.lock.json | ConvertFrom-Json
+          $lock.foobar2000 = $fb; $lock.foo_ui_webview2 = $rel.tag_name
+          $lock | ConvertTo-Json | Set-Content installer/deps.lock.json
+          "foobar2000 $fb · foo_ui_webview2 $($rel.tag_name)"
+      - uses: peter-evans/create-pull-request@v7
+        with:
+          branch: deps/bundled-software
+          title: 'Installer: update bundled foobar2000 / foo_ui_webview2'
+          commit-message: 'installer: bump bundled software'
+          body: |
+            New versions of the software the installer bundles. CI builds the installer and runs a silent install on Windows for this PR.
+            Merge, then tag a patch release to ship it.

@@ -1,0 +1,8 @@
+node_modules/
+dist/
+installer/deps/
+stage/
+*.log
+__pycache__/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,5 @@
+{
+  "_comment": "Versions bundled into the installer. Updated by .github/workflows/deps-watch.yml (pull request) — releases always build from these.",
+  "foobar2000": "2.26.1",
+  "foo_ui_webview2": ""
+}

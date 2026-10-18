@@ -1,0 +1,62 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - run: npm ci
+      - name: Checks (the tag must match the theme version)
+        run: node tools/check.mjs
+      - name: Fetch and verify bundled software
+        id: deps
+        shell: pwsh
+        env: { GITHUB_TOKEN: '${{ github.token }}' }
+        run: |
+          $lock = Get-Content installer/deps.lock.json | ConvertFrom-Json
+          ./installer/fetch-deps.ps1 -Fb2kVersion $lock.foobar2000 -ComponentTag $lock.foo_ui_webview2
+      - name: Inno Setup 6.6
+        shell: pwsh
+        run: choco upgrade innosetup -y --no-progress
+      - name: Build installer and theme archive
+        shell: pwsh
+        run: |
+          $v = '${{ github.ref_name }}'.TrimStart('v')
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /Qp "/DAppVersion=$v" "/DRepoUrl=${{ github.server_url }}/${{ github.repository }}" installer/gatefold.iss
+          New-Item -ItemType Directory -Force stage/gatefold | Out-Null
+          Copy-Item -Recurse theme/* stage/gatefold/
+          Compress-Archive -Path stage/gatefold -DestinationPath "dist/gatefold-theme-$v.zip"
+      # Code signing: once the project is accepted by SignPath Foundation (free for open source),
+      # upload dist/Gatefold-Setup-*.exe with actions/upload-artifact and submit it with
+      # signpath/github-action-submit-signing-request — the exact steps are in docs/SIGNING.md.
+      - name: Checksums and notes
+        shell: pwsh
+        run: |
+          Get-ChildItem dist -File | ForEach-Object { "{0}  {1}" -f (Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLower(), $_.Name } | Set-Content -Encoding ASCII dist/SHA256SUMS.txt
+          $v = '${{ github.ref_name }}'.TrimStart('v')
+          $log = Get-Content CHANGELOG.md -Raw
+          $section = [regex]::Match($log, "(?ms)^## \[?$([regex]::Escape($v))\]?.*?(?=^## |\z)").Value
+          @"
+          $section
+
+          **Bundled:** foobar2000 ${{ steps.deps.outputs.fb2k }} (official unmodified installer) · foo_ui_webview2 ${{ steps.deps.outputs.fuw2 }} · WebView2 bootstrapper
+
+          SHA-256 — see SHA256SUMS.txt. Bundled third-party checksums:
+          ``````
+          $(Get-Content installer/deps/SHA256SUMS.txt -Raw)
+          ``````
+          "@ | Set-Content -Encoding UTF8 notes.md
+      - uses: softprops/action-gh-release@v2
+        with:
+          body_path: notes.md
+          files: |
+            dist/Gatefold-Setup-*.exe
+            dist/gatefold-theme-*.zip
+            dist/SHA256SUMS.txt

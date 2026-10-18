@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gatefold</title>
+  <link rel="icon" href="data:,">
+  <link rel="preload" href="fonts/inter-latin-opsz-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/inter-cyrillic-opsz-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="stylesheet" href="css/canvas.css">
+  <script src="js/skin-boot.js"></script>
+  <script src="js/palette-core.js"></script>
+  <script type="module" src="js/app.js"></script>
+</head>
+<body class="booting">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.8v14.4a1 1 0 0 0 1.5.86l11.6-7.2a1 1 0 0 0 0-1.72L8.5 3.94A1 1 0 0 0 7 4.8Z" fill="currentColor"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="4" width="4.2" height="16" rx="1.3" fill="currentColor"/><rect x="13.8" y="4" width="4.2" height="16" rx="1.3" fill="currentColor"/></symbol>
+    <symbol id="i-prev" viewBox="0 0 24 24"><path d="M18 5.6v12.8a1 1 0 0 1-1.55.84L8 13.6V18a1 1 0 0 1-2 0V6a1 1 0 0 1 2 0v4.4l8.45-5.64A1 1 0 0 1 18 5.6Z" fill="currentColor"/></symbol>
+    <symbol id="i-next" viewBox="0 0 24 24"><path d="M6 5.6v12.8a1 1 0 0 0 1.55.84L16 13.6V18a1 1 0 0 0 2 0V6a1 1 0 0 0-2 0v4.4L7.55 4.76A1 1 0 0 0 6 5.6Z" fill="currentColor"/></symbol>
+    <symbol id="i-v-albums" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3.5" width="7" height="7" rx="1.6"/><path d="M13 5.5h8M13 8.5h5M4 14.5h17M4 18.5h17"/></symbol>
+    <symbol id="i-v-covers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="5" height="5" rx="1.3"/><rect x="3" y="15" width="5" height="5" rx="1.3"/><path d="M11 5.5h10M11 8h6M11 16.5h10M11 19h6"/></symbol>
+    <symbol id="i-v-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.8"/></symbol>
+    <symbol id="i-v-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 5h16M4 9.7h16M4 14.3h16M4 19h16"/></symbol>
+    <symbol id="i-hd" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="3"/><path d="M7 9v6M7 12h3.5M10.5 9v6M14 9v6h1.6a3 3 0 0 0 0-6z"/></symbol>
+    <symbol id="i-window" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M3 9h18M6.5 6.8h.01M9 6.8h.01"/></symbol>
+    <symbol id="i-shuffle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></symbol>
+    <symbol id="i-repeat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></symbol>
+    <symbol id="i-repeat1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/><path d="M11 10h1v4"/></symbol>
+    <symbol id="i-order" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 6h16M4 12h11M4 18h7"/></symbol>
+    <symbol id="i-vol" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4V5Z" fill="currentColor" stroke="none"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></symbol>
+    <symbol id="i-vol-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4V5Z" fill="currentColor" stroke="none"/><path d="m16 9 6 6M22 9l-6 6"/></symbol>
+    <symbol id="i-disc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.6"/><path d="M12 3a9 9 0 0 1 9 9" stroke-linecap="round" opacity=".55"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h7"/><circle cx="4.5" cy="6" r="1" fill="currentColor"/><circle cx="4.5" cy="12" r="1" fill="currentColor"/><circle cx="4.5" cy="18" r="1" fill="currentColor"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.8"/></symbol>
+    <symbol id="i-queue" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 6h12M3 12h12M3 18h7"/><path d="M17 15v6l4.5-3L17 15Z" fill="currentColor" stroke-linejoin="round"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></symbol>
+    <symbol id="i-image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="1.8"/><path d="m21 15-4.5-4.5L6 21"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+    <symbol id="i-sidebar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/></symbol>
+    <symbol id="i-min" viewBox="0 0 24 24"><path d="M6 12.5h12" stroke="currentColor" stroke-width="1.2"/></symbol>
+    <symbol id="i-max" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="6.5" y="6.5" width="11" height="11" rx="1.5"/></symbol>
+    <symbol id="i-restore" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="6.5" y="8.5" width="9" height="9" rx="1.5"/><path d="M9 6.5h7A1.5 1.5 0 0 1 17.5 8v7"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"><path d="m7 7 10 10M17 7 7 17"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-expand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
+    <symbol id="i-canvas" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2.5"/><path d="M8 21h8" stroke-linecap="round"/><rect x="6.5" y="7.5" width="6" height="6" rx="1" fill="currentColor" stroke="none" opacity=".55"/><path d="M15 9h3M15 12h2" stroke-linecap="round"/></symbol>
+    <symbol id="i-monitor2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"><rect x="2" y="5" width="12" height="9" rx="1.5"/><rect x="10" y="9" width="12" height="9" rx="1.5" fill="var(--bg, #000)"/><path d="M14 21h4"/></symbol>
+    <symbol id="i-music" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></symbol>
+    <symbol id="i-sparkle" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5c.5 4.6 2.4 6.5 7 7-4.6.5-6.5 2.4-7 7-.5-4.6-2.4-6.5-7-7 4.6-.5 6.5-2.4 7-7Z"/><path d="M19 15c.25 2 1 2.75 3 3-2 .25-2.75 1-3 3-.25-2-1-2.75-3-3 2-.25 2.75-1 3-3Z" opacity=".7"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/></symbol>
+    <symbol id="i-quote" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 6h16M4 10h12M4 14h16M4 18h9"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20.5c.9-3.9 3.9-6 7.5-6s6.6 2.1 7.5 6"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"/></symbol>
+    <symbol id="i-heart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-9.3-9.6C1.5 7.4 3.7 4 7.2 4c2.1 0 3.6 1.1 4.8 2.8C13.2 5.1 14.7 4 16.8 4c3.5 0 5.7 3.4 4.5 6.9-1.8 5-9.3 9.6-9.3 9.6Z"/></symbol>
+    <symbol id="i-heart-f" viewBox="0 0 24 24"><path d="M12 20.5s-7.5-4.6-9.3-9.6C1.5 7.4 3.7 4 7.2 4c2.1 0 3.6 1.1 4.8 2.8C13.2 5.1 14.7 4 16.8 4c3.5 0 5.7 3.4 4.5 6.9-1.8 5-9.3 9.6-9.3 9.6Z" fill="currentColor"/></symbol>
+    <symbol id="i-yt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="4"/><path d="M10 9.2v5.6l4.8-2.8L10 9.2Z" fill="currentColor"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/></symbol>
+    <symbol id="i-history" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></symbol>
+    <symbol id="i-pip" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="2.5" y="4.5" width="19" height="15" rx="2.5"/><rect x="12" y="11.5" width="7" height="5.5" rx="1" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-speed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4.5 18a8.5 8.5 0 1 1 15 0"/><path d="m12 13 4-4"/></symbol>
+    <symbol id="i-pause-c" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M9 7v10M15 7v10"/></symbol>
+  </defs>
+</svg>
+
+<div id="bg" aria-hidden="true">
+  <div class="bg-art a"></div><div class="bg-art b"></div>
+  <div class="aurora"><i class="blob b1"></i><i class="blob b2"></i><i class="blob b3"></i><i class="blob b4"></i></div>
+  <div class="veil"></div>
+  <div class="grain"></div>
+</div>
+
+<header id="titlebar">
+  <div class="tb-left">
+    <button class="icon-btn" id="btnSidebar" title="Свернуть панель" aria-label="Свернуть панель"><svg><use href="#i-sidebar"/></svg></button>
+    <button class="icon-btn" id="btnMainMenu" title="Меню foobar2000" aria-label="Меню"><svg><use href="#i-menu"/></svg></button>
+    <div class="brand"><i class="brand-mark"></i><span>Gatefold</span></div>
+  </div>
+  <div class="tb-center">
+    <label class="search" id="searchBox"><svg width="16" height="16"><use href="#i-search"/></svg>
+      <input id="searchInput" type="search" placeholder="Исполнитель, альбом или трек" spellcheck="false" autocomplete="off"><kbd>Ctrl F</kbd></label>
+  </div>
+  <div class="caption" id="caption">
+    <button id="capMin" aria-label="Свернуть"><svg width="16" height="16"><use href="#i-min"/></svg></button>
+    <button id="capMax" aria-label="Развернуть"><svg width="16" height="16"><use id="capMaxIcon" href="#i-max"/></svg></button>
+    <button id="capClose" aria-label="Закрыть"><svg width="16" height="16"><use href="#i-close"/></svg></button>
+  </div>
+</header>
+
+<nav id="sidebar">
+  <button class="nav-item" data-view="now"><svg><use href="#i-disc"/></svg><span>Сейчас играет</span></button>
+  <button class="nav-item" data-view="playlist"><svg><use href="#i-list"/></svg><span>Плейлист</span></button>
+  <button class="nav-item" data-view="artists"><svg><use href="#i-mic"/></svg><span>Исполнители</span><b class="badge" id="artCount"></b></button>
+  <button class="nav-item" data-view="library"><svg><use href="#i-grid"/></svg><span>Библиотека</span><b class="badge" id="libCount"></b></button>
+  <button class="nav-item" data-view="queue"><svg><use href="#i-queue"/></svg><span>Очередь</span><b class="badge" id="queueCount"></b></button>
+  <button class="nav-item" data-view="youtube"><svg><use href="#i-yt"/></svg><span>YouTube</span><b class="badge yt-badge" id="ytBadge"></b></button>
+  <div class="nav-sep"></div>
+  <div class="nav-label">Плейлисты <button class="icon-btn" id="btnNewPl" title="Новый плейлист"><svg width="14" height="14"><use href="#i-plus"/></svg></button></div>
+  <div id="playlists"></div>
+  <div class="side-foot">
+    <div class="nav-sep"></div>
+    <button class="nav-item" data-view="covers"><svg><use href="#i-image"/></svg><span>Обложки</span><b class="badge" id="coverBadge"></b></button>
+    <button class="nav-item" data-view="settings"><svg><use href="#i-gear"/></svg><span>Настройки</span></button>
+  </div>
+</nav>
+
+<main id="main">
+  <!-- NOW PLAYING -->
+  <section class="view" id="view-now">
+    <div class="np">
+      <div class="np-art-wrap">
+        <div class="np-halo" id="npHalo"></div>
+        <div class="np-art" id="npArt">
+          <div class="art-empty" id="npArtEmpty"><svg><use href="#i-music"/></svg><div id="npArtEmptyText">Нет обложки</div></div>
+          <img id="npImgA" alt=""><img id="npImgB" alt="">
+        </div>
+      </div>
+      <div class="np-info">
+        <div class="np-kicker"><span class="eq"><i></i><i></i><i></i></span><span id="npKicker">Ничего не играет</span></div>
+        <h1 class="np-title" id="npTitle">Gatefold</h1>
+        <div class="np-artist"><span class="link" id="npArtist"></span></div>
+        <div class="np-album"><span class="link" id="npAlbum"></span><span id="npYear"></span></div>
+        <div class="np-badges" id="npBadges"></div>
+        <div class="np-actions" id="npActions"></div>
+        <canvas id="viz"></canvas>
+        <div class="np-tabs">
+          <button class="np-tab active" data-tab="next">Далее</button>
+          <button class="np-tab" data-tab="lyrics">Текст</button>
+          <button class="np-tab" data-tab="palette">Палитра</button>
+        </div>
+        <div class="np-panel" id="npPanel"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PLAYLIST -->
+  <section class="view" id="view-playlist">
+    <div class="view-head pl-head">
+      <div class="pl-cover" id="plCover"></div>
+      <div class="pl-ttl"><div class="kicker" id="plKicker">Плейлист</div><h2 id="plTitle">—</h2><div class="sub" id="plSub"></div>
+        <div class="pl-acts">
+          <button class="btn primary" id="plPlay"><svg><use href="#i-play"/></svg>Слушать</button>
+          <button class="btn" id="plShuffle" title="Случайный порядок — сам плейлист не перемешивается"><svg><use href="#i-shuffle"/></svg>Вперемешку</button>
+          <button class="btn" id="plJump" title="К играющему треку"><svg><use href="#i-disc"/></svg>К текущему</button>
+        </div>
+      </div>
+      <div class="actions"><div class="seg icon-seg" id="plModes" role="group" aria-label="Вид"></div></div>
+    </div>
+    <div class="list-head pl-lh"><div>#</div><div>Название</div><div class="h-artist">Исполнитель</div><div class="h-album">Альбом</div><div>Время</div></div>
+    <div class="scroller list-surface" id="plScroller"><div class="vlist" id="plList"></div></div>
+  </section>
+
+  <!-- LIBRARY -->
+  <section class="view" id="view-library">
+    <div class="view-head">
+      <div><div class="kicker">Медиатека</div><h2>Альбомы</h2><div class="sub" id="libSub"></div></div>
+      <div class="actions lib-tools">
+        <input class="filter" id="libFilter" placeholder="Фильтр…" spellcheck="false">
+        <select class="select" id="libSort">
+          <option value="artist">По исполнителю</option>
+          <option value="name">По названию</option>
+          <option value="year">По году</option>
+          <option value="added">Недавно добавленные</option>
+          <option value="played">Недавно проигранные</option>
+          <option value="trackCount">По числу треков</option>
+        </select>
+      </div>
+    </div>
+    <div class="scroller" id="libScroller"><div class="vlist" id="libGrid"></div></div>
+  </section>
+
+  <!-- ARTISTS -->
+  <section class="view" id="view-artists">
+    <div class="view-head">
+      <div><div class="kicker">Медиатека</div><h2>Исполнители</h2><div class="sub" id="artSub"></div></div>
+      <div class="actions lib-tools">
+        <input class="filter" id="artFilter" placeholder="Исполнитель или альбом…" spellcheck="false">
+        <select class="select" id="artSort">
+          <option value="name">По имени</option>
+          <option value="added">Недавно добавленные</option>
+          <option value="played">Недавно проигранные</option>
+          <option value="albums">По числу альбомов</option>
+          <option value="tracks">По числу треков</option>
+        </select>
+      </div>
+    </div>
+    <div class="scroller" id="artScroller"><div class="vlist" id="artGrid"></div></div>
+  </section>
+
+  <!-- ARTIST -->
+  <section class="view" id="view-artist">
+    <div class="scroller" id="artistScroller">
+      <div class="album-hero artist-hero" id="artistHero"></div>
+      <div class="nav-label" style="padding:4px 30px 8px">Альбомы</div>
+      <div class="agrid" id="artistAlbums"></div>
+    </div>
+  </section>
+
+  <!-- ALBUM -->
+  <section class="view" id="view-album">
+    <div class="album-hero" id="albumHero"></div>
+    <div class="list-head"><div>#</div><div>Название</div><div>Исполнитель</div><div class="h-album">Формат</div><div>Время</div></div>
+    <div class="scroller list-surface" id="albumScroller"><div class="vlist" id="albumList"></div></div>
+  </section>
+
+  <!-- SEARCH -->
+  <section class="view" id="view-search">
+    <div class="view-head"><div><div id="searchBack" class="head-back"></div><div class="kicker">Поиск</div><h2 id="searchTitle">—</h2><div class="sub" id="searchSub"></div></div></div>
+    <div class="scroller" id="searchScroller"><div id="searchBody"></div></div>
+  </section>
+
+  <!-- QUEUE -->
+  <section class="view" id="view-queue">
+    <div class="view-head">
+      <div><div class="kicker">Воспроизведение</div><h2>Очередь</h2><div class="sub" id="queueSub"></div></div>
+      <div class="actions"><button class="btn" id="queueClear"><svg><use href="#i-x"/></svg>Очистить</button></div>
+    </div>
+    <div class="scroller list-surface" id="queueScroller"><div id="queueBody"></div></div>
+  </section>
+
+  <!-- COVERS -->
+  <section class="view" id="view-covers">
+    <div class="view-head"><div><div class="kicker">Автоматизация</div><h2>Обложки</h2><div class="sub">Поиск и установка недостающих обложек: iTunes · Deezer · MusicBrainz / Cover Art Archive</div></div></div>
+    <div class="scroller"><div class="cards" id="coversBody"></div></div>
+  </section>
+
+  <!-- YOUTUBE (built by js/youtube.js on first visit) -->
+  <section class="view" id="view-youtube"></section>
+
+  <!-- SETTINGS -->
+  <section class="view" id="view-settings">
+    <div class="view-head"><div><div class="kicker">Gatefold</div><h2>Настройки</h2><div class="sub">Изменения применяются сразу</div></div></div>
+    <div class="scroller st-scroller"><div class="st-wrap" id="settingsBody"></div></div>
+  </section>
+</main>
+
+<footer id="playerbar">
+  <div class="pb-track">
+    <div class="pb-art" id="pbArt" title="Сейчас играет"></div>
+    <div class="pb-meta"><div class="pb-title" id="pbTitle">—</div><div class="pb-artist" id="pbArtist"></div></div>
+    <button class="icon-btn like-btn" id="btnLike" title="В понравившиеся (L)" aria-label="Нравится" aria-pressed="false"><svg><use href="#i-heart"/></svg></button>
+  </div>
+  <div class="pb-center">
+    <div class="pb-controls">
+      <button class="icon-btn" id="btnOrder" title="Порядок воспроизведения"><svg><use id="orderIcon" href="#i-order"/></svg></button>
+      <button class="icon-btn" id="btnPrev" title="Предыдущий (Shift+←)"><svg><use href="#i-prev"/></svg></button>
+      <button class="play-btn" id="btnPlay" title="Воспроизведение / пауза (Пробел)"><svg><use id="playIcon" href="#i-play"/></svg></button>
+      <button class="icon-btn" id="btnNext" title="Следующий (Shift+→)"><svg><use href="#i-next"/></svg></button>
+      <button class="icon-btn" id="btnSac" title="Остановить после текущего"><svg><use href="#i-pause-c"/></svg></button>
+    </div>
+    <div class="pb-seek">
+      <span class="num" id="tCur">0:00</span>
+      <div class="seek" id="seek"><canvas id="wave"></canvas><div class="track"><div class="fill" id="seekFill"></div></div><div class="knob" id="seekKnob"></div><div class="tip num" id="seekTip">0:00</div></div>
+      <span class="num" id="tTot">0:00</span>
+    </div>
+  </div>
+  <div class="pb-right">
+    <button class="icon-btn" id="btnQueue" title="Очередь"><svg><use href="#i-queue"/></svg></button>
+    <div class="vol">
+      <button class="icon-btn" id="btnMute" title="Без звука"><svg><use id="volIcon" href="#i-vol"/></svg></button>
+      <input class="range" id="vol" type="range" min="0" max="100" step="1" value="100" aria-label="Громкость">
+    </div>
+    <button class="icon-btn" id="btnFull" title="Холст — полноэкранный режим (F)"><svg><use href="#i-canvas"/></svg></button>
+  </div>
+</footer>
+
+<div id="dropOverlay" aria-hidden="true">
+  <div class="drop-zone" data-target="new"><svg width="44" height="44"><use href="#i-plus"/></svg><b>Новый плейлист «Импорт»</b><small>для пакетной конвертации — удобно держать отдельно</small></div>
+  <div class="drop-zone" data-target="current"><svg width="44" height="44"><use href="#i-list"/></svg><b>В текущий плейлист</b><small>или отпустите на нужном плейлисте слева</small></div>
+</div>
+<div id="batchBar"></div>
+<div id="layer"></div>
+<div id="toasts"></div>
+</body>
+</html>

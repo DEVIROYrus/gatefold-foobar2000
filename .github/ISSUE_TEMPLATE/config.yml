@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: foo_ui_webview2 (the component)
+    url: https://github.com/NereaFantasia/foo_ui_webview2/issues
+    about: Problems with the component itself go to its own tracker.
