@@ -45,6 +45,12 @@ jobs:
         run: |
           $v = (Get-Content package.json | ConvertFrom-Json).version
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /Qp "/DAppVersion=$v" "/DRepoUrl=${{ github.server_url }}/${{ github.repository }}" installer/gatefold.iss
+      # uploaded before the smoke test, so the installer can be tried by hand even when the test fails
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer-preview
+          path: dist/Gatefold-Setup-*.exe
+          retention-days: 14
       - name: Silent install smoke test
         shell: pwsh
         run: |
@@ -58,8 +64,11 @@ jobs:
           }
           if (-not (Test-Path "$env:ProgramFiles\foobar2000\foobar2000.exe")) { throw 'foobar2000 was not installed' }
           (Get-Item "$env:ProgramFiles\foobar2000\foobar2000.exe").VersionInfo.FileVersion
-      - uses: actions/upload-artifact@v4
+      - name: Setup log
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          name: installer-preview
-          path: dist/Gatefold-Setup-*.exe
+          name: setup-log
+          path: setup.log
+          if-no-files-found: ignore
           retention-days: 14
