@@ -10,5 +10,8 @@ All notable changes are listed here. Versions follow [Semantic Versioning](https
 - English and Russian interface.
 - Unofficial lyrics sources and the unofficial YouTube search are off by default; YouTube search with your own Data API key.
 - Installer: installs or updates foobar2000 x64, foo_ui_webview2 and the WebView2 Runtime; updates an existing template in place.
+- One-click updates from GitHub Releases inside the interface: checksum-verified, with a backup and «Restore previous version»; falls back to the installer when a newer foo_ui_webview2 is required.
+- The theme's own tooltips replace the native ones, which foobar2000's window drew away from the cursor and cut off.
+- Volume control in Canvas (slider, mouse wheel, ↑/↓, M).
 
 The history before the public release (in Russian) is in [docs/HISTORY.ru.md](docs/HISTORY.ru.md).

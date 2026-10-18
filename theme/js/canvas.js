@@ -13,7 +13,7 @@
  * popup window on another monitor (canvas.html → canvas-main.js), same module.
  * Layouts: cover (cover + lyrics side by side) · lyrics (lyrics first) · minimal.
  */
-import { call, ok, esc, fmtTime } from './bridge.js';
+import { call, ok, on, esc, fmtTime } from './bridge.js';
 import { fetchArt } from './artbytes.js';
 import { setFullscreen } from './winfs.js';
 import { settings, setSetting, onSettings } from './settings.js';
@@ -57,6 +57,7 @@ function build() {
         <span class="cv-time num" data-dur>0:00</span>
         <div class="cv-tools">
           <div class="cv-seg" data-a="layout"><button data-v="cover" title="${$t('Обложка и текст')}">${$t('Обложка')}</button><button data-v="lyrics" title="${$t('Крупный текст')}">${$t('Текст')}</button><button data-v="minimal" title="${$t('Только обложка')}">${$t('Минимум')}</button></div>
+          <div class="cv-vol"><button class="cv-btn" data-a="mute" title="${$t('Без звука (M)')}">${ICON('vol')}</button><input class="cv-range" type="range" min="0" max="100" step="1" aria-label="${$t('Громкость')}"></div>
           <button class="cv-btn" data-a="lyrics" title="${$t('Текст песни (T)')}">${ICON('quote')}</button>
           <button class="cv-btn" data-a="screen" title="${$t('Открыть на другом мониторе')}">${ICON('monitor2')}</button>
           <button class="cv-btn" data-a="close" title="${$t('Выйти (Esc)')}">${ICON('x')}</button>
@@ -71,6 +72,11 @@ function build() {
     variant: 'canvas',
   });
   el.addEventListener('click', onClick);
+  // volume: the same foobar2000 volume as the player bar, in either window
+  const vr = el.querySelector('.cv-range');
+  vr.addEventListener('input', () => { paintVol(+vr.value, false); call('playback.setVolume', { volume: +vr.value }); });
+  vr.addEventListener('wheel', (e) => { e.preventDefault(); const v = Math.max(0, Math.min(100, vol.v + (e.deltaY < 0 ? 3 : -3))); paintVol(v, false); call('playback.setVolume', { volume: v }); }, { passive: false });
+  call('playback.getVolume').then((r) => { if (ok(r)) paintVol(r.volume, r.isMuted ?? r.muted); });
   el.addEventListener('dblclick', (e) => { if (host.standalone && !e.target.closest('.cv-chrome, .ln')) toggleWindowFullscreen(); });
   el.addEventListener('pointermove', poke);
   el.addEventListener('pointerdown', (e) => { poke(); if (host.standalone && !host.fullscreen && e.button === 0 && !e.target.closest('button, .cv-chrome, .ln')) call('window.startDrag'); });
@@ -79,6 +85,19 @@ function build() {
     if (d > 0) { const p = (e.clientX - r.left) / r.width * d; call('playback.setPosition', { position: p }); host.onSeek && host.onSeek(p); }
   });
 }
+
+const vol = { v: 100, m: false };
+function paintVol(v, m) {
+  if (v != null) vol.v = Math.round(+v);
+  if (m != null) vol.m = !!m;
+  if (!el) return;
+  const r = el.querySelector('.cv-range'); if (!r) return;
+  const shown = vol.m ? 0 : vol.v;
+  if (document.activeElement !== r) r.value = shown;
+  r.style.setProperty('--p', shown + '%');
+  el.querySelector('[data-a=mute] use').setAttribute('href', vol.m || vol.v === 0 ? '#i-vol-x' : '#i-vol');
+}
+on('playback:volumeChanged', (d) => paintVol(d.volume, d.isMuted ?? d.muted));
 
 function onClick(e) {
   const b = e.target.closest('[data-a], [data-v]');
@@ -90,6 +109,7 @@ function onClick(e) {
     case 'next': call('playback.next'); break;
     case 'play': call('playback.playOrPause').then((r) => { if (!ok(r)) call('playback.play'); }); break;
     case 'lyrics': setSetting('canvasLyrics', !settings.canvasLyrics); break;
+    case 'mute': call('playback.toggleMute'); break;
     case 'screen': openOnOtherScreen(); break;
     case 'close': close(); break;
   }
@@ -287,6 +307,8 @@ document.addEventListener('keydown', (e) => {
     case 'l': case 'L': case 'д': case 'Д': { const L = ['cover', 'lyrics', 'minimal']; setSetting('canvasLayout', L[(L.indexOf(settings.canvasLayout) + 1) % L.length]); break; }
     case 't': case 'T': case 'е': case 'Е': setSetting('canvasLyrics', !settings.canvasLyrics); break;
     case 'c': case 'C': case 'с': case 'С': setSetting('canvasClock', !settings.canvasClock); break;
+    case 'ArrowUp': case 'ArrowDown': { const v = Math.max(0, Math.min(100, vol.v + (k === 'ArrowUp' ? 5 : -5))); paintVol(v, false); call('playback.setVolume', { volume: v }); hint($t('Громкость {0}%', v)); break; }
+    case 'm': case 'M': case 'ь': case 'Ь': call('playback.toggleMute'); break;
     case '[': case 'х': case 'Х': nudge(-0.2); break;
     case ']': case 'ъ': case 'Ъ': nudge(0.2); break;
     default: handled = false;

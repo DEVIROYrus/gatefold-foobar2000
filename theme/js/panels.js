@@ -15,6 +15,7 @@ import * as Canvas from './canvas.js';
 
 import { $t, lang, LANGS } from './i18n.js';
 import { VERSION } from './version.js';
+import { settingsSection as updatesSection } from './update-ui.js';
 const CF_pl = (n) => plural(n, 'файл', 'файла', 'файлов');
 
 // ---------------------------------------------------------------- control builders
@@ -204,6 +205,8 @@ export function renderSettings() {
   const t = TC.tstate;
   const thumbs = h(`<div class="row"><div class="lbl"><b>${$t('Кэш миниатюр')}</b><small id="tcInfo">${$t('{0} шт. · {1} МБ', t.count, (t.bytes / 1048576).toFixed(1))}</small></div></div>`);
   thumbs.append(button($t('Очистить'), async () => { await TC.clear(); toast($t('Кэш миниатюр очищен')); renderSettings(); }));
+  section('updates', 'download', $t('Обновления'), '', group('', updatesSection()));
+
   section('storage', 'folder', $t('Хранилище и сброс'), '',
     group('',
       toggle('thumbCache', $t('Миниатюры обложек на диске'), $t('Медиатека открывается мгновенно и после перезапуска')),

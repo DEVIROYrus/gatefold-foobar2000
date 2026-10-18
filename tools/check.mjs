@@ -29,6 +29,8 @@ console.log(`✓ ${asts.size} scripts parse`);
 const ver = (fs.readFileSync(path.join(THEME, 'js', 'version.js'), 'utf8').match(/VERSION = '([^']+)'/) || [])[1];
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
 if (ver !== pkg) fail(`theme/js/version.js (${ver}) ≠ package.json (${pkg})`); else console.log(`✓ version ${ver}`);
+const man = JSON.parse(fs.readFileSync(path.join(THEME, 'gatefold.json'), 'utf8'));
+if (man.version !== ver) fail(`theme/gatefold.json (${man.version}) ≠ theme/js/version.js (${ver})`);
 if (process.env.GITHUB_REF_TYPE === 'tag' && process.env.GITHUB_REF_NAME && process.env.GITHUB_REF_NAME !== 'v' + ver) fail(`tag ${process.env.GITHUB_REF_NAME} ≠ v${ver}`);
 
 // 3. translations

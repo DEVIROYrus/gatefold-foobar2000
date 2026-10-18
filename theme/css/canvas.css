@@ -124,3 +124,11 @@ body.canvas-open #toasts { z-index: 950; }
   background: color-mix(in oklab, var(--surface) 88%, transparent); box-shadow: var(--shadow-pop); z-index: 3; line-height: 1.5; }
 .cv-tip b { font-family: var(--font-display); font-size: 20px; display: block; margin-bottom: 6px; }
 .cv-tip kbd { font: inherit; font-weight: 700; padding: 1px 7px; border-radius: 6px; border: 1px solid var(--line-2); }
+
+/* volume (2.x) */
+.cv-vol { display: flex; align-items: center; gap: 4px; padding-right: 6px; border-radius: 22px; background: color-mix(in oklab, var(--text) 8%, transparent); }
+.cv-vol .cv-btn { background: none; }
+.cv-range { -webkit-appearance: none; appearance: none; width: 120px; height: 22px; background: transparent; cursor: pointer; }
+.cv-range::-webkit-slider-runnable-track { height: 4px; border-radius: 4px; background: linear-gradient(90deg, var(--text) var(--p, 50%), color-mix(in oklab, var(--text) 22%, transparent) var(--p, 50%)); }
+.cv-range::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5px; border-radius: 50%; background: var(--text); box-shadow: 0 1px 4px rgb(0 0 0 / .45); border: 0; transition: transform 120ms; }
+.cv-range:hover::-webkit-slider-thumb { transform: scale(1.15); }
