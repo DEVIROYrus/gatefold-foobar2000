@@ -8,7 +8,7 @@ foo_ui_webview2 bridge (tests/fixtures/mock-bridge.js + mock-extras.js) — no f
 Checks: every screen renders without page errors in Russian and English; the English interface
 contains no untranslated Russian text; playlist view modes; likes; YouTube search modes; the
 language switch; settings search; the one-click updater (checksum, component requirement, install,
-rollback); the theme's own tooltips; the Canvas volume control; Settings → foobar2000.
+rollback); the theme's own tooltips; the Canvas volume control; Settings → foobar2000; the first-run welcome.
 """
 import asyncio, os, sys, threading, http.server, socketserver, functools, json, io, re, zipfile, hashlib
 from pathlib import Path
@@ -16,7 +16,7 @@ from playwright.async_api import async_playwright
 
 ROOT = Path(__file__).resolve().parent.parent
 FIX = ROOT / 'tests' / 'fixtures'
-MOCK = ''.join((FIX / f).read_text(encoding='utf-8') for f in ('mock-bridge.js', 'mock-extras.js', 'mock-updates.js', 'mock-prefs.js'))
+MOCK = ''.join((FIX / f).read_text(encoding='utf-8') for f in ('mock-bridge.js', 'mock-extras.js', 'mock-updates.js', 'mock-prefs.js', 'mock-welcome.js'))
 VIEWS = ['now', 'playlist', 'artists', 'library', 'queue', 'youtube', 'covers', 'settings']
 # Russian strings that come from the mock music library itself (data, not interface text)
 DATA = ['Слепое пятно', 'Тихий Час', 'Неизвестный Бэнд', 'Другой альбом', 'Кто-то ещё', 'Без обложки', 'Локальная строка',
@@ -43,12 +43,13 @@ def check(cond, msg):
     print(('  ok   ' if cond else '  FAIL ') + msg)
     if not cond: failures.append(msg)
 
-async def page(browser, port, settings, setup=None):
+async def page(browser, port, settings, setup=None, pre=''):
     ctx = await browser.new_context(viewport={'width': 1600, 'height': 940})
     if setup: await setup(ctx)
     pg = await ctx.new_page()
     errs = []
     pg.on('pageerror', lambda e: errs.append(str(e)))
+    if pre: await pg.add_init_script(pre)
     # seeded once per context: a reload (e.g. after a language switch) keeps what the page saved
     seed = "if (!localStorage.getItem('aurora.settings.v1')) localStorage.setItem('aurora.settings.v1', JSON.stringify(%s));" % json.dumps({'fontMode': 'inter', 'coverSweep': False, 'coverAuto': False, 'artistAuto': False, 'canvasIdleMin': 0, **settings})
     await pg.add_init_script(seed + MOCK)
@@ -287,6 +288,54 @@ async def test_fb2k_prefs(browser, port):
     check(not errs, f'no page errors {errs[:2]}')
     await ctx.close()
 
+async def test_welcome(browser, port):
+    print('· first run: no music yet')
+    for lang in ('ru', 'en'):
+        ctx, pg, errs = await page(browser, port, {'language': lang}, pre='window.__emptyMusic = true;')
+        await pg.wait_for_timeout(800)
+        check(await pg.evaluate("!!document.querySelector('#view-now .welcome') && document.body.classList.contains('no-music')"), f'{lang}: the welcome replaces the empty Now playing screen')
+        if lang == 'en':
+            left = [s for s in await pg.evaluate(SCAN) if not any(d in s for d in DATA)]
+            check(not left, f'en: the welcome is fully translated {left[:3]}')
+        await ctx.close()
+    ctx, pg, errs = await page(browser, port, {'language': 'en'}, pre='window.__emptyMusic = true;')
+    await pg.wait_for_timeout(800)
+    calls = lambda: pg.evaluate("window.__calls.map(c => c.join(' '))")
+    # «Just listen»: a folder → a new playlist named after it → plays
+    await pg.click(".welcome [data-welcome=folder]"); await pg.wait_for_timeout(1500)
+    c = await calls()
+    check(any('playlist.create' in x and 'Lumen Arcade' in x for x in c), 'Open a folder… creates a playlist named after the folder')
+    check(any('playlist.addPathsAsync' in x and 'D:\\\\Music\\\\Lumen Arcade' in x for x in c), 'the folder is added asynchronously')
+    check(any(x.startswith('playlist.playTrack') for x in c), 'and starts playing')
+    check(await pg.evaluate("document.querySelector('.view.active')?.id") == 'view-playlist', 'the playlist opens')
+    check(await pg.evaluate("!document.querySelector('.welcome') && !document.body.classList.contains('no-music')"), 'the welcome is gone once there is music')
+    toast = await pg.evaluate("[...document.querySelectorAll('.toast')].map(t => t.innerText).join(' | ')")
+    check('Added 12 tracks' in toast and 'Add the folder to the library' in toast, f'the result is reported, with an offer to add the folder to the library {toast[:120]}')
+    await ctx.close()
+    # «Connect your music folder»: native page opens, the theme waits, then opens Library
+    ctx, pg, errs2 = await page(browser, port, {'language': 'en'}, pre='window.__emptyMusic = true;')
+    await pg.wait_for_timeout(800)
+    await pg.click(".welcome [data-welcome=library]"); await pg.wait_for_timeout(400)
+    check(any(x.startswith('config.showLibraryPreferences') for x in await pg.evaluate("window.__calls.map(c => c.join(' '))")), 'Connect a folder… opens foobar2000’s Media Library page')
+    check(await pg.evaluate("!document.querySelector('.wl-wait').hidden"), 'the welcome shows that it is waiting')
+    await pg.evaluate("window.__wl.lib = 480"); await pg.wait_for_timeout(3800)
+    check(await pg.evaluate("document.querySelector('.view.active')?.id") == 'view-library', 'when the library has music, Library opens by itself')
+    toast = await pg.evaluate("[...document.querySelectorAll('.toast')].map(t => t.innerText).join(' | ')")
+    check('Library connected: 480 tracks' in toast, f'and says how much it found {toast[:100]}')
+    await ctx.close()
+    # the empty Library and playlist screens offer the same buttons
+    ctx, pg, errs3 = await page(browser, port, {'language': 'en'}, pre='window.__emptyMusic = true;')
+    await pg.wait_for_timeout(800)
+    await pg.click('.welcome [data-welcome=later]'); await pg.wait_for_timeout(300)
+    await nav(pg, 'library', 1500)
+    check(await pg.evaluate("!!document.querySelector('#view-library .empty [data-welcome=library]')"), 'empty Library offers to connect a folder')
+    await nav(pg, 'artists', 1500)
+    check(await pg.evaluate("!!document.querySelector('#view-artists .empty [data-welcome=library]')"), 'empty Artists offers to connect a folder')
+    await nav(pg, 'playlist', 1500)
+    check(await pg.evaluate("!!document.querySelector('#plList .empty [data-welcome=folder][data-guid]')"), 'an empty playlist offers to fill itself')
+    check(not (errs + errs2 + errs3), f'no page errors {(errs + errs2 + errs3)[:2]}')
+    await ctx.close()
+
 async def main():
     httpd = serve(); port = httpd.server_address[1]
     async with async_playwright() as p:
@@ -300,6 +349,7 @@ async def main():
         await test_tooltips(browser, port)
         await test_canvas_volume(browser, port)
         await test_fb2k_prefs(browser, port)
+        await test_welcome(browser, port)
         await browser.close()
     httpd.shutdown()
     print(f'\n{len(failures)} failure(s)')
