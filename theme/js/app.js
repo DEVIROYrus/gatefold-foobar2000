@@ -4,6 +4,7 @@
 import './i18n-boot.js';
 import './tooltip.js';
 import * as UpdUI from './update-ui.js';
+import * as Welcome from './welcome.js';
 import { waitForBridge, call, on, ok, normTrack, esc, fmtTime, debounce, log, albumKeyOf, hasBridge, artUrl, plural } from './bridge.js';
 import { settings, setSetting, onSettings } from './settings.js';
 import { router, onRoute, $, h, icon, toast, popupMenu, closeMenus } from './ui.js';
@@ -756,6 +757,7 @@ Lib.shared.onPlayAlbum = () => { if (router.current !== 'now') toast($t('Вос�
   Lib.getAllAlbums();
   Likes.init();
   UpdUI.init();
+  Welcome.init();
   // first screens of the grid into the thumbnail cache while the window is idle
   setTimeout(() => idleP(5000).then(() => Lib.prewarm()), 12000);
   $('coverBadge').textContent = CF.getReview().length || '';

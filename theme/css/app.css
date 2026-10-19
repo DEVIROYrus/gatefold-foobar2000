@@ -894,3 +894,33 @@ body.side-collapsed .upd-pill .upd-txt, body.side-collapsed .upd-pill svg { disp
 .adv-d[open] > summary svg { transform: rotate(90deg); }
 .adv-d > summary:hover { color: var(--accent); }
 .adv-d > .adv-branch { padding-left: calc(var(--d, 0) * 14px + 20px); }
+
+/* ================= first run: no music yet (js/welcome.js) ================= */
+body.no-music #view-now > .np { display: none; }
+.welcome { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; padding: 48px 32px 40px; animation: updIn 420ms var(--ease) both; }
+.wl-hero { text-align: center; max-width: 620px; }
+.wl-mark { width: 64px; height: 64px; margin: 0 auto 18px; border-radius: 20px; display: grid; place-items: center; color: var(--on-accent);
+  background: linear-gradient(135deg, var(--accent), var(--accent-2, var(--accent))); box-shadow: 0 18px 40px -16px color-mix(in oklab, var(--accent) 70%, transparent); }
+.wl-hero h1 { margin: 0 0 10px; font-size: var(--fs-2xl); font-weight: 750; letter-spacing: -.02em; line-height: 1.1; }
+.wl-hero p { margin: 0; color: var(--text-2); font-size: var(--fs-md); line-height: 1.5; }
+.wl-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; width: min(940px, 100%); }
+.wl-card { position: relative; display: flex; flex-direction: column; gap: 10px; padding: 24px; border-radius: 18px; background: var(--surface); border: 1px solid var(--line); }
+.wl-card.primary { border-color: color-mix(in oklab, var(--accent) 45%, transparent); background: linear-gradient(160deg, color-mix(in oklab, var(--accent) 10%, var(--surface)), var(--surface) 55%); }
+.wl-badge { position: absolute; top: 18px; right: 18px; padding: 3px 9px; border-radius: 99px; font-size: var(--fs-xs); font-weight: 700; letter-spacing: .04em; color: var(--accent); background: color-mix(in oklab, var(--accent) 14%, transparent); }
+.wl-ic { width: 44px; height: 44px; border-radius: 13px; display: grid; place-items: center; color: var(--accent); background: color-mix(in oklab, var(--accent) 13%, transparent); }
+.wl-card h2 { margin: 6px 0 0; font-size: var(--fs-lg); font-weight: 700; }
+.wl-card p { margin: 0; color: var(--text-2); font-size: var(--fs-sm); line-height: 1.5; }
+.wl-steps { margin: 4px 0 0; padding: 0; list-style: none; counter-reset: wl; display: flex; flex-direction: column; gap: 8px; }
+.wl-steps li { counter-increment: wl; display: flex; gap: 10px; align-items: baseline; font-size: var(--fs-sm); color: var(--text-2); line-height: 1.4; }
+.wl-steps li::before { content: counter(wl); flex: none; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: var(--fs-xs); font-weight: 700; color: var(--text); background: var(--hover); transform: translateY(1px); }
+.wl-steps b { color: var(--text); }
+.wl-acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: auto; padding-top: 8px; }
+.wl-wait { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 10px; font-size: var(--fs-sm); color: var(--text-2); background: var(--hover); }
+.wl-wait[hidden] { display: none; }
+.wl-card.waiting .wl-steps li::before { background: color-mix(in oklab, var(--accent) 22%, transparent); color: var(--accent); }
+.wl-drop { display: flex; gap: 8px; align-items: center; margin-top: 4px !important; color: var(--text-3) !important; }
+.wl-drop svg { flex: none; opacity: .8; }
+.wl-later { border: 0; background: none; color: var(--text-3); font: inherit; font-size: var(--fs-sm); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.wl-later:hover { color: var(--text-2); }
+@media (max-width: 860px) { .wl-cards { grid-template-columns: 1fr; } }
+.empty .empty-acts { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 6px; }

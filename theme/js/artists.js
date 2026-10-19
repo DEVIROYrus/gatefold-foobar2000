@@ -9,6 +9,7 @@ import { paletteForAlbum } from './theme.js';
 import { isVarious } from './match.js';
 
 import { $t } from './i18n.js';
+import { emptyActions } from './welcome.js';
 const dpr = () => Math.min(2, window.devicePixelRatio || 1);
 const AR = { list: [], view: [], byKey: new Map(), nodes: new Map(), cols: 1, tw: 160, rh: 210, loaded: false, loading: false };
 const scroller = $('artScroller'), grid = $('artGrid');
@@ -42,7 +43,7 @@ export async function loadArtists(force) {
   AR.loaded = true; AR.loading = false;
   $('artCount').textContent = AR.list.length || '';
   grid.innerHTML = ''; AR.nodes.clear();
-  if (!AR.list.length) { grid.innerHTML = `<div class="empty"><b>${$t('Медиатека пуста')}</b></div>`; return; }
+  if (!AR.list.length) { grid.innerHTML = `<div class="empty"><b>${$t('Медиатека пуста')}</b><span>${$t('Исполнители появятся, когда в медиатеке будет музыка')}</span>${emptyActions()}</div>`; return; }
   applyFilter();
   // background download of every missing photo (visible tiles jump the queue)
   if (settings.artistAuto) for (const x of AR.list) AA.want(jobOf(x));

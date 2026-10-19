@@ -18,6 +18,7 @@ import * as Likes from './likes.js';
 import { bgCall } from './sched.js';
 
 import { $t } from './i18n.js';
+import { emptyActions } from './welcome.js';
 const dpr = () => Math.min(2, window.devicePixelRatio || 1);
 /** A track as the host's context-menu/handle APIs want it: path, or path|subsong:N. */
 const trackHandle = (t) => t.handle || ((t.subsong ? `${t.absolutePath || t.path}|subsong:${t.subsong}` : (t.absolutePath || t.path)));
@@ -215,6 +216,12 @@ export async function openPlaylist(guid) {
   buildLayout();
   plScroller.scrollTop = 0;
   renderPlaylist();
+  if (!pl.trackCount) {
+    plList.style.height = '';
+    plList.innerHTML = isLiked
+      ? `<div class="empty"><b>${$t('Пока нет лайков')}</b><span>${$t('Нажмите ♡ рядом с треком в панели плеера или клавишу L')}</span></div>`
+      : `<div class="empty"><b>${$t('Плейлист пуст')}</b><span>${$t('Добавьте сюда папку или файлы — или перетащите их в окно')}</span>${emptyActions({ library: false, guid: pl.guid })}</div>`;
+  }
 }
 
 /* ---- header: cover collage, play / shuffle, view switch */
@@ -533,8 +540,10 @@ async function fromSnapshot() {
   setTimeout(() => idle(3000).then(() => loadLibrary(true, true)), 1500);
   return true;
 }
+const emptyLib = () => { libGrid.innerHTML = `<div class="empty"><b>${$t('Медиатека пуста')}</b><span>${$t('Подключите папку с музыкой — foobar2000 будет следить за ней сам')}</span>${emptyActions()}</div>`; libGrid.style.height = ''; };
 function ensureTiles() {
   if (router.current !== 'library' || !LIB.loaded) return layoutLib();
+  if (!LIB.albums.length) return emptyLib();
   if (!LIB.nodes.size) { if (libGrid.querySelector('.empty')) libGrid.innerHTML = ''; applyFilter(); } else layoutLib();
 }
 function showCounts() {
@@ -650,7 +659,7 @@ export async function loadLibrary(force, background = false) {
   showCounts();
   if (wasLoaded) libEvents.dispatchEvent(new Event('changed'));
   libGrid.innerHTML = ''; LIB.nodes.clear();
-  if (!out.length) { libGrid.innerHTML = `<div class="empty"><b>${$t('Медиатека пуста')}</b><span>${$t('Добавьте папки: Preferences → Media Library')}</span></div>`; libGrid.style.height = ''; return; }
+  if (!out.length) { emptyLib(); return; }
   await sortLib();
   applyFilter();
 }
