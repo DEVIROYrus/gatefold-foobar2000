@@ -8,7 +8,7 @@ foo_ui_webview2 bridge (tests/fixtures/mock-bridge.js + mock-extras.js) — no f
 Checks: every screen renders without page errors in Russian and English; the English interface
 contains no untranslated Russian text; playlist view modes; likes; YouTube search modes; the
 language switch; settings search; the one-click updater (checksum, component requirement, install,
-rollback); the theme's own tooltips; the Canvas volume control.
+rollback); the theme's own tooltips; the Canvas volume control; Settings → foobar2000.
 """
 import asyncio, os, sys, threading, http.server, socketserver, functools, json, io, re, zipfile, hashlib
 from pathlib import Path
@@ -16,7 +16,7 @@ from playwright.async_api import async_playwright
 
 ROOT = Path(__file__).resolve().parent.parent
 FIX = ROOT / 'tests' / 'fixtures'
-MOCK = ''.join((FIX / f).read_text(encoding='utf-8') for f in ('mock-bridge.js', 'mock-extras.js', 'mock-updates.js'))
+MOCK = ''.join((FIX / f).read_text(encoding='utf-8') for f in ('mock-bridge.js', 'mock-extras.js', 'mock-updates.js', 'mock-prefs.js'))
 VIEWS = ['now', 'playlist', 'artists', 'library', 'queue', 'youtube', 'covers', 'settings']
 # Russian strings that come from the mock music library itself (data, not interface text)
 DATA = ['Слепое пятно', 'Тихий Час', 'Неизвестный Бэнд', 'Другой альбом', 'Кто-то ещё', 'Без обложки', 'Локальная строка',
@@ -248,6 +248,45 @@ async def test_canvas_volume(browser, port):
     check(not errs, f'no page errors {errs[:2]}')
     await ctx.close()
 
+async def test_fb2k_prefs(browser, port):
+    print('· Settings → foobar2000')
+    ctx, pg, errs = await page(browser, port, {'language': 'en'})
+    await nav(pg, 'settings', 1200)
+    sec = '#st-foobar'
+    calls = lambda: pg.evaluate("window.__calls.map(c => c.join(' '))")
+    check('[WASAPI shared]' in await pg.inner_text(f'{sec} .st-pick'), 'the output device in effect is shown')
+    await pg.click(f'{sec} .st-pick'); await pg.wait_for_timeout(300)
+    await pg.click("#layer .menu .mi:has-text('Headphones (USB DAC)')"); await pg.wait_for_timeout(400)
+    check(any('config.setOutputDevice' in c and '{33333333' in c for c in await calls()), 'picking a device switches foobar2000 output')
+    check('Headphones' in await pg.inner_text(f'{sec} .st-pick'), 'the picker shows the new device')
+    await pg.click(f"{sec} .seg button:has-text('Track')"); await pg.wait_for_timeout(300)
+    check(any('replaygain.setMode' in c and '"sourceMode":"track"' in c for c in await calls()), 'ReplayGain source mode is written')
+    await pg.evaluate(f"(() => {{ const r = [...document.querySelectorAll('{sec} .row')].find(x => x.innerText.includes('Output buffer')).querySelector('input'); r.value = 500; r.dispatchEvent(new Event('input')); }})()"); await pg.wait_for_timeout(600)
+    check(any('config.setOutputBuffer' in c and '"milliseconds":500' in c for c in await calls()), 'the buffer slider writes milliseconds (debounced)')
+    check('Default' in await pg.inner_text(f'{sec}'), 'the active DSP preset is shown')
+    roots = await pg.inner_text(f'{sec}')
+    check('D:\\Music' in roots and '11,902' in roots, 'library folders are listed with track counts')
+    await pg.fill(f'{sec} .adv-search input', 'id3'); await pg.wait_for_timeout(500)
+    rows = await pg.evaluate(f"[...document.querySelectorAll('{sec} .adv-row')].map(r => r.innerText)")
+    check(len(rows) == 1 and 'Tagging' in rows[0], f'Advanced search finds an entry with its path {rows}')
+    check(await pg.evaluate(f"document.querySelector('{sec} .adv-row').classList.contains('changed')"), 'a non-default entry is marked')
+    await pg.click(f'{sec} .adv-row .toggle'); await pg.wait_for_timeout(400)
+    check(any('setAdvancedConfigValue' in c and '{C2}' in c and 'true' in c for c in await calls()), 'a checkbox entry is written')
+    await pg.fill(f'{sec} .adv-search input', 'thread'); await pg.wait_for_timeout(400)
+    await pg.fill(f'{sec} .adv-input', '5'); await pg.press(f'{sec} .adv-input', 'Enter'); await pg.wait_for_timeout(400)
+    check(any('setAdvancedConfigValue' in c and '{B3}' in c and '"5"' in c for c in await calls()), 'an integer entry is written on Enter')
+    await pg.click(f'{sec} .adv-reset'); await pg.wait_for_timeout(400)
+    check(any('resetAdvancedConfig' in c and '{B3}' in c for c in await calls()), 'an entry can be reset to its default')
+    await pg.fill(f'{sec} .adv-search input', ''); await pg.wait_for_timeout(300)
+    await pg.click(f"{sec} .adv-d > summary:has-text('Playback')"); await pg.wait_for_timeout(300)
+    await pg.click(f"{sec} .adv-d .adv-d > summary:has-text('Seek')"); await pg.wait_for_timeout(300)
+    await pg.click(f"{sec} .adv-radio:not(.on)"); await pg.wait_for_timeout(400)
+    check(any('setAdvancedConfigValue' in c and '{B6}' in c for c in await calls()), 'the tree opens branch by branch; a radio entry is selected')
+    await pg.click(f"{sec} .btn:has-text('All foobar2000 preferences')"); await pg.wait_for_timeout(200)
+    check(any(c.startswith('misc.showPreferences') for c in await calls()), 'the native Preferences dialog is one click away')
+    check(not errs, f'no page errors {errs[:2]}')
+    await ctx.close()
+
 async def main():
     httpd = serve(); port = httpd.server_address[1]
     async with async_playwright() as p:
@@ -260,6 +299,7 @@ async def main():
         await test_updates(browser, port)
         await test_tooltips(browser, port)
         await test_canvas_volume(browser, port)
+        await test_fb2k_prefs(browser, port)
         await browser.close()
     httpd.shutdown()
     print(f'\n{len(failures)} failure(s)')

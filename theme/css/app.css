@@ -871,3 +871,26 @@ body.side-collapsed .upd-pill .upd-txt, body.side-collapsed .upd-pill svg { disp
 .upd-acts .btn[disabled] { opacity: .55; pointer-events: none; }
 .upd-fine { margin: 0; color: var(--text-3); font-size: var(--fs-xs); line-height: 1.45; }
 .toast a.link { color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+
+/* ================= Settings → foobar2000 (js/fb2kprefs.js) ================= */
+.st-pick { max-width: min(380px, 52%); gap: 8px; justify-content: space-between; }
+.st-pick .st-pick-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.st-pick svg { flex: none; opacity: .6; transform: rotate(90deg); }
+.st-count { color: var(--text-3); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.adv-search { width: min(300px, 46%); margin: 0; }
+.adv-list { display: flex; flex-direction: column; }
+.adv-list > .row:first-child, .adv-branch > .row:first-child { border-top: 1px solid var(--line); }
+.adv-row .lbl b { font-weight: 500; }
+.adv-row.changed .lbl b::after { content: ''; display: inline-block; width: 6px; height: 6px; margin-left: 8px; border-radius: 50%; background: var(--accent); vertical-align: 2px; }
+.adv-ctl { display: flex; align-items: center; gap: 6px; flex: none; max-width: 52%; }
+.adv-input { width: 220px; }
+.adv-radio.on { color: var(--accent); border-color: color-mix(in oklab, var(--accent) 45%, transparent); pointer-events: none; }
+.adv-na { color: var(--text-3); font-size: var(--fs-sm); }
+.adv-reset { width: 28px; height: 28px; }
+.adv-d { border-top: 1px solid var(--line); }
+.adv-d > summary { list-style: none; display: flex; align-items: center; gap: 8px; padding: 10px 0 10px calc(var(--d, 0) * 14px); cursor: pointer; font-weight: 550; user-select: none; }
+.adv-d > summary::-webkit-details-marker { display: none; }
+.adv-d > summary svg { width: 12px; height: 12px; opacity: .55; transition: transform 140ms var(--ease); }
+.adv-d[open] > summary svg { transform: rotate(90deg); }
+.adv-d > summary:hover { color: var(--accent); }
+.adv-d > .adv-branch { padding-left: calc(var(--d, 0) * 14px + 20px); }

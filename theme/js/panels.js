@@ -16,6 +16,7 @@ import * as Canvas from './canvas.js';
 import { $t, lang, LANGS } from './i18n.js';
 import { VERSION } from './version.js';
 import { settingsSection as updatesSection } from './update-ui.js';
+import { fb2kGroups } from './fb2kprefs.js';
 const CF_pl = (n) => plural(n, 'файл', 'файла', 'файлов');
 
 // ---------------------------------------------------------------- control builders
@@ -205,6 +206,8 @@ export function renderSettings() {
   const t = TC.tstate;
   const thumbs = h(`<div class="row"><div class="lbl"><b>${$t('Кэш миниатюр')}</b><small id="tcInfo">${$t('{0} шт. · {1} МБ', t.count, (t.bytes / 1048576).toFixed(1))}</small></div></div>`);
   thumbs.append(button($t('Очистить'), async () => { await TC.clear(); toast($t('Кэш миниатюр очищен')); renderSettings(); }));
+  section('foobar', 'disc', 'foobar2000', $t('Настройки самого плеера — те же, что в его окне Preferences: изменения видны и там'), ...fb2kGroups(group, actions, button));
+
   section('updates', 'download', $t('Обновления'), '', group('', updatesSection()));
 
   section('storage', 'folder', $t('Хранилище и сброс'), '',
