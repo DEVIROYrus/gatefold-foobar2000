@@ -20,3 +20,9 @@ body:
       label: Console lines / Строки консоли
       description: View → Console, lines starting with [Gatefold]
       render: text
+  - type: textarea
+    id: setuplog
+    attributes:
+      label: Installer log (installer problems only) / Журнал установщика (только для проблем установки)
+      description: "Win+R → %TEMP% → the newest «Setup Log YYYY-MM-DD #NNN.txt». Attach the file or paste it. / Win+R → %TEMP% → самый свежий «Setup Log ГГГГ-ММ-ДД #NNN.txt». Приложите файл или вставьте текст."
+      render: text

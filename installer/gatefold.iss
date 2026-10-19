@@ -51,6 +51,8 @@ DisableProgramGroupPage=yes
 DisableReadyPage=no
 DisableWelcomePage=no
 PrivilegesRequired=lowest
+; every run leaves %TEMP%\Setup Log <date> #NNN.txt — the first thing to ask for in a bug report
+SetupLogging=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
@@ -125,12 +127,16 @@ en.Running=foobar2000 is running. It has to be closed while Gatefold installs in
 ru.Running=foobar2000 запущен. Его нужно закрыть, пока Gatefold устанавливается в профиль.%n%nЗакрыть foobar2000 сейчас?
 en.StillRunning=foobar2000 is still running. Close it and press Next again.
 ru.StillRunning=foobar2000 всё ещё запущен. Закройте его и снова нажмите «Далее».
-en.StInstallFb=Installing foobar2000 %1…
-ru.StInstallFb=Устанавливаю foobar2000 %1…
-en.StInstallWv=Installing the WebView2 Runtime…
-ru.StInstallWv=Устанавливаю среду WebView2…
-en.FbFailed=The foobar2000 installer did not finish (code %1). Gatefold will still be installed; run the foobar2000 installer again later.
-ru.FbFailed=Установщик foobar2000 не завершился (код %1). Gatefold всё равно будет установлен; запустите установку foobar2000 позже ещё раз.
+en.StInstallFb=Installing foobar2000 %1… Windows asks for permission now — if no prompt is visible, click the flashing shield icon on the taskbar.
+ru.StInstallFb=Устанавливаю foobar2000 %1… Windows сейчас спросит разрешение — если окна не видно, нажмите мигающий значок щита на панели задач.
+en.FbDeclined=foobar2000 installs into Program Files, so Windows needs your permission (the “User Account Control” prompt).%n%nTry again?%n%nNo — continue without foobar2000; you can install it yourself from foobar2000.org later, Gatefold will be ready.
+ru.FbDeclined=foobar2000 ставится в Program Files, поэтому Windows нужно ваше разрешение (окно «Контроль учётных записей»).%n%nПопробовать ещё раз?%n%nНет — продолжить без foobar2000: его можно поставить самому с foobar2000.org, Gatefold уже будет готов.
+en.FbMissing=foobar2000 was not installed (%1).%n%nGatefold, the WebView2 UI component and the theme will still be installed — they are ready the moment foobar2000 is.%n%nOpen the foobar2000 download page now?
+ru.FbMissing=foobar2000 не установился (%1).%n%nКомпонент WebView2 UI и тема всё равно будут установлены — они заработают, как только появится foobar2000.%n%nОткрыть страницу загрузки foobar2000?
+en.FbMissingNote=foobar2000 is not installed yet: get the 64-bit version from foobar2000.org/download, install it, then do the step above.
+ru.FbMissingNote=foobar2000 ещё не установлен: скачайте 64-битную версию с foobar2000.org/download, установите её и сделайте шаг выше.
+en.StInstallWv=Installing the WebView2 Runtime (downloaded from Microsoft, may take a few minutes)…
+ru.StInstallWv=Устанавливаю среду WebView2 (скачивается с сайта Microsoft, может занять несколько минут)…
 en.WvFailed=The WebView2 Runtime could not be installed (code %1). Install it from Microsoft: https://go.microsoft.com/fwlink/p/?LinkId=2124703
 ru.WvFailed=Не удалось установить среду WebView2 (код %1). Установите её с сайта Microsoft: https://go.microsoft.com/fwlink/p/?LinkId=2124703
 en.LastStepTitle=One last step in foobar2000
@@ -179,6 +185,7 @@ var
   PlanText: TNewStaticText;
   PickBtn: TNewButton;
   FinishNote, FinishHead: TNewStaticText;
+  FbMissing: Boolean;
 
 { ---------------------------------------------------------------- helpers }
 function VerPart(var S: String): Integer;
@@ -423,17 +430,14 @@ end;
 
 { ---------------------------------------------------------------- foobar2000 must be closed }
 function FoobarRunning: Boolean;
-var Loc, Svc, Res: Variant;
+var Cap: TExecOutput; RC, I: Integer;
 begin
+  { tasklist instead of WMI: WMI can stall for a long time when its service is busy or starting }
   Result := False;
-  try
-    Loc := CreateOleObject('WbemScripting.SWbemLocator');
-    Svc := Loc.ConnectServer('.', 'root\CIMV2');
-    Res := Svc.ExecQuery('SELECT ProcessId FROM Win32_Process WHERE Name = ''foobar2000.exe''');
-    Result := Res.Count > 0;
-  except
-    Result := False;
-  end;
+  if ExecAndCaptureOutput(ExpandConstant('{sys}\tasklist.exe'), '/FI "IMAGENAME eq foobar2000.exe" /FO CSV /NH', '', SW_HIDE, ewWaitUntilTerminated, RC, Cap) then
+    for I := 0 to GetArrayLength(Cap.StdOut) - 1 do
+      if Pos('"foobar2000.exe"', Lowercase(Cap.StdOut[I])) = 1 then Result := True;
+  Log('foobar2000 running: ' + IntToStr(Ord(Result)));
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
@@ -459,30 +463,70 @@ begin
   if not WizardSilent then MsgBox(Msg, mbError, MB_OK);
 end;
 
-procedure InstallDependencies;
-var Exe, Args: String; RC: Integer;
+{ foobar2000's official installer is per-machine (Program Files), so it needs elevation. Run it
+  with the "runas" verb from the wizard in the foreground: the UAC prompt then comes up in front instead
+  of flashing on the taskbar, where it looked like a hang. A declined prompt can be retried; afterwards
+  the install is checked on disk, since an exit code alone does not prove foobar2000.exe is there. }
+function FoobarInstalledNow: Boolean;
 begin
+  if FbFound and Fb64 and not FbPortable then Result := FileExists(AddBackslash(FbDir) + 'foobar2000.exe')
+  else Result := FileExists(ExpandConstant('{commonpf64}\foobar2000\foobar2000.exe'));
+end;
+
+procedure InstallFoobar;
+var Exe, Args, Why: String; RC, I: Integer; Started: Boolean;
+begin
+  WizardForm.StatusLabel.Caption := FmtMessage(CustomMessage('StInstallFb'), ['{#FB2K_VERSION}']);
+  ExtractTemporaryFile('{#FB2K_FILE}');
+  Exe := ExpandConstant('{tmp}\{#FB2K_FILE}');
+  Args := '/S';
+  if FbFound and Fb64 and not FbPortable then Args := Args + ' /D=' + FbDir;
+  Why := '';
+  repeat
+    BringToFrontAndRestore;
+    Log('foobar2000: runas ' + Exe + ' ' + Args);
+    Started := ShellExec('runas', Exe, Args, '', SW_SHOWNORMAL, ewWaitUntilTerminated, RC);
+    Log(Format('foobar2000: started=%d code=%d', [Ord(Started), RC]));
+    if Started then Break;
+    { 1223 = the UAC prompt was declined or closed }
+    Why := SysErrorMessage(RC) + ' (' + IntToStr(RC) + ')';
+    if WizardSilent or (MsgBox(CustomMessage('FbDeclined'), mbConfirmation, MB_YESNO) <> IDYES) then Break;
+  until False;
+  if Started then begin
+    { some installers hand the work to an elevated copy and return at once — give it time }
+    for I := 1 to 240 do begin
+      if FoobarInstalledNow then Break;
+      Sleep(250);
+    end;
+    if not FoobarInstalledNow then Why := Format('exit code %d, foobar2000.exe not found', [RC]);
+  end;
+  if FoobarInstalledNow then begin
+    Log('foobar2000: installed');
+    if FbFound and Fb64 and not FbPortable then UseFoobarDir(FbDir)
+    else begin
+      FbFound := False; Fb64 := False;
+      if not TryDir(ExpandConstant('{commonpf64}\foobar2000')) then FindFoobar;
+    end;
+  end else begin
+    FbMissing := not FbFound or not Fb64;
+    Log('foobar2000: not installed — ' + Why);
+    if not WizardSilent and (MsgBox(FmtMessage(CustomMessage('FbMissing'), [Why]), mbError, MB_YESNO) = IDYES) then
+      ShellExec('open', 'https://www.foobar2000.org/download', '', '', SW_SHOWNORMAL, ewNoWait, RC);
+  end;
+end;
+
+procedure InstallDependencies;
+var RC: Integer;
+begin
+  { foobar2000 first: its permission prompt comes right after «Install», while the user is looking }
+  if NeedFb then InstallFoobar;
   if NeedWv then begin
     WizardForm.StatusLabel.Caption := CustomMessage('StInstallWv');
     ExtractTemporaryFile('MicrosoftEdgeWebview2Setup.exe');
+    Log('WebView2: bootstrapper');
     if not Exec(ExpandConstant('{tmp}\MicrosoftEdgeWebview2Setup.exe'), '/silent /install', '', SW_HIDE, ewWaitUntilTerminated, RC) or (RC <> 0) then
-      SuspendAndLog(FmtMessage(CustomMessage('WvFailed'), [IntToStr(RC)]));
-  end;
-  if NeedFb then begin
-    WizardForm.StatusLabel.Caption := FmtMessage(CustomMessage('StInstallFb'), ['{#FB2K_VERSION}']);
-    ExtractTemporaryFile('{#FB2K_FILE}');
-    Exe := ExpandConstant('{tmp}\{#FB2K_FILE}');
-    Args := '/S';
-    if FbFound and Fb64 and not FbPortable then Args := Args + ' /D=' + FbDir;
-    { the official installer asks for elevation itself (UAC); ShellExec lets it }
-    if not ShellExec('', Exe, Args, '', SW_SHOWNORMAL, ewWaitUntilTerminated, RC) or (RC <> 0) then
-      SuspendAndLog(FmtMessage(CustomMessage('FbFailed'), [IntToStr(RC)]))
-    else begin
-      if not (FbFound and Fb64) then begin
-        FbFound := False; Fb64 := False;
-        if not TryDir(ExpandConstant('{commonpf64}\foobar2000')) then FindFoobar;
-      end else UseFoobarDir(FbDir);
-    end;
+      SuspendAndLog(FmtMessage(CustomMessage('WvFailed'), [IntToStr(RC)]))
+    else Log('WebView2: installed');
   end;
 end;
 
@@ -501,6 +545,7 @@ begin
     T := CustomMessage('LastStep1');
     if TplName <> 'default' then T := T + #13#10#13#10 + FmtMessage(CustomMessage('LastStep2'), [TplName]);
   end;
+  if FbMissing then T := T + #13#10#13#10 + CustomMessage('FbMissingNote');
   T := T + #13#10#13#10 + CustomMessage('Recommend');
   if FinishNote = nil then begin
     FinishHead := TNewStaticText.Create(WizardForm);
