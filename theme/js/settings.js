@@ -4,6 +4,12 @@ const KEY = 'aurora.settings.v1';
 export const DEFAULTS = {
   // appearance
   updateCheck: true,       // look for a new Gatefold release on GitHub (at most every 12 h)
+  taskbarButtons: true,    // ⏮ ⏯ ⏭ ♡ on the taskbar thumbnail (wininteg.js)
+  taskbarProgress: true,   // playback progress drawn on the taskbar button
+  trayIcon: false,         // an icon in the notification area with a player menu
+  minimizeToTray: false,   // only with trayIcon
+  closeToTray: false,      // only with trayIcon
+  miniTopmost: true,       // the mini player stays above other windows (mini.js)
   language: 'auto',        // 'auto' (system) | 'ru' | 'en' — read by i18n.js before anything renders
   ytSearch: 'off',         // YouTube search: 'off' (links only) | 'api' (YouTube Data API v3, own key) | 'web' (unofficial, parses the results page)
   ytApiKey: '',

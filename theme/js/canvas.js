@@ -330,7 +330,7 @@ let popupId = '';
 export async function openOnOtherScreen() {
   if (popupId) {
     const all = await call('window.getAllWindows');
-    const alive = ok(all) && (all.windows || []).some((w) => (w.windowId || w.id) === popupId);
+    const alive = ok(all) && (all.items || all.windows || []).some((w) => (w.windowId || w.id) === popupId);
     if (alive) { call('window.focus', { windowId: popupId }); return; }
   }
   let b = null; try { b = JSON.parse(localStorage.getItem(BOUNDS) || 'null'); } catch {}

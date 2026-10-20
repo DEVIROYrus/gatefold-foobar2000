@@ -924,3 +924,67 @@ body.no-music #view-now > .np { display: none; }
 .wl-later:hover { color: var(--text-2); }
 @media (max-width: 860px) { .wl-cards { grid-template-columns: 1fr; } }
 .empty .empty-acts { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 6px; }
+
+/* ================= playlist editing (library.js) ================= */
+#plList .vrow.sel, #plList .vtile.sel .cov { box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 45%, transparent); }
+#plList .vrow.sel { background: color-mix(in oklab, var(--accent) 14%, transparent); }
+#plList .vtile.sel .cov { outline: 2px solid var(--accent); outline-offset: 2px; }
+#plList .vrow.focus { box-shadow: inset 2px 0 0 var(--accent), inset 0 0 0 1px color-mix(in oklab, var(--accent) 45%, transparent); }
+body.pl-dragging, body.pl-dragging * { cursor: grabbing !important; user-select: none !important; }
+body.pl-dragging #plList .vrow.sel, body.pl-dragging #plList .vtile.sel { opacity: .45; }
+.drag-ghost { position: fixed; left: 0; top: 0; z-index: 10001; pointer-events: none; display: flex; align-items: center; gap: 8px; max-width: 320px; padding: 7px 12px; border-radius: 10px;
+  font-size: var(--fs-sm); font-weight: 600; color: var(--on-accent); background: var(--accent); box-shadow: 0 12px 30px -10px rgb(0 0 0 / .6); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.drag-ghost.copy::after { content: '+'; font-weight: 800; margin-left: 2px; }
+.drag-ghost span { overflow: hidden; text-overflow: ellipsis; }
+.drop-line { position: absolute; left: 0; right: 0; top: 0; height: 2px; z-index: 5; pointer-events: none; background: var(--accent); border-radius: 2px; box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 25%, transparent); }
+.drop-line::before { content: ''; position: absolute; left: -4px; top: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.drop-line.v { right: auto; width: 2px; }
+.drop-line.v::before { left: -3px; top: -4px; }
+.pl-item.drop-hl { background: color-mix(in oklab, var(--accent) 22%, transparent) !important; box-shadow: inset 0 0 0 1px var(--accent); }
+.pl-selbar { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 20; display: flex; align-items: center; gap: 6px; padding: 8px 8px 8px 16px; border-radius: 14px;
+  background: color-mix(in oklab, var(--surface-2, var(--surface)) 96%, transparent); border: 1px solid var(--line-2, var(--line)); box-shadow: 0 18px 40px -14px rgb(0 0 0 / .6); backdrop-filter: blur(12px); animation: updIn 220ms var(--ease) both; }
+.pl-selbar[hidden] { display: none; }
+.pl-selbar .n { font-weight: 650; font-size: var(--fs-sm); white-space: nowrap; }
+.pl-selbar .gap { width: 10px; }
+body.side-dragging, body.side-dragging * { cursor: grabbing !important; user-select: none !important; }
+.pl-item.pl-moving { opacity: .5; }
+.pl-item.drop-above { box-shadow: inset 0 2px 0 var(--accent); }
+.pl-item.drop-below { box-shadow: inset 0 -2px 0 var(--accent); }
+
+/* ================= smart playlists (smartpl.js) ================= */
+.sp-sheet { width: min(760px, 100%); padding: 24px; gap: 16px; overflow: auto; }
+.sp-head { display: flex; gap: 14px; align-items: center; padding-right: 36px; }
+.sp-head h3 { margin: 2px 0; font-size: var(--fs-xl); font-weight: 700; }
+.sp-head .sub { color: var(--text-3); font-size: var(--fs-sm); }
+.sp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; margin-top: 16px; }
+.sp-card { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 8px; row-gap: 2px; align-items: center; text-align: left; padding: 10px 12px; border-radius: 12px;
+  border: 1px solid var(--line); background: var(--hover); color: var(--text); font: inherit; cursor: pointer; transition: border-color 140ms, background 140ms; }
+.sp-card svg { color: var(--accent); width: 18px; height: 18px; }
+.sp-card b { font-size: var(--fs-sm); font-weight: 650; }
+.sp-card small { grid-column: 1 / -1; color: var(--text-3); font-size: var(--fs-xs); line-height: 1.35; }
+.sp-card:hover { border-color: color-mix(in oklab, var(--accent) 40%, transparent); }
+.sp-card.on { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 14%, transparent); }
+.sp-form { margin-top: 16px; padding: 16px; border-radius: 14px; background: var(--hover); display: flex; flex-direction: column; gap: 12px; }
+.sp-form-h b { display: block; font-size: var(--fs-md); }
+.sp-form-h small { color: var(--text-3); font-size: var(--fs-sm); }
+.sp-param .seg { flex-wrap: wrap; }
+.sp-param .st-input, .sp-row .st-input { width: 100%; box-sizing: border-box; }
+.sp-query { height: auto; padding: 10px 12px; font-family: ui-monospace, Consolas, monospace; font-size: var(--fs-sm); resize: vertical; }
+.sp-help { display: inline-block; margin-top: 6px; font-size: var(--fs-xs); color: var(--accent); cursor: pointer; }
+.sp-row { display: flex; gap: 8px; }
+.sp-row .btn { flex: none; }
+.sp-count { min-height: 18px; font-size: var(--fs-sm); color: var(--text-2); display: flex; align-items: center; gap: 8px; }
+.sp-count b { color: var(--text); }
+.sp-bad { color: var(--text-3); }
+select.st-input { height: 34px; }
+
+/* ================= Library → by cover colour (colors.js) ================= */
+.color-ribbon { flex: none; display: flex; align-items: center; gap: 14px; padding: 0 28px 12px; flex-wrap: wrap; }
+.color-ribbon[hidden] { display: none; }
+.cr-sw { display: flex; gap: 6px; padding: 5px; border-radius: 99px; background: var(--hover); }
+.cr-b { width: 24px; height: 24px; border-radius: 50%; border: 0; cursor: pointer; background: var(--c); box-shadow: inset 0 0 0 1px rgb(255 255 255 / .12); transition: transform 140ms var(--ease), box-shadow 140ms; }
+.cr-b.n { background: conic-gradient(from 200deg, #f4f4f4, #8a8a8a, #141414, #f4f4f4); }
+.cr-b:hover { transform: scale(1.18); }
+.cr-b.on { transform: scale(1.18); box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--text); }
+.color-ribbon.picked .cr-b:not(.on) { opacity: .45; }
+.cr-info { display: flex; align-items: center; gap: 8px; color: var(--text-3); font-size: var(--fs-sm); }

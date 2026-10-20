@@ -20,8 +20,13 @@ Gatefold is a theme for the [foo_ui_webview2](https://github.com/NereaFantasia/f
 - **Album-driven colour.** k-means in OKLab picks the colour roles from each cover, with WCAG contrast control. Or choose a fixed **Dark**, **Light** or **Grey** theme.
 - **Now playing:** a large cover that breathes with the bass and a spectrum in the album's colours. Format badges show codec, bit depth / sample rate, bitrate, DR, ReplayGain and play count.
 - **Playlists in four views:** by album, with covers, tiles and compact. Each playlist remembers its own view.
+- **Real playlist editing:** select with Shift/Ctrl, drag to reorder or onto a playlist in the sidebar, Delete, Ctrl+Z (foobar2000's own undo), Alt+↑/↓; drag playlists to reorder them.
+- **Smart playlists without the query language:** recently added, most played, forgotten favourites, never played, a genre, a decade, lossless, hi-res… with a live count of matching tracks. They stay up to date by themselves.
+- **«More like this» radio:** similar artists you actually have (Deezer's related artists, plus genre and era), never the same artist twice in a row; the playlist keeps topping itself up.
 - **Liked** — a heart in the player and on every row. Likes are stored in an ordinary foobar2000 playlist.
 - **Library and Artists:** cover grids, sorting by recently added or played, and album pages. Albums split by guest artists are merged back into one.
+- **The colour wall:** sort the library by cover colour — a rainbow of your albums — and pick a colour to see only those covers.
+- **Windows around the window:** ⏮ ⏯ ⏭ ♡ on the taskbar thumbnail, progress on the taskbar button, an optional tray icon with a player menu (minimize / close to tray), and a **mini player** that stays above other windows.
 - **Synced lyrics:** from tags or an `.lrc` next to the track, then online (LRCLIB). Lines are highlighted as they play, click a line to seek, and `[` `]` adjust the timing.
 - **Canvas:** full-screen Now playing with slow motion, lyrics and a clock. It can open on a second monitor.
 - **YouTube:** paste a link, or search with your own YouTube Data API key. The player has its own controls, quality selection, a queue, history and a mini player. Music pauses while a video plays.
@@ -64,6 +69,7 @@ Gatefold has **no telemetry** and no accounts. The only network requests it make
 |---|---|---|
 | Cover art | iTunes Search API, Deezer API, MusicBrainz / Cover Art Archive | Albums without art (automatic search can be turned off) |
 | Artist photos | Deezer, MusicBrainz / Wikidata | The Artists screen (can be turned off) |
+| «More like this» radio | Deezer (related artists, by name) | Only when you start a radio |
 | Lyrics | LRCLIB | Tracks without lyrics in tags or files |
 | YouTube | youtube-nocookie.com player; Google API when you use your own key | Only on the YouTube screen |
 | Update check | api.github.com, github.com (release downloads) | Every 12 hours and when you press *Check now* (can be turned off) |
@@ -90,6 +96,8 @@ Settings can turn on lyrics from **Musixmatch, NetEase, QQ Music and Kugou**, an
 | F (on Now playing) | Canvas |
 | Ctrl+R | Reload the interface |
 | Ctrl+P | foobar2000 Preferences |
+
+In a playlist: Shift/Ctrl+click select · Ctrl+A all · Delete remove · Ctrl+Z / Ctrl+Y undo / redo · Alt+↑/↓ move · Enter play · Esc clear the selection.
 
 On the YouTube screen: Space/K play/pause · J/L ±10 s · F full screen · T theatre mode · Q quality · N/P next/previous · `/` search.
 

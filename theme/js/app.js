@@ -5,6 +5,9 @@ import './i18n-boot.js';
 import './tooltip.js';
 import * as UpdUI from './update-ui.js';
 import * as Welcome from './welcome.js';
+import * as WinInteg from './wininteg.js';
+import * as Mini from './mini.js';
+import * as Radio from './radio.js';
 import { waitForBridge, call, on, ok, normTrack, esc, fmtTime, debounce, log, albumKeyOf, hasBridge, artUrl, plural } from './bridge.js';
 import { settings, setSetting, onSettings } from './settings.js';
 import { router, onRoute, $, h, icon, toast, popupMenu, closeMenus } from './ui.js';
@@ -143,6 +146,7 @@ $('capMin').onclick = () => call('window.minimize');
 $('capMax').onclick = () => call(app.maximized ? 'window.restore' : 'window.maximize');
 $('capClose').onclick = () => call('window.close');
 $('btnFull').onclick = () => Canvas.open();
+$('btnMini').onclick = (e) => Mini.open({ minimizeMain: e.shiftKey });
 async function toggleFullscreen() {
   if (!app.standalone) return;
   const r = await WFS.setFullscreen(!app.fullscreen);
@@ -381,6 +385,7 @@ function renderNpActions() {
   if (t.album) btn($t('{0}Альбом', icon('grid')), openNpAlbum).id = 'npAlbumBtn';
   function openNpAlbum() { openTrackAlbum(t); }
   if (!app.art.available && t.album) btn($t('{0}Найти обложку', icon('image')), () => router.go('covers', { manual: CF.jobFromTrack(t) }), 'primary');
+  if (t.artist) btn($t('{0}Радио', icon('sparkle')), () => Radio.start(t)).title = $t('Похожая музыка из вашей медиатеки — бесконечно');
   btn(`${icon('more')}`, () => call('menu.showNativePopup', { mode: 'nowPlaying' }));
 }
 
@@ -758,6 +763,14 @@ Lib.shared.onPlayAlbum = () => { if (router.current !== 'now') toast($t('Вос�
   Likes.init();
   UpdUI.init();
   Welcome.init();
+  Radio.init({ getAllAlbums: Lib.getAllAlbums });
+  Lib.shared.radioFor = (t) => Radio.start(t);
+  WinInteg.init({
+    state: () => app.state, track: () => app.track, pos: () => Viz.getPosition(),
+    dur: () => Viz.progressState.dur || (app.track && app.track.duration) || 0,
+    liked: (t) => Likes.has(t), toggleLike: () => toggleLike(), playPause: () => $('btnPlay').click(), openMini: () => Mini.open(),
+  });
+  Likes.events.addEventListener('change', () => WinInteg.poke());
   // first screens of the grid into the thumbnail cache while the window is idle
   setTimeout(() => idleP(5000).then(() => Lib.prewarm()), 12000);
   $('coverBadge').textContent = CF.getReview().length || '';

@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gatefold · Мини-плеер</title>
+  <link rel="icon" href="data:,">
+  <link rel="preload" href="fonts/inter-latin-opsz-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/inter-cyrillic-opsz-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="stylesheet" href="css/mini.css">
+  <script src="js/palette-core.js"></script>
+  <script type="module" src="js/mini-main.js"></script>
+</head>
+<body class="mini-popup">
+  <div class="mini" id="mini">
+    <div class="mi-art" id="miArt"><div class="mi-ph" id="miPh"></div><img id="miImg" alt=""></div>
+    <div class="mi-body">
+      <div class="mi-top">
+        <div class="mi-meta"><div class="mi-title" id="miTitle">Gatefold</div><div class="mi-sub" id="miSub">Ничего не играет</div></div>
+        <div class="mi-win">
+          <button class="mi-ib" id="miPin" title="Поверх всех окон"><svg><use href="#i-pip"/></svg></button>
+          <button class="mi-ib" id="miOpen" title="Открыть Gatefold"><svg><use href="#i-expand"/></svg></button>
+          <button class="mi-ib" id="miClose" title="Закрыть мини-плеер (Esc)"><svg><use href="#i-x"/></svg></button>
+        </div>
+      </div>
+      <div class="mi-seek" id="miSeek"><i id="miFill"></i></div>
+      <div class="mi-ctl">
+        <span class="mi-time" id="miCur">0:00</span>
+        <button class="mi-ib" id="miLike" title="В понравившиеся (L)"><svg><use href="#i-heart"/></svg></button>
+        <span class="mi-gap"></span>
+        <button class="mi-ib" id="miPrev" title="Предыдущий"><svg><use href="#i-prev"/></svg></button>
+        <button class="mi-play" id="miPlay" title="Воспроизведение / пауза (Пробел)"><svg><use href="#i-play"/></svg></button>
+        <button class="mi-ib" id="miNext" title="Следующий"><svg><use href="#i-next"/></svg></button>
+        <span class="mi-gap"></span>
+        <button class="mi-ib" id="miVol" title="Громкость — колёсико мыши, щелчок — без звука"><svg><use href="#i-vol"/></svg></button>
+        <span class="mi-time r" id="miDur">0:00</span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

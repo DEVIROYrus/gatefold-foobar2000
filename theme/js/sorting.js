@@ -17,6 +17,7 @@ import { call, ok, on, log, albumKeyOf, normTrack } from './bridge.js';
 import { bgCall } from './sched.js';
 
 import { $t } from './i18n.js';
+import * as Colors from './colors.js';
 // root collation: Latin before Cyrillic, like Explorer and foobar2000 itself; case and punctuation ignored, numbers by value
 const coll = new Intl.Collator('en', { sensitivity: 'base', numeric: true, ignorePunctuation: true });
 export const cmpText = (a, b) => coll.compare(a || '', b || '') || (a || '').localeCompare(b || '');
@@ -27,7 +28,7 @@ export const albumKey = (a) => albumKeyOf(artistOf(a), a.name);
 const recOf = (kind, a) => { let v = rec[kind].get(albumKey(a)) || 0; if (a.parts) for (const p of a.parts) v = Math.max(v, rec[kind].get(albumKeyOf(p.albumArtist, p.name)) || 0); return v; };
 
 export const SORTS = {
-  artist: $t('По исполнителю'), name: $t('По названию'), year: $t('По году'), added: $t('Недавно добавленные'), played: $t('Недавно проигранные'), trackCount: $t('По числу треков'),
+  artist: $t('По исполнителю'), name: $t('По названию'), year: $t('По году'), added: $t('Недавно добавленные'), played: $t('Недавно проигранные'), trackCount: $t('По числу треков'), color: $t('По цвету обложки'),
 };
 
 // ---------------------------------------------------------------- comparators
@@ -48,6 +49,7 @@ const CMP = {
   trackCount: chain((a, b) => (b.trackCount || 0) - (a.trackCount || 0), byArtist, byYearAsc, byName),
   added: chain(recency('added'), byArtist, byYearAsc, byName, byPath),
   played: chain(recency('played'), byArtist, byYearAsc, byName, byPath),
+  color: chain(Colors.compare, byArtist, byYearAsc, byName, byPath),
 };
 
 export function sortAlbums(list, by) {

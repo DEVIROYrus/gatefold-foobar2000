@@ -19,6 +19,8 @@ import { bgCall } from './sched.js';
 
 import { $t } from './i18n.js';
 import { emptyActions } from './welcome.js';
+import * as SmartPL from './smartpl.js';
+import * as Colors from './colors.js';
 const dpr = () => Math.min(2, window.devicePixelRatio || 1);
 /** A track as the host's context-menu/handle APIs want it: path, or path|subsong:N. */
 const trackHandle = (t) => t.handle || ((t.subsong ? `${t.absolutePath || t.path}|subsong:${t.subsong}` : (t.absolutePath || t.path)));
@@ -126,7 +128,7 @@ CF.events.addEventListener('change', debounce(() => {
 }, 400));
 
 // ============================================================ playlist view
-const PL = { guid: '', index: -1, name: '', total: 0, pages: new Map(), loading: new Set(), runs: [], allRuns: [], kind: null, ref: null, top: null, n: 0, height: 0, nodes: new Map(), sel: -1, token: 0, mode: 'albums', rowH: 36, cols: 1, tw: 160, th: 220 };
+const PL = { guid: '', index: -1, name: '', total: 0, pages: new Map(), loading: new Set(), runs: [], allRuns: [], kind: null, ref: null, top: null, n: 0, height: 0, nodes: new Map(), sel: -1, selSet: new Set(), anchor: -1, locked: false, token: 0, mode: 'albums', rowH: 36, cols: 1, tw: 160, th: 220 };
 let ROW = 36, HEAD = 72, ROWC = 56;
 const PAGE = 150, TGAP = 18, TMIN = 158;
 /* row heights follow the text size (13…20 px), the same formula as the CSS variables set in app.js */
@@ -195,8 +197,13 @@ export async function openPlaylist(guid) {
   if (!pl) pl = list[0];
   if (!pl) { plList.innerHTML = `<div class="empty"><b>${$t('Нет плейлистов')}</b></div>`; return; }
   const token = ++PL.token;
-  Object.assign(PL, { guid: pl.guid, index: pl.index, name: pl.name, total: pl.trackCount, pages: new Map(), loading: new Set(), nodes: new Map(), sel: -1 });
+  // the same playlist again (an edit, a reorder): keep the scroll position and the selection
+  const same = pl.guid === PL.guid, keepTop = plScroller.scrollTop;
+  const keepSel = same ? new Set([...PL.selSet].filter((t) => t < pl.trackCount)) : new Set();
+  Object.assign(PL, { guid: pl.guid, index: pl.index, name: pl.name, total: pl.trackCount, pages: new Map(), loading: new Set(), nodes: new Map(),
+    sel: same && PL.sel < pl.trackCount ? PL.sel : -1, selSet: keepSel, anchor: same ? PL.anchor : -1, locked: !!(pl.isAutoplaylist || pl.isLocked) });
   plList.innerHTML = '';
+  updateSelBar();
   $('plTitle').textContent = pl.name;
   const act = await call('playlist.getActive');
   $('plSub').textContent = `${pl.trackCount} ${plural(pl.trackCount, 'трек', 'трека', 'треков')}${ok(act) && act.guid === pl.guid && act.duration ? ' · ' + fmtDuration(act.duration) : ''}`;
@@ -214,7 +221,7 @@ export async function openPlaylist(guid) {
   PL.mode = plModes[pl.guid] || def;
   renderPlHead(pl, isLiked);
   buildLayout();
-  plScroller.scrollTop = 0;
+  plScroller.scrollTop = same ? keepTop : 0;
   renderPlaylist();
   if (!pl.trackCount) {
     plList.style.height = '';
@@ -319,15 +326,20 @@ function firstVisible(y) {
   return lo;
 }
 
-async function loadPage(p) {
-  if (PL.pages.has(p) || PL.loading.has(p)) return;
+const pageWait = new Map();
+function loadPage(p) {
+  if (PL.pages.has(p)) return Promise.resolve();
+  if (pageWait.has(p) && PL.loading.has(p)) return pageWait.get(p);
   PL.loading.add(p);
   const token = PL.token;
-  const r = await call('playlist.getTracks', { playlistGuid: PL.guid, start: p * PAGE, count: PAGE, fields: FIELDS });
-  PL.loading.delete(p);
-  if (token !== PL.token || !ok(r)) return;
-  PL.pages.set(p, r.tracks || []);
-  schedulePl();
+  const pr = call('playlist.getTracks', { playlistGuid: PL.guid, start: p * PAGE, count: PAGE, fields: FIELDS }).then((r) => {
+    PL.loading.delete(p); pageWait.delete(p);
+    if (token !== PL.token || !ok(r)) return;
+    PL.pages.set(p, r.tracks || []);
+    schedulePl();
+  });
+  pageWait.set(p, pr);
+  return pr;
 }
 const trackAt = (t) => { const pg = PL.pages.get(Math.floor(t / PAGE)); return pg ? pg[t % PAGE] : null; };
 
@@ -398,7 +410,8 @@ function renderPlaylist() {
         } else if (!tr && !tile.dataset.filled) tile.querySelector('.tt').innerHTML = '<div class="skeleton" style="width:70%"></div>';
         const playing = PL.index === shared.playing.playlist && t === shared.playing.index;
         tile.classList.toggle('playing', playing);
-        tile.classList.toggle('sel', t === PL.sel);
+        tile.classList.toggle('sel', PL.selSet.has(t));
+        tile.classList.toggle('focus', t === PL.sel && PL.selSet.size > 1);
       }
     } else {
       const t = PL.ref[i];
@@ -435,7 +448,8 @@ function renderPlaylist() {
       } else if (!tr) { (cv ? el.querySelector('.c-tt b') : el.children[1]).innerHTML = '<div class="skeleton" style="width:60%"></div>'; }
       const playing = PL.index === shared.playing.playlist && t === shared.playing.index;
       el.classList.toggle('playing', playing);
-      el.classList.toggle('sel', t === PL.sel);
+      el.classList.toggle('sel', PL.selSet.has(t));
+      el.classList.toggle('focus', t === PL.sel && PL.selSet.size > 1);
       el.children[0].innerHTML = playing ? '<span class="eq"><i></i><i></i><i></i></span>' : (tr && tr.trackNumber && PL.mode === 'albums' ? tr.trackNumber : t + 1);
     }
   }
@@ -459,27 +473,284 @@ function renderPlaylist() {
   }
 }
 
+/* ---- editing: selection (click / Ctrl / Shift), Delete, drag to reorder or onto a sidebar playlist,
+   undo / redo, a context menu of our own with foobar2000's actions one level down. foobar2000 keeps an
+   undo point for every remove, insert and reorder, so Ctrl+Z is foobar2000's own undo. */
+const selList = () => [...PL.selSet].sort((a, b) => a - b);
+function selectOnly(t) { PL.selSet = new Set([t]); PL.sel = t; PL.anchor = t; }
+function selRange(a, b, add) {
+  if (!add) PL.selSet = new Set();
+  for (let i = Math.min(a, b); i <= Math.max(a, b); i++) PL.selSet.add(i);
+}
+const pushSel = debounce(() => {
+  if (!PL.guid) return;
+  call('playlist.setSelection', { playlistGuid: PL.guid, indices: selList() });
+  if (PL.sel >= 0) call('playlist.focusTrack', { playlistGuid: PL.guid, index: PL.sel });
+}, 120);
+function selChanged() { schedulePl(); updateSelBar(); pushSel(); }
+export function clearPlaylistSelection() { if (!PL.selSet.size) return false; PL.selSet = new Set(); selChanged(); return true; }
+
+/** every page that holds one of `ts` is loaded */
+async function ensureTracks(ts) {
+  const pages = [...new Set(ts.map((t) => Math.floor(t / PAGE)))].filter((p) => !PL.pages.has(p));
+  for (let i = 0; i < pages.length; i += 6) await Promise.all(pages.slice(i, i + 6).map(loadPage));
+}
+async function selectedHandles() {
+  const ts = selList();
+  await ensureTracks(ts);
+  return ts.map((t) => trackAt(t)).filter(Boolean).map(trackHandle).filter(Boolean);
+}
+const lockedMsg = () => toast($t('Этот плейлист нельзя менять вручную — это автоплейлист или он заблокирован компонентом'));
+const failed = (r) => (r && /LOCK/i.test(String(r.code || r.error)) ? lockedMsg() : toast($t('foobar2000 не выполнил действие: {0}', esc((r && (r.error || r.code)) || '?'))));
+
+export async function plUndo(redo = false) {
+  if (!PL.guid) return;
+  const r = await call(redo ? 'playlist.redo' : 'playlist.undo', { playlistGuid: PL.guid });
+  if (!ok(r)) failed(r);
+}
+export async function removeSelected() {
+  const items = selList();
+  if (!items.length || !PL.guid) return;
+  if (PL.locked) return lockedMsg();
+  const r = await call('playlist.removeTracks', { playlistGuid: PL.guid, items });
+  if (!ok(r)) return failed(r);
+  const first = items[0];
+  PL.selSet = new Set(); PL.sel = Math.min(first, PL.total - items.length - 1); PL.anchor = PL.sel;
+  updateSelBar();
+  toast($t('Удалено из плейлиста: {0} {1}', items.length, plural(items.length, 'трек', 'трека', 'треков')), { ms: 6000, action: { label: $t('Отменить'), fn: () => plUndo() } });
+}
+/** move the selected rows so that they start before row `pos` (of the current order) */
+async function moveSelectionTo(pos) {
+  const sel = selList(); const n = PL.total;
+  if (!sel.length) return;
+  if (PL.locked) return lockedMsg();
+  const contiguous = sel[sel.length - 1] - sel[0] === sel.length - 1;
+  if (contiguous && pos >= sel[0] && pos <= sel[sel.length - 1] + 1) return;     // dropped onto itself
+  const S = PL.selSet, before = [], after = [];
+  for (let i = 0; i < n; i++) if (!S.has(i)) (i < pos ? before : after).push(i);
+  const r = await call('playlist.reorder', { playlistGuid: PL.guid, newOrder: [...before, ...sel, ...after] });
+  if (!ok(r)) return failed(r);
+  const start = before.length;
+  PL.selSet = new Set(sel.map((_, k) => start + k)); PL.sel = start; PL.anchor = start;
+  pushSel();
+}
+async function moveBy(delta) {
+  const sel = selList();
+  if (!sel.length) return;
+  const pos = delta < 0 ? Math.max(0, sel[0] - 1) : Math.min(PL.total, sel[sel.length - 1] + 2);
+  await moveSelectionTo(pos);
+  scrollToTrack(PL.sel, false, true);
+}
+async function addSelectionTo(guid, name) {
+  const handles = await selectedHandles();
+  if (!handles.length) return;
+  if (!guid) {
+    const c = await call('playlist.create', { name: name || $t('Новый плейлист') });
+    if (!ok(c)) return failed(c);
+    guid = c.guid; name = name || $t('Новый плейлист');
+  }
+  const r = await call('playlist.addHandles', { playlistGuid: guid, handles });
+  if (!ok(r)) return failed(r);
+  toast($t('Добавлено в «{0}»: {1} {2}', esc(name), handles.length, plural(handles.length, 'трек', 'трека', 'треков')));
+}
+async function queueSelection() {
+  const tracks = selList();
+  const r = await call('queue.add', { playlistGuid: PL.guid, tracks });
+  if (!ok(r)) return failed(r);
+  toast($t('В очереди: +{0}', tracks.length));
+}
+
+/* the bar that appears while several rows are selected */
+let selBar = null;
+function updateSelBar() {
+  const n = PL.selSet.size;
+  if (!selBar) {
+    selBar = h(`<div class="pl-selbar" hidden><span class="n"></span><span class="gap"></span>
+      <button class="btn sm" data-sb="play">${icon('play')}${$t('Слушать')}</button>
+      <button class="btn sm" data-sb="queue">${icon('queue')}${$t('В очередь')}</button>
+      <button class="btn sm" data-sb="to">${icon('plus')}${$t('В плейлист')}</button>
+      <button class="btn sm danger" data-sb="del">${icon('x')}${$t('Удалить')}</button>
+      <button class="icon-btn" data-sb="clear" title="${$t('Снять выделение (Esc)')}">${icon('x', 14)}</button></div>`);
+    $('view-playlist').append(selBar);
+    selBar.addEventListener('click', async (e) => {
+      const b = e.target.closest('[data-sb]'); if (!b) return;
+      const a = b.dataset.sb;
+      if (a === 'play') call('playlist.playTrack', { playlistGuid: PL.guid, index: selList()[0] });
+      if (a === 'queue') queueSelection();
+      if (a === 'del') removeSelected();
+      if (a === 'clear') clearPlaylistSelection();
+      if (a === 'to') { const r = b.getBoundingClientRect(); const id = await popupMenu(await playlistTargets(), r.left, r.top - 8 - 32 * 6); pickTarget(id); }
+    });
+  }
+  selBar.hidden = n < 2;
+  if (n >= 2) selBar.querySelector('.n').textContent = $t('Выбрано: {0}', n);
+}
+async function playlistTargets() {
+  const all = await call('playlist.getAll');
+  const list = ((ok(all) && all.playlists) || []).filter((p) => p.guid !== PL.guid && !p.isAutoplaylist);
+  return [{ id: 'new', label: $t('Новый плейлист…') }, ...(list.length ? [{ type: 'sep' }] : []), ...list.map((p) => ({ id: 'pl:' + p.guid + '\u0001' + p.name, label: p.name }))];
+}
+function pickTarget(id) {
+  if (!id) return;
+  if (id === 'new') return addSelectionTo('', $t('Новый плейлист'));
+  const [guid, name] = id.slice(3).split('\u0001');
+  addSelectionTo(guid, name);
+}
+
 plList.addEventListener('click', (e) => {
+  if (dragJustEnded) return;
   if (heartClick(e, (r) => trackAt(+r.dataset.t))) return;
   const pb = e.target.closest('.vtile .play'); if (pb) { e.stopPropagation(); call('playlist.playTrack', { playlistGuid: PL.guid, index: +pb.closest('.vtile').dataset.t }); return; }
-  const row = e.target.closest('.vrow, .vtile'); if (!row) return;
-  PL.sel = +row.dataset.t; schedulePl();
-  call('playlist.focusTrack', { playlistGuid: PL.guid, index: PL.sel });
+  const row = e.target.closest('.vrow, .vtile');
+  if (!row) { if (e.target === plList) clearPlaylistSelection(); return; }
+  const t = +row.dataset.t;
+  if (e.shiftKey && PL.anchor >= 0) { selRange(PL.anchor, t, e.ctrlKey || e.metaKey); PL.sel = t; }
+  else if (e.ctrlKey || e.metaKey) { if (PL.selSet.has(t)) PL.selSet.delete(t); else PL.selSet.add(t); PL.sel = t; PL.anchor = t; }
+  else selectOnly(t);
+  selChanged();
 });
 plList.addEventListener('dblclick', (e) => {
-  if (e.target.closest('.row-like, .play')) return;
+  if (e.target.closest('.row-like, .play') || e.shiftKey || e.ctrlKey) return;
   const row = e.target.closest('.vrow, .vtile'); if (!row) return;
   call('playlist.playTrack', { playlistGuid: PL.guid, index: +row.dataset.t });
 });
 plList.addEventListener('contextmenu', async (e) => {
   const row = e.target.closest('.vrow, .vtile'); if (!row) return;
   e.preventDefault();
-  const t = +row.dataset.t, tr = trackAt(t);
-  PL.sel = t; schedulePl();
-  await call('playlist.focusTrack', { playlistGuid: PL.guid, index: t });
-  // native foobar2000 context menu: Masstagger, Online Tagger, File Operations, ReplayGain, DR Meter…
-  if (tr) call('menu.showNativePopup', { mode: 'handles', handles: [trackHandle(tr)] });
+  const t = +row.dataset.t;
+  if (!PL.selSet.has(t)) selectOnly(t);
+  PL.sel = t; selChanged();
+  const n = PL.selSet.size;
+  const radio = shared.radioFor && trackAt(t) ? [{ id: 'radio', label: $t('Радио «Похожее на это»') }] : [];
+  const id = await popupMenu([
+    { id: 'play', label: $t('Воспроизвести') },
+    { id: 'queue', label: n > 1 ? $t('Добавить в очередь ({0})', n) : $t('Добавить в очередь') },
+    { id: 'to', label: $t('Добавить в плейлист'), children: await playlistTargets() },
+    ...radio,
+    { type: 'sep' },
+    { id: 'del', label: n > 1 ? $t('Удалить из плейлиста ({0})  Del', n) : $t('Удалить из плейлиста  Del'), disabled: PL.locked },
+    { type: 'sep' },
+    { id: 'native', label: $t('Действия foobar2000…') },
+  ], e.clientX, e.clientY);
+  if (!id) return;
+  if (id === 'play') call('playlist.playTrack', { playlistGuid: PL.guid, index: t });
+  else if (id === 'queue') queueSelection();
+  else if (id === 'del') removeSelected();
+  else if (id === 'radio') shared.radioFor(trackAt(t));
+  else if (id === 'new' || id.startsWith('pl:')) pickTarget(id);
+  else if (id === 'native') {
+    // foobar2000's own menu (Convert, ReplayGain, Properties, tagging…) for exactly these rows
+    await call('playlist.setActive', { playlistGuid: PL.guid });
+    await call('playlist.setSelection', { playlistGuid: PL.guid, indices: selList() });
+    const r = await call('menu.showNativePopup', { mode: 'selection' });
+    if (!ok(r)) { const hs = await selectedHandles(); if (hs.length) call('menu.showNativePopup', { mode: 'handles', handles: hs }); }
+  }
 });
+
+/* drag: pointer based (HTML drag-and-drop belongs to files from Explorer, see dropzone.js) */
+let drag = null, dragJustEnded = false;
+plList.addEventListener('pointerdown', (e) => {
+  if (e.button !== 0 || e.shiftKey || e.ctrlKey || e.target.closest('button, .row-like, input')) return;
+  const row = e.target.closest('.vrow, .vtile'); if (!row) return;
+  drag = { t: +row.dataset.t, x: e.clientX, y: e.clientY, on: false, target: null };
+});
+function dropTarget(e) {
+  const under = document.elementFromPoint(e.clientX, e.clientY);
+  const side = under && under.closest('.pl-item[data-guid]');
+  if (side) return side.dataset.guid === PL.guid ? null : { guid: side.dataset.guid, name: side.querySelector('.name')?.textContent || '', el: side };
+  const sr = plScroller.getBoundingClientRect();
+  if (e.clientX < sr.left || e.clientX > sr.right || e.clientY < sr.top || e.clientY > sr.bottom || PL.locked) return null;
+  const lr = plList.getBoundingClientRect();
+  const y = e.clientY - lr.top, x = e.clientX - lr.left;
+  if (PL.mode === 'grid') {
+    const r = Math.max(0, Math.floor((y - 8) / PL.rowH)), c = Math.max(0, Math.min(PL.cols - 1, Math.floor(x / (PL.tw + TGAP))));
+    let t = r * PL.cols + c; if (x - c * (PL.tw + TGAP) > PL.tw / 2) t++;
+    t = Math.min(PL.total, t);
+    const col = t % PL.cols, row = Math.floor(t / PL.cols);
+    const atEnd = t === PL.total && col === 0 && t > 0;
+    return { pos: t, gx: atEnd ? PL.cols * (PL.tw + TGAP) - TGAP / 2 : col * (PL.tw + TGAP) - TGAP / 2, gy: PL.top[atEnd ? row - 1 : row] ?? 8 };
+  }
+  if (!PL.n) return { pos: 0, y: 0 };
+  const i = firstVisible(Math.max(0, y));
+  if (PL.kind[i] === 1) { const run = PL.runs[PL.ref[i]]; return { pos: run.start, y: PL.top[i] }; }
+  const t = PL.ref[i], h0 = PL.top[i + 1] - PL.top[i];
+  if (y > PL.top[i] + h0 / 2) {
+    // after this row: before the next album's header, if one follows
+    const nx = i + 1 < PL.n && PL.kind[i + 1] === 1 ? PL.top[i + 1] : PL.top[i] + h0;
+    return { pos: t + 1, y: nx };
+  }
+  return { pos: t, y: PL.top[i] };
+}
+let ghost = null, line = null, autoRaf = 0, lastMove = null;
+function autoScroll() {
+  autoRaf = 0;
+  if (!drag || !drag.on || !lastMove) return;
+  const r = plScroller.getBoundingClientRect(), y = lastMove.clientY;
+  const v = y < r.top + 48 ? -Math.ceil((r.top + 48 - y) / 4) : y > r.bottom - 48 ? Math.ceil((y - r.bottom + 48) / 4) : 0;
+  if (v && lastMove.clientX >= r.left && lastMove.clientX <= r.right) { plScroller.scrollTop += v; moveDrag(lastMove); }
+  autoRaf = requestAnimationFrame(autoScroll);
+}
+function startDrag() {
+  if (!PL.selSet.has(drag.t)) { selectOnly(drag.t); selChanged(); }
+  drag.on = true;
+  document.body.classList.add('pl-dragging');
+  const n = PL.selSet.size, tr = trackAt(drag.t);
+  ghost = h(`<div class="drag-ghost">${icon('music', 14)}<span></span></div>`);
+  ghost.querySelector('span').textContent = n > 1 ? `${n} ${plural(n, 'трек', 'трека', 'треков')}` : (tr && tr.title) || '1';
+  document.body.append(ghost);
+  line = h('<div class="drop-line"></div>'); plList.append(line);
+  autoRaf = requestAnimationFrame(autoScroll);
+}
+function moveDrag(e) {
+  lastMove = { clientX: e.clientX, clientY: e.clientY };
+  ghost.style.transform = `translate(${e.clientX + 14}px, ${e.clientY + 12}px)`;
+  const tg = dropTarget(e);
+  document.querySelectorAll('.pl-item.drop-hl').forEach((x) => { if (!tg || x !== tg.el) x.classList.remove('drop-hl'); });
+  drag.target = tg;
+  if (tg && tg.el) { tg.el.classList.add('drop-hl'); line.hidden = true; ghost.classList.add('copy'); return; }
+  ghost.classList.remove('copy');
+  if (!tg) { line.hidden = true; return; }
+  line.hidden = false;
+  if (PL.mode === 'grid') { line.className = 'drop-line v'; line.style.transform = `translate(${tg.gx}px, ${tg.gy}px)`; line.style.height = PL.th + 'px'; }
+  else { line.className = 'drop-line'; line.style.transform = `translateY(${tg.y - 1}px)`; line.style.height = ''; }
+}
+function endDrag() {
+  cancelAnimationFrame(autoRaf); autoRaf = 0; lastMove = null;
+  document.body.classList.remove('pl-dragging');
+  ghost && ghost.remove(); line && line.remove(); ghost = line = null;
+  document.querySelectorAll('.pl-item.drop-hl').forEach((x) => x.classList.remove('drop-hl'));
+}
+addEventListener('pointermove', (e) => {
+  if (!drag) return;
+  if (!drag.on) { if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 6) return; startDrag(); }
+  moveDrag(e);
+});
+addEventListener('pointerup', () => {
+  if (!drag) return;
+  const d = drag; drag = null;
+  if (!d.on) return;
+  endDrag();
+  dragJustEnded = true; setTimeout(() => { dragJustEnded = false; }, 0);
+  const tg = d.target;
+  if (!tg) return;
+  if (tg.guid) addSelectionTo(tg.guid, tg.name);
+  else moveSelectionTo(tg.pos);
+});
+addEventListener('keydown', (e) => { if (e.key === 'Escape' && drag && drag.on) { drag = null; endDrag(); } }, true);
+
+/* keys while the playlist is on screen */
+document.addEventListener('keydown', (e) => {
+  if (router.current !== 'playlist' || (e.target.closest && e.target.closest('input, textarea, select'))) return;
+  const k = e.key.toLowerCase();
+  const stop = () => { e.preventDefault(); e.stopImmediatePropagation(); };
+  if (k === 'delete') { stop(); removeSelected(); }
+  else if ((e.ctrlKey || e.metaKey) && (k === 'a' || k === 'ф')) { stop(); PL.selSet = new Set(Array.from({ length: PL.total }, (_, i) => i)); PL.anchor = 0; selChanged(); }
+  else if ((e.ctrlKey || e.metaKey) && (k === 'z' || k === 'я')) { stop(); plUndo(e.shiftKey); }
+  else if ((e.ctrlKey || e.metaKey) && (k === 'y' || k === 'н')) { stop(); plUndo(true); }
+  else if (e.altKey && (k === 'arrowup' || k === 'arrowdown')) { stop(); moveBy(k === 'arrowup' ? -1 : 1); }
+  else if (k === 'enter' && PL.sel >= 0) { stop(); call('playlist.playTrack', { playlistGuid: PL.guid, index: PL.sel }); }
+  else if (k === 'escape' && PL.selSet.size) { stop(); clearPlaylistSelection(); }
+}, true);
 $('plJump').addEventListener('click', () => jumpToPlaying(true));
 
 export function jumpToPlaying(force) {
@@ -503,7 +774,7 @@ export async function revealPlaying() {
 }
 function flashPlaying() {
   if (shared.playing.index < 0) return;
-  PL.sel = shared.playing.index; scrollToTrack(shared.playing.index, true); schedulePl();
+  selectOnly(shared.playing.index); scrollToTrack(shared.playing.index, true); schedulePl(); updateSelBar();
   setTimeout(() => plList.querySelector('.vrow.playing, .vtile.playing')?.classList.add('flash'), 450);
   setTimeout(() => plList.querySelector('.flash')?.classList.remove('flash'), 1900);
 }
@@ -517,7 +788,7 @@ on('metadb:changed', debounce(() => { if (router.current === 'playlist') refresh
 onRoute((v) => { if (v === 'playlist' && plStale) refreshPlRows(); });
 
 // ============================================================ library grid
-const LIB = { albums: [], view: [], loaded: false, loading: false, stale: true, cols: 1, tileW: 180, rowH: 240, nodes: new Map() };
+const LIB = { hue: null, albums: [], view: [], loaded: false, loading: false, stale: true, cols: 1, tileW: 180, rowH: 240, nodes: new Map() };
 const libScroller = $('libScroller'), libGrid = $('libGrid');
 const GAP = 8, PAD = 20;
 
@@ -671,9 +942,49 @@ async function sortLib() {
     const has = await SORT.ensure(by, LIB.albums);
     if (!has && !warnedNoStats) { warnedNoStats = true; toast($t('Нет данных о добавлении/прослушивании: нужен компонент Playback Statistics (foo_playcount). Альбомы упорядочены по исполнителю.'), { ms: 7000 }); }
   }
+  if (by === 'color') { await Colors.ensure([]); Colors.ensure(LIB.albums); }
   LIB.sorted = SORT.sortAlbums(LIB.albums, by);
   LIB.needResort = false;
+  ribbon();
 }
+/* «By cover colour»: a ribbon of hues above the grid filters the wall to one colour */
+const HUES = Array.from({ length: 12 }, (_, i) => 15 + i * 30);
+function ribbon() {
+  const el = $('libRibbon');
+  const on = settings.librarySort === 'color';
+  el.hidden = !on;
+  if (!on) { if (LIB.hue != null) { LIB.hue = null; } return; }
+  if (!el.dataset.built) {
+    el.dataset.built = '1';
+    el.innerHTML = `<div class="cr-sw">${HUES.map((h) => `<button class="cr-b" data-h="${h}" style="--c:oklch(70% 0.16 ${h})" title="${$t('Только этот цвет')}"></button>`).join('')}<button class="cr-b n" data-h="neutral" title="${$t('Чёрно-белые и серые обложки')}"></button></div><span class="cr-info"></span>`;
+    el.addEventListener('click', (e) => {
+      const b = e.target.closest('.cr-b'); if (!b) return;
+      const h = b.dataset.h === 'neutral' ? 'neutral' : +b.dataset.h;
+      LIB.hue = LIB.hue === h ? null : h;
+      libScroller.scrollTop = 0; applyFilter(); ribbonInfo();
+    });
+  }
+  ribbonInfo();
+}
+function ribbonInfo() {
+  const el = $('libRibbon'); if (el.hidden) return;
+  el.querySelectorAll('.cr-b').forEach((b) => b.classList.toggle('on', String(LIB.hue) === b.dataset.h));
+  el.classList.toggle('picked', LIB.hue != null);
+  const st = Colors.state;
+  el.querySelector('.cr-info').innerHTML = st.running
+    ? `<span class="spinner"></span>${$t('Разбираю цвета обложек: {0} из {1}', st.done, st.total)}`
+    : LIB.hue != null ? $t('{0} {1} этого цвета · щёлкните ещё раз, чтобы показать все', LIB.view.length, plural(LIB.view.length, 'альбом', 'альбома', 'альбомов')) : $t('Выберите цвет, чтобы оставить только его');
+}
+let lastColorSort = 0;
+Colors.events.addEventListener('progress', () => {
+  if (settings.librarySort !== 'color' || !LIB.loaded) return;
+  ribbonInfo();
+  const now = performance.now();
+  if (Colors.state.running && now - lastColorSort < 2500) return;
+  lastColorSort = now;
+  LIB.sorted = SORT.sortAlbums(LIB.albums, 'color');
+  if (router.current === 'library') { applyFilter(); ribbonInfo(); }
+});
 /* "Recently played": the album that just started moves to the front — re-ordered when
    the grid is scrolled to the top or the next time it is opened, never under the cursor. */
 SORT.events.addEventListener('played', () => {
@@ -686,9 +997,12 @@ onRoute((v) => { if (v === 'library' && LIB.needResort && LIB.loaded && !LIB.loa
 function applyFilter() {
   const q = $('libFilter').value.trim().toLowerCase();
   const base = LIB.sorted || LIB.albums;
-  LIB.view = q ? base.filter((a) => (a.name + ' ' + a.artist + ' ' + (a.year || '') + ' ' + (a.genre || '')).toLowerCase().includes(q)) : base;
+  let view = q ? base.filter((a) => (a.name + ' ' + a.artist + ' ' + (a.year || '') + ' ' + (a.genre || '')).toLowerCase().includes(q)) : base;
+  if (LIB.hue != null && settings.librarySort === 'color') view = view.filter((a) => Colors.matches(a, LIB.hue));
+  LIB.view = view;
   libGrid.querySelectorAll('.tile').forEach((t) => t.remove()); LIB.nodes.clear();
   layoutLib();
+  if (settings.librarySort === 'color') ribbonInfo();
 }
 
 function layoutLib() {
@@ -758,12 +1072,14 @@ async function albumMenu(a, x, y) {
   const id = await popupMenu([
     { id: 'play', label: $t('Слушать альбом') },
     { id: 'queue', label: $t('Добавить в очередь') },
+    ...(shared.radioFor ? [{ id: 'radio', label: $t('Радио «Похожее на это»') }] : []),
     { type: 'sep' },
     { id: 'cover', label: $t('Найти обложку…') },
     { id: 'explorer', label: $t('Показать в проводнике') },
   ], x, y);
   if (id === 'play') playAlbumRow(a);
   if (id === 'queue') queueAlbum(a);
+  if (id === 'radio') shared.radioFor(a.albumArtist || a.artist);
   if (id === 'cover') router.go('covers', { manual: CF.jobFromAlbum(a) });
   if (id === 'explorer' && a.firstTrackAbsolutePath) call('shell.showInExplorer', { path: a.firstTrackAbsolutePath });
 }
@@ -969,6 +1285,7 @@ export async function renderPlaylists() {
     el.dataset.guid = p.guid;
     if (router.current === 'playlist' && PL.guid === p.guid) el.classList.add('active');
     el.onclick = () => { call('playlist.setActive', { playlistGuid: p.guid }); router.go('playlist', p.guid); };
+    sideDraggable(el, p.guid);
     el.oncontextmenu = async (e) => {
       e.preventDefault();
       const id = await popupMenu([{ id: 'play', label: $t('Воспроизвести') }, { id: 'rename', label: $t('Переименовать…') }, { id: 'dup', label: $t('Дублировать') }, { type: 'sep' }, { id: 'del', label: $t('Удалить') }], e.clientX, e.clientY);
@@ -980,6 +1297,40 @@ export async function renderPlaylists() {
     box.appendChild(el);
   }
 }
+/* drag a playlist up or down the sidebar to reorder foobar2000's playlist list */
+let sideDrag = null;
+function sideDraggable(el, guid) {
+  el.addEventListener('pointerdown', (e) => { if (e.button === 0 && !e.target.closest('input')) sideDrag = { el, guid, y: e.clientY, on: false }; });
+}
+addEventListener('pointermove', (e) => {
+  if (!sideDrag) return;
+  if (!sideDrag.on) { if (Math.abs(e.clientY - sideDrag.y) < 6) return; sideDrag.on = true; sideDrag.el.classList.add('pl-moving'); document.body.classList.add('side-dragging'); }
+  const items = [...$('playlists').querySelectorAll('.pl-item[data-guid]:not(.pl-liked)')];
+  let before = null;
+  for (const it of items) { const r = it.getBoundingClientRect(); if (e.clientY < r.top + r.height / 2) { before = it; break; } }
+  items.forEach((it) => it.classList.toggle('drop-above', it === before && it !== sideDrag.el));
+  const last = items[items.length - 1];
+  if (last) last.classList.toggle('drop-below', !before && last !== sideDrag.el);
+  sideDrag.before = before ? before.dataset.guid : '';
+});
+addEventListener('pointerup', async () => {
+  const d = sideDrag; sideDrag = null;
+  if (!d || !d.on) return;
+  document.body.classList.remove('side-dragging');
+  $('playlists').querySelectorAll('.pl-moving, .drop-above, .drop-below').forEach((x) => x.classList.remove('pl-moving', 'drop-above', 'drop-below'));
+  const swallow = (e) => { e.stopImmediatePropagation(); e.preventDefault(); };
+  d.el.addEventListener('click', swallow, true); setTimeout(() => d.el.removeEventListener('click', swallow, true), 0);
+  const all = await call('playlist.getAll');
+  const guids = ((ok(all) && all.playlists) || []).map((p) => p.guid);
+  const from = guids.indexOf(d.guid); if (from < 0) return;
+  guids.splice(from, 1);
+  const to = d.before ? guids.indexOf(d.before) : guids.length;
+  guids.splice(to < 0 ? guids.length : to, 0, d.guid);
+  const r = await call('playlist.reorderPlaylists', { newOrderGuids: guids });
+  if (!ok(r)) toast($t('foobar2000 не выполнил действие: {0}', esc(r.error || r.code || '?')));
+  renderPlaylists();
+});
+
 function inlineRename(el, p) {
   const span = el.querySelector('.name');
   const inp = h(`<input class="filter" style="height:26px;width:100%" value="${esc(p.name)}">`);
@@ -989,7 +1340,11 @@ function inlineRename(el, p) {
   inp.onblur = () => done(true);
   inp.onclick = (e) => e.stopPropagation();
 }
-$('btnNewPl').addEventListener('click', async () => {
+$('btnNewPl').addEventListener('click', async (e) => {
+  const r = e.currentTarget.getBoundingClientRect();
+  const id = await popupMenu([{ id: 'plain', label: $t('Новый плейлист') }, { id: 'smart', label: $t('Умный плейлист…') }], r.left, r.bottom + 4);
+  if (id === 'smart') return SmartPL.open();
+  if (id !== 'plain') return;
   const c = await call('playlist.create', { name: $t('Новый плейлист') });
   if (ok(c)) { await renderPlaylists(); const el = [...$('playlists').children].pop(); if (el) inlineRename(el, { guid: c.guid, name: $t('Новый плейлист') }); }
 });
