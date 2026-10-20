@@ -63,6 +63,9 @@ jobs:
         run: |
           mkdir -p /tmp/log && cp build.log /tmp/log/ 2>/dev/null || echo "no build.log" > /tmp/log/build.log
           echo "${{ job.status }} ${GITHUB_SHA} $(date -u +%FT%TZ)" > /tmp/log/STATUS
+          # the downloaded models too (CC BY-NC-SA 4.0, MTG-UPF): lets the front end be checked offline
+          mkdir -p /tmp/log/work && cp work/*.pb work/*.json /tmp/log/work/ 2>/dev/null || true
+          cp out/models/*.onnx out/models/manifest.json /tmp/log/work/ 2>/dev/null || true
           cd /tmp/log && git init -q -b ml-log
           git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A && git commit -qm "ML build log ${GITHUB_SHA::7}"
