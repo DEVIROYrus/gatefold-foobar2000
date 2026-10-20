@@ -759,13 +759,14 @@ async def main():
         browser = await p.chromium.launch(**kw)
         only = os.environ.get('ONLY', '')
         run = lambda name: not only or any(o in name for o in only.split(','))
+        import time
         for lang in ('ru', 'en'):
-            if run('language'): await test_language(browser, port, lang)
+            if run('language'): t0 = time.time(); await test_language(browser, port, lang); print(f'  ({time.time() - t0:.0f} s)')
         for name, fn in [('playlists', test_playlists), ('youtube', test_youtube), ('settings', test_settings), ('updates', test_updates),
                          ('tooltips', test_tooltips), ('canvas_volume', test_canvas_volume), ('fb2k_prefs', test_fb2k_prefs), ('welcome', test_welcome),
                          ('playlist_editing', test_playlist_editing), ('windows', test_windows), ('smart_color_radio', test_smart_color_radio),
                          ('sound_ai', test_sound_ai), ('layout', test_layout), ('stability', test_stability)]:
-            if run(name): await fn(browser, port)
+            if run(name): t0 = time.time(); await fn(browser, port); print(f'  ({time.time() - t0:.0f} s)')
         await browser.close()
     httpd.shutdown()
     print(f'\n{len(failures)} failure(s)')

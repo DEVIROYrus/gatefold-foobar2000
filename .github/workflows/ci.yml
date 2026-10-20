@@ -8,8 +8,19 @@ permissions:
 
 jobs:
   theme:
-    name: Theme — static checks and end-to-end tests
+    name: Theme — ${{ matrix.part }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    # the end-to-end tests in parallel parts (one job took ~25 min); ONLY= picks tests by name
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { part: 'screens, settings, updates', only: 'language,playlists,youtube,settings,updates,tooltips,canvas_volume,fb2k_prefs,welcome' }
+          - { part: 'editing, windows, smart playlists, radio', only: 'playlist_editing,windows,smart_color_radio' }
+          - { part: 'sound analysis', only: 'sound_ai' }
+          - { part: 'layout', only: 'layout' }
+          - { part: 'stability', only: 'stability' }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -24,6 +35,7 @@ jobs:
           pip install playwright==1.48.0 onnx==1.17.0 numpy
           python -m playwright install --with-deps chromium
       - name: End-to-end (headless Chromium, mocked foobar2000 bridge)
+        env: { ONLY: '${{ matrix.only }}' }
         run: python tests/e2e.py
 
   installer:
