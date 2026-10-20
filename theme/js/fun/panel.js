@@ -33,7 +33,7 @@ export function open() {
   const sync = () => grid.querySelectorAll('.fun-skin').forEach((b) => b.classList.toggle('on', b.dataset.id === Skins.current()));
   for (const s of Skins.SKINS) {
     const b = html(`<button class="fun-skin" data-id="${s.id}">${PREVIEW[s.id]}<b>${esc(s.title)}</b><small>${esc(s.desc)}</small></button>`);
-    b.onclick = async () => { grid.classList.add('busy'); await Skins.apply(s.id); grid.classList.remove('busy'); sync(); renderOpts(); };
+    b.onclick = async () => { grid.classList.add('busy'); try { await Skins.apply(s.id); } finally { grid.classList.remove('busy'); } sync(); renderOpts(); };
     grid.appendChild(b);
   }
   sync(); renderOpts();

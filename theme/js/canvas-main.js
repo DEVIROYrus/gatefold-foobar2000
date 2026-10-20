@@ -4,6 +4,7 @@
  * The popup has its own WebView and bridge, so it tracks playback itself.
  */
 import './i18n-boot.js';
+import './input-guard.js';
 import './tooltip.js';
 import { waitForBridge, call, on, ok, normTrack, artUrl, log } from './bridge.js';
 import * as Theme from './theme.js';

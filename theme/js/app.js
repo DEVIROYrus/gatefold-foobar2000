@@ -1,6 +1,7 @@
 /*
  * Gatefold · app.js — boot, window chrome, playback state, Now Playing, player bar.
  */
+import './input-guard.js';
 import './i18n-boot.js';
 import './tooltip.js';
 import './select.js';
@@ -638,6 +639,9 @@ seek.addEventListener('pointermove', (e) => {
   if (dragging) Viz.setDrag(f); else Viz.setHover(f);
 });
 seek.addEventListener('pointerleave', () => { if (!dragging) Viz.setHover(-1); });
+const seekReset = () => { if (!dragging) return; dragging = false; seek.classList.remove('drag'); Viz.setDrag(-1); };
+seek.addEventListener('lostpointercapture', seekReset);
+addEventListener('gatefold:input-reset', seekReset);
 seek.addEventListener('pointerup', async (e) => {
   if (!dragging) return;
   dragging = false; seek.classList.remove('drag');

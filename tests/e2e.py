@@ -10,6 +10,7 @@ contains no untranslated Russian text; playlist view modes; likes; YouTube searc
 language switch; settings search; the one-click updater (checksum, component requirement, install,
 rollback); the theme's own tooltips; the Canvas volume control; Settings → foobar2000; the first-run welcome.
 """
+from collections import Counter
 import asyncio, os, sys, threading, http.server, socketserver, functools, json, io, re, zipfile, hashlib
 from pathlib import Path
 from playwright.async_api import async_playwright
@@ -451,6 +452,7 @@ async def test_windows(browser, port):
     await pg.mouse.move(200, 60); await pg.mouse.wheel(0, -100); await pg.wait_for_timeout(300)
     check(any(c[0] == 'playback.setVolume' for c in await pg.evaluate("window.__calls")), 'the mouse wheel changes the volume')
     if os.environ.get('SHOTS'): await pg.screenshot(path=os.environ['SHOTS'] + '/mini.png')
+    check(await pg.evaluate("(() => { const ev = new DragEvent('dragstart', { bubbles: true, cancelable: true }); (document.querySelector('#mini img') || document.body).dispatchEvent(ev); return ev.defaultPrevented; })()"), 'mini: no native drag either')
     check(not errs, f'mini: no page errors {errs[:2]}')
     await ctx.close()
 
@@ -613,24 +615,118 @@ async def test_sound_ai(browser, port):
     check(not errs, f'no page errors {errs[:2]}')
     await ctx.close()
 
+MONKEY_PICK = r"""((seed, seen) => {
+  let x = seed >>> 0; const rnd = () => ((x = (x * 1664525 + 1013904223) >>> 0) / 4294967296);
+  const bad = /удал|remove|delete|reset|сброс|очист|clear|uninstall|rescan|переска|install|установ|откат|rollback|выход|quit|exit|close|закр|свернуть|minimi|maximi|развернуть|youtube\.com|github|папк|folder|файл|file|import|импорт/i;
+  const els = [...document.querySelectorAll('button, [role=button], .tile, .atile, .vrow, .vtile, .pl-item, [data-go], .mi, .chip, .seg button, label.switch, .sw, .nav-item, .tab, [data-tab]')]
+    .filter((e) => { const r = e.getBoundingClientRect(); if (!r.width || !r.height || r.bottom < 0 || r.top > innerHeight || r.right < 0 || r.left > innerWidth) return false;
+      if (e.closest('#winctl, .win-controls, .titlebar-controls') || /^btn(Close|Min|Max)$/.test(e.id)) return false;
+      const t = (e.textContent || '') + ' ' + (e.getAttribute('title') || '') + ' ' + (e.dataset.tip || '') + ' ' + (e.getAttribute('aria-label') || '') + ' ' + (e.id || '');
+      if (bad.test(t)) return false; const s = getComputedStyle(e); return s.visibility !== 'hidden' && s.pointerEvents !== 'none'; });
+  if (!els.length) return null;
+  const key = (e) => (e.id || e.className || e.tagName).toString().slice(0, 40);
+  // a few random candidates; the least clicked kind wins, so one big grid does not eat the run
+  let e = null; for (let k = 0; k < 4; k++) { const c = els[Math.floor(rnd() * els.length)]; if (!e || (seen[key(c)] || 0) < (seen[key(e)] || 0)) e = c; }
+  const r = e.getBoundingClientRect();
+  return { x: r.left + r.width * (0.3 + rnd() * 0.4), y: r.top + r.height * (0.3 + rnd() * 0.4), what: key(e) };
+})"""
+
+async def test_stability(browser, port):
+    print('· stability: mouse after a drag, random clicking, track-change storm, leaks')
+    pre = "window.__rej = []; addEventListener('unhandledrejection', (e) => window.__rej.push(String(e.reason && (e.reason.stack || e.reason))));"
+    ctx, pg, errs = await page(browser, port, {'language': 'en'}, pre=pre)
+    cons = []
+    pg.on('console', lambda m: cons.append(m.text) if m.type == 'error' and 'Failed to load resource' not in m.text else None)
+    missing = []
+    pg.on('response', lambda r: missing.append(r.url) if r.status >= 400 and '/theme/' in r.url else None)
+    # 1. native drag-and-drop never starts from the page (it froze clicks in foo_ui_webview2)
+    await nav(pg, 'library', 1500)
+    r = await pg.evaluate("""(() => { const img = document.querySelector('#view-library img, .tile img, img');
+      if (!img) return null; const ev = new DragEvent('dragstart', { bubbles: true, cancelable: true }); img.dispatchEvent(ev);
+      const a = document.createElement('a'); a.href = '#x'; a.textContent = 'x'; document.body.appendChild(a); const ev2 = new DragEvent('dragstart', { bubbles: true, cancelable: true }); a.dispatchEvent(ev2); a.remove();
+      return { img: ev.defaultPrevented, link: ev2.defaultPrevented, css: getComputedStyle(img).webkitUserDrag }; })()""")
+    check(r and r['img'] and r['link'] and r['css'] == 'none', f'dragging a cover or a link never starts a native drag {r}')
+    t = await pg.evaluate("(() => { const e = document.querySelector('#view-library .tile'); if (!e) return null; const r = e.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 3]; })()")
+    if t:
+        await pg.mouse.move(t[0], t[1]); await pg.mouse.down(); await pg.mouse.move(t[0] + 40, t[1] + 30, steps=8); await pg.mouse.move(t[0] + 160, t[1] + 90, steps=8); await pg.mouse.up()
+        await pg.wait_for_timeout(400)
+        b = await pg.evaluate("(() => { const r = document.querySelector('.nav-item[data-view=queue]').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()")
+        await pg.mouse.click(b[0], b[1]); await pg.wait_for_timeout(900)
+        check(await pg.evaluate("document.querySelector('.view.active')?.id") == 'view-queue', 'a real click works right after pulling a cover around')
+    # files dragged over the window from Explorer: the overlay never outlives the drag, even if the leave is lost
+    ENTER = "(() => { const dt = new DataTransfer(); dt.items.add(new File(['x'], 'a.flac')); document.querySelector('#view-' + (document.querySelector('.view.active').id.slice(5))).dispatchEvent(new DragEvent('dragenter', { bubbles: true, cancelable: true, dataTransfer: dt })); return document.body.classList.contains('dragging'); })()"
+    check(await pg.evaluate(ENTER), 'files over the window show the drop overlay')
+    await pg.wait_for_timeout(2200)
+    check(not await pg.evaluate("document.body.classList.contains('dragging')"), 'it goes away by itself when the drag stops coming (a lost dragleave)')
+    await pg.evaluate(ENTER); await pg.mouse.move(700, 400); await pg.mouse.move(720, 420); await pg.wait_for_timeout(100)
+    check(not await pg.evaluate("document.body.classList.contains('dragging')"), 'or as soon as the mouse moves normally again')
+    # 2. random clicking (seeded, repeatable), with Escape now and then
+    base_nodes = None
+    for v in VIEWS: await nav(pg, v, 500)
+    await nav(pg, 'now', 800)
+    base_nodes = await pg.evaluate("document.getElementsByTagName('*').length")
+    seed, done, log, reloads = int(os.environ.get("MONKEY_SEED", 20261020)), 0, [], []
+    for i in range(int(os.environ.get("MONKEY_N", 320))):
+        if i % 40 == 0:
+            await nav(pg, VIEWS[(i // 40) % len(VIEWS)], 450)
+        if i % 9 == 8:
+            await pg.keyboard.press('Escape'); await pg.wait_for_timeout(60); continue
+        try: p = await pg.evaluate(MONKEY_PICK + f"({seed + i}, {json.dumps(dict(Counter(log)))})")
+        except Exception:   # a click reloaded the page (e.g. the language switch): fine, carry on
+            reloads.append(log[-1] if log else '?'); await pg.wait_for_load_state(); await pg.wait_for_timeout(1500); continue
+        if not p: continue
+        log.append(p['what'])
+        await pg.mouse.click(p['x'], p['y'], button='right' if i % 17 == 16 else 'left'); done += 1
+        await pg.wait_for_timeout(70)
+        if pg.url.split('?')[0].split('#')[0] != f'http://127.0.0.1:{port}/theme/index.html': break
+    for _ in range(4): await pg.keyboard.press('Escape'); await pg.wait_for_timeout(120)
+    check(done > int(os.environ.get("MONKEY_N", 320)) * 0.6, f'random clicking ran ({done} clicks)')
+    bad_nav = []
+    for v in VIEWS:
+        await nav(pg, v, 600)
+        if await pg.evaluate("document.querySelector('.view.active')?.id") != 'view-' + v: bad_nav.append(v)
+        # nothing invisible sits over the screen and eats the clicks
+        hit = await pg.evaluate("(() => { const a = document.querySelector('.view.active'); const r = a.getBoundingClientRect(); const pts = [[.5, .5], [.25, .3], [.75, .7]]; return pts.map(([fx, fy]) => { const e = document.elementFromPoint(r.left + r.width * fx, r.top + r.height * fy); return !e || a.contains(e) || e.closest('#toasts, .toast') ? '' : (e.id || e.className || e.tagName); }).filter(Boolean); })()")
+        if hit: bad_nav.append(f'{v}: covered by {hit}')
+    check(not bad_nav, f'every screen still opens after random clicking {bad_nav} (last clicks: {log[-6:]})')
+    # 3. track-change storm: the last track wins, nothing throws
+    n = await pg.evaluate("window.fb2k.invoke('playlist.getActive').then((r) => r.trackCount)")
+    for i in range(60):
+        await pg.evaluate(f"window.__emit('playback:trackChanged', window.__track({i % n}))"); await pg.wait_for_timeout(15)
+    await pg.wait_for_timeout(1500)
+    want = await pg.evaluate(f"window.__track({59 % n}).title")
+    check(await pg.inner_text('#pbTitle') == want, f'after 60 quick track changes the player bar shows the last one ({want})')
+    # 4. leaks: walking every screen five more times does not keep growing the page
+    await nav(pg, 'now', 800)
+    a = await pg.evaluate("document.getElementsByTagName('*').length")
+    for _ in range(5):
+        for v in VIEWS: await nav(pg, v, 250)
+    await nav(pg, 'now', 1200)
+    b2 = await pg.evaluate("document.getElementsByTagName('*').length")
+    check(b2 <= a * 1.15 + 200, f'DOM size stays flat over 40 screen changes ({base_nodes} → {a} → {b2})')
+    rej = await pg.evaluate("window.__rej")
+    check(not errs, f'no page errors {errs[:3]}')
+    check(not rej, f'no unhandled promise rejections {rej[:3]}')
+    check(not cons, f'no console errors {cons[:3]}')
+    check(not missing, f'no missing files {sorted(set(missing))[:5]}')
+    print('    reloads after:', reloads)
+    print('    clicked:', Counter(log).most_common(12))
+    await ctx.close()
+
 async def main():
     httpd = serve(); port = httpd.server_address[1]
     async with async_playwright() as p:
         kw = {'executable_path': os.environ['CHROMIUM']} if os.environ.get('CHROMIUM') else {}
         browser = await p.chromium.launch(**kw)
-        for lang in ('ru', 'en'): await test_language(browser, port, lang)
-        await test_playlists(browser, port)
-        await test_youtube(browser, port)
-        await test_settings(browser, port)
-        await test_updates(browser, port)
-        await test_tooltips(browser, port)
-        await test_canvas_volume(browser, port)
-        await test_fb2k_prefs(browser, port)
-        await test_welcome(browser, port)
-        await test_playlist_editing(browser, port)
-        await test_windows(browser, port)
-        await test_smart_color_radio(browser, port)
-        await test_sound_ai(browser, port)
+        only = os.environ.get('ONLY', '')
+        run = lambda name: not only or any(o in name for o in only.split(','))
+        for lang in ('ru', 'en'):
+            if run('language'): await test_language(browser, port, lang)
+        for name, fn in [('playlists', test_playlists), ('youtube', test_youtube), ('settings', test_settings), ('updates', test_updates),
+                         ('tooltips', test_tooltips), ('canvas_volume', test_canvas_volume), ('fb2k_prefs', test_fb2k_prefs), ('welcome', test_welcome),
+                         ('playlist_editing', test_playlist_editing), ('windows', test_windows), ('smart_color_radio', test_smart_color_radio),
+                         ('sound_ai', test_sound_ai), ('stability', test_stability)]:
+            if run(name): await fn(browser, port)
         await browser.close()
     httpd.shutdown()
     print(f'\n{len(failures)} failure(s)')

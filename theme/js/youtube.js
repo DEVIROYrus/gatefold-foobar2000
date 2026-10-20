@@ -441,8 +441,10 @@ function bindSeek(el) {
     if (!P()) return;
     el.setPointerCapture(e.pointerId); el.classList.add('drag');
     const move = (ev) => { const f = at(ev); el.style.setProperty('--p', f * 100 + '%'); ctrl.querySelector('.yt-t0').textContent = fmtTime(f * dur()); };
-    const up = (ev) => { el.classList.remove('drag'); el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); P().seekTo(at(ev) * dur(), true); };
+    const stop = () => { el.classList.remove('drag'); el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('lostpointercapture', stop); };
+    const up = (ev) => { stop(); P() && P().seekTo(at(ev) * dur(), true); };
     move(e); el.addEventListener('pointermove', move); el.addEventListener('pointerup', up);
+    el.addEventListener('lostpointercapture', stop);   // the window lost the mouse: no seek
   });
 }
 function syncButtons() {

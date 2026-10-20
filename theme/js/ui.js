@@ -65,13 +65,16 @@ export function toast(msg, { img = '', ms = 3600, action = null } = {}) {
 // ---------------------------------------------------------------- popup menu
 // items: [{ id, label, checked, disabled, children:[…] } | { type: 'sep' }]
 let openMenus = [];
-export function closeMenus() { openMenus.forEach((m) => m.remove()); openMenus = []; }
+let pending = null;   // the finish() of the menu on screen: a new menu settles the old one (null) first
+const removeMenus = () => { openMenus.forEach((m) => m.remove()); openMenus = []; };
+/** closes the menu on screen; its popupMenu() promise settles with null */
+export function closeMenus() { if (pending) pending(null); removeMenus(); }
 
 export function popupMenu(items, x, y) {
   closeMenus();
   return new Promise((resolve) => {
     let done = false;
-    const finish = (v) => { if (done) return; done = true; closeMenus(); document.removeEventListener('pointerdown', outside, true); document.removeEventListener('keydown', key, true); resolve(v); };
+    const finish = (v) => { if (done) return; done = true; if (pending === finish) pending = null; removeMenus(); document.removeEventListener('pointerdown', outside, true); document.removeEventListener('keydown', key, true); resolve(v); };
     const outside = (e) => { if (!openMenus.some((m) => m.contains(e.target))) finish(null); };
     const key = (e) => { if (e.key === 'Escape') { e.preventDefault(); finish(null); } };
     const build = (list, px, py, depth, flipX = 0) => {
@@ -100,7 +103,8 @@ export function popupMenu(items, x, y) {
       m.style.left = Math.max(6, lx) + 'px'; m.style.top = ly + 'px';
     };
     build(items, x, y, 0);
-    setTimeout(() => { document.addEventListener('pointerdown', outside, true); document.addEventListener('keydown', key, true); }, 0);
+    pending = finish;
+    setTimeout(() => { if (done) return; document.addEventListener('pointerdown', outside, true); document.addEventListener('keydown', key, true); }, 0);
   });
 }
 

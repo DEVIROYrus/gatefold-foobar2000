@@ -742,6 +742,8 @@ addEventListener('pointerup', () => {
   else moveSelectionTo(tg.pos);
 });
 addEventListener('keydown', (e) => { if (e.key === 'Escape' && drag && drag.on) { drag = null; endDrag(); } }, true);
+// the window lost the mouse or the focus mid-drag (input-guard.js): drop the drag, change nothing
+addEventListener('gatefold:input-reset', () => { if (drag) { const on = drag.on; drag = null; if (on) endDrag(); } });
 
 /* keys while the playlist is on screen */
 document.addEventListener('keydown', (e) => {
@@ -1323,6 +1325,7 @@ export async function renderPlaylists() {
   }
 }
 /* drag a playlist up or down the sidebar to reorder foobar2000's playlist list */
+addEventListener('gatefold:input-reset', () => { if (!sideDrag) return; sideDrag = null; document.body.classList.remove('side-dragging'); $('playlists').querySelectorAll('.pl-moving, .drop-above, .drop-below').forEach((x) => x.classList.remove('pl-moving', 'drop-above', 'drop-below')); });
 let sideDrag = null;
 function sideDraggable(el, guid) {
   el.addEventListener('pointerdown', (e) => { if (e.button === 0 && !e.target.closest('input')) sideDrag = { el, guid, y: e.clientY, on: false }; });

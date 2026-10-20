@@ -4,6 +4,7 @@
  * itself, takes the colours of the cover like the main window, and remembers where it was put.
  */
 import './i18n-boot.js';
+import './input-guard.js';
 import './tooltip.js';
 import { waitForBridge, call, on, ok, normTrack, artUrl, fmtTime, log } from './bridge.js';
 import { settings, setSetting } from './settings.js';

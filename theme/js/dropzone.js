@@ -34,8 +34,19 @@ function setHover(e) {
   overlay.querySelectorAll('.drop-zone').forEach((z) => z.classList.toggle('hot', !hoverPl && z.dataset.target === hoverTarget));
 }
 
-document.addEventListener('dragenter', (e) => { if (!hasFiles(e)) return; e.preventDefault(); depth++; show(); setHover(e); });
-document.addEventListener('dragover', (e) => { if (!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setHover(e); });
+/* The overlay covers the views while files hang over the window. Counting dragenter/dragleave is
+   fragile (a leave can be lost when the drag is cancelled outside, or the host does not forward it),
+   and a forgotten overlay would swallow every click. So it also goes away when dragover stops coming
+   (one comes at least every few hundred ms while a drag is over the page) or the mouse moves normally. */
+let lastOver = 0, watch = 0;
+function alive() {
+  clearInterval(watch);
+  watch = setInterval(() => { if (!document.body.classList.contains('dragging')) { clearInterval(watch); return; } if (performance.now() - lastOver > 1500) hide(); }, 250);
+}
+document.addEventListener('dragenter', (e) => { if (!hasFiles(e)) return; e.preventDefault(); depth++; lastOver = performance.now(); show(); setHover(e); alive(); });
+document.addEventListener('dragover', (e) => { if (!hasFiles(e)) return; e.preventDefault(); lastOver = performance.now(); e.dataTransfer.dropEffect = 'copy'; if (!document.body.classList.contains('dragging')) { show(); alive(); } setHover(e); });
+for (const ev of ['pointermove', 'pointerdown']) addEventListener(ev, () => { if (document.body.classList.contains('dragging')) hide(); }, { capture: true, passive: true });
+addEventListener('gatefold:input-reset', () => { if (document.body.classList.contains('dragging')) hide(); });
 document.addEventListener('dragleave', (e) => { if (!hasFiles(e)) return; if (--depth <= 0) hide(); });
 document.addEventListener('drop', (e) => {
   if (!hasFiles(e)) return;
