@@ -35,7 +35,7 @@ jobs:
           pip install playwright==1.48.0 onnx==1.17.0 numpy
           python -m playwright install --with-deps chromium
       - name: End-to-end (headless Chromium, mocked foobar2000 bridge)
-        env: { ONLY: '${{ matrix.only }}' }
+        env: { ONLY: '${{ matrix.only }}', PYTHONUNBUFFERED: '1' }
         run: python tests/e2e.py
 
   installer:
