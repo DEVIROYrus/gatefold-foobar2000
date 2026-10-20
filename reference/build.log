@@ -1,0 +1,62 @@
+== pip (tools)
+essentia-tensorflow==2.1b6.dev1389
+numpy==1.26.4
+onnx==1.16.2
+onnxruntime==1.22.1
+numpy==1.26.4
+onnx==1.16.2
+protobuf==3.20.3
+tensorflow-cpu==2.15.1
+tensorflow-estimator==2.15.0
+tensorflow-io-gcs-filesystem==0.37.1
+tf2onnx==1.16.1
+
+== EffNet
+effnet inputs [('melspectrogram', ['batch_size', 128, 96])] outputs [('activations', ['batch_size', 400]), ('embeddings', ['batch_size', 1280])]
+
+== heads
+head mood_aggressive classes 2
+head mood_happy classes 2
+head mood_party classes 2
+head mood_relaxed classes 2
+head mood_sad classes 2
+head danceability classes 2
+head voice_instrumental classes 2
+head mood_acoustic classes 2
+head mood_electronic classes 2
+
+== framing (Essentia reference)
+2026-10-20 11:54:06.303449: W tensorflow/stream_executor/platform/default/dso_loader.cc:64] Could not load dynamic library 'libcudart.so.11.0'; dlerror: libcudart.so.11.0: cannot open shared object file: No such file or directory; LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.17/x64/lib
+2026-10-20 11:54:06.303471: I tensorflow/stream_executor/cuda/cudart_stub.cc:29] Ignore above cudart dlerror if you do not have a GPU set up on your machine.
+[   INFO   ] MusicExtractorSVM: no classifier models were configured by default
+2026-10-20 11:54:06.608347: I tensorflow/core/platform/cpu_feature_guard.cc:142] This TensorFlow binary is optimized with oneAPI Deep Neural Network Library (oneDNN) to use the following CPU instructions in performance-critical operations:  SSE3 SSE4.1 SSE4.2 AVX AVX2 AVX512F FMA
+To enable them in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2026-10-20 11:54:06.608661: W tensorflow/stream_executor/platform/default/dso_loader.cc:64] Could not load dynamic library 'libcuda.so.1'; dlerror: libcuda.so.1: cannot open shared object file: No such file or directory; LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.17/x64/lib
+2026-10-20 11:54:06.608676: W tensorflow/stream_executor/cuda/cuda_driver.cc:326] failed call to cuInit: UNKNOWN ERROR (303)
+2026-10-20 11:54:06.608694: I tensorflow/stream_executor/cuda/cuda_diagnostics.cc:156] kernel driver does not appear to be running on this host (runnervmxehtw): /proc/driver/nvidia/version does not exist
+[   INFO   ] TensorflowPredict: Successfully loaded graph file: `work/effnet.pb`
+2026-10-20 11:54:07.068816: I tensorflow/core/platform/profile_utils/cpu_utils.cc:114] CPU Frequency: 2596120000 Hz
+framing centered=False hop=62 → max |Δ| 0.14853
+framing centered=False hop=64 → max |Δ| 0.19258
+framing centered=False hop=128 → max |Δ| 0.48180
+framing centered=True hop=62 → max |Δ| 0.00000
+framing centered=True hop=64 → max |Δ| 0.18332
+framing centered=True hop=128 → max |Δ| 0.48321
+framing {'centered': True, 'patchHop': 62, 'maxError': 2.7418136596679688e-06}
+
+== reference data
+
+== onnxruntime-web
+{
+ "danceability.onnx": 514046,
+ "discogs-effnet.onnx": 18027718,
+ "mood_acoustic.onnx": 514047,
+ "mood_aggressive.onnx": 514049,
+ "mood_electronic.onnx": 514049,
+ "mood_happy.onnx": 514044,
+ "mood_party.onnx": 514044,
+ "mood_relaxed.onnx": 514046,
+ "mood_sad.onnx": 514042,
+ "ort-wasm-simd-threaded.wasm": 11210254,
+ "voice_instrumental.onnx": 514052
+}
