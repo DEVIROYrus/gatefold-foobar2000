@@ -18,7 +18,10 @@ All notable changes are listed here. Versions follow [Semantic Versioning](https
 - Taskbar thumbnail buttons (translated, with ♡), taskbar progress, optional tray icon with a player menu, minimize/close to tray; a mini player window.
 - Smart playlists from recipes, with a live match count.
 - Library → «By cover colour» with a colour ribbon filter.
-- «More like this» radio from your own library, topping itself up.
+- «More like this» radio from your own library: Deezer related artists (two steps), IDF-weighted genres as a fallback, every candidate track measured by sound (vibe.js) and kept close to the seed's feel; skips lower an artist; tops itself up.
+- The theme's own drop-down lists: the native ones opened away from the control and were cut off.
+- Fix: two different albums with the same title in one folder (e.g. «Eternity» by Anathema and by Kamelot) were merged into one.
+- Menus open above dialogs.
 - Settings → foobar2000: output device and buffer, ReplayGain, DSP preset, playlist cursor behaviour, library folders and the whole Advanced tree with search — in the theme instead of the native Preferences dialog, which stays one click away.
 
 The history before the public release (in Russian) is in [docs/HISTORY.ru.md](docs/HISTORY.ru.md).

@@ -975,9 +975,6 @@ export default {
  "Собираю радио «{0}»…": "Building the “{0}” radio…",
  "Для «{0}» не нашлось похожей музыки в медиатеке": "No similar music for “{0}” in your library",
  "Не удалось создать плейлист радио": "Couldn’t create the radio playlist",
- "foobar2000 не добавил треки радио: {0}": "foobar2000 didn’t add the radio tracks: {0}",
- "Радио «{0}»: {1} похожих исполнителей из вашей медиатеки. Плейлист будет пополняться сам": "“{0}” radio: {1} similar artists from your library. The playlist tops itself up",
- "Радио «{0}»: похожие по жанру и времени — Deezer не знает подходящих исполнителей из вашей медиатеки": "“{0}” radio: similar by genre and era — Deezer knows no matching artists in your library",
  "Новое в медиатеке, свежее сверху": "New in the library, newest first",
  "7 дней": "7 days",
  "30 дней": "30 days",
@@ -1021,5 +1018,9 @@ export default {
  "Умный плейлист «{0}» создан — он сам пополняется новыми треками": "Smart playlist “{0}” created — it fills itself with new matching tracks",
  "Выберите рецепт": "Pick a recipe",
  "Плейлист сам пополняется: новые подходящие треки появятся в нём без вашего участия": "It keeps itself up to date: new matching tracks appear in it on their own",
- "По цвету обложки": "By cover colour"
+ "По цвету обложки": "By cover colour",
+ "Радио «{0}»: {1} похожих исполнителей из вашей медиатеки.": "“{0}” radio: {1} similar artists from your library.",
+ "Радио «{0}»: Deezer не знает похожих исполнителей из вашей медиатеки — подбираю по жанру.": "“{0}” radio: Deezer knows no similar artists in your library — picking by genre.",
+ "Треки подбираются и по звучанию — плейлист пополняется, пока играет музыка": "Tracks are also matched by how they sound; the playlist grows while the music plays",
+ "Плейлист пополняется, пока играет музыка": "The playlist grows while the music plays"
 };
