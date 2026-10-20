@@ -1,5 +1,5 @@
 """Draws the installer artwork (original design: an opened gatefold sleeve with a record).
-Run: python tools/make_installer_art.py  → installer/assets/*.bmp, *.png, gatefold.ico"""
+Run: python tools/make_installer_art.py  → installer/assets/wizard-*.bmp/png (the large images; the icon is make_app_icon.py)"""
 import math, os
 from PIL import Image, ImageDraw, ImageFilter
 
@@ -66,24 +66,6 @@ def small(w, h, name):
     im.save(os.path.join(OUT, name + '.bmp')); im.save(os.path.join(OUT, name + '.png'))
 
 for pct, (w, h) in {100: (164, 314), 125: (192, 386), 150: (246, 459), 175: (273, 556), 200: (328, 604)}.items(): large(w, h, f'wizard-{pct}')
-for pct, (w, h) in {100: (55, 55), 125: (64, 68), 150: (83, 80), 175: (92, 97), 200: (110, 106)}.items(): small(w, h, f'wizard-small-{pct}')
 
-# icon: a record with the pink label on a rounded tile
-def icon(sz):
-    W = sz * S
-    im = Image.new('RGBA', (W, W), (0, 0, 0, 0))
-    d = ImageDraw.Draw(im)
-    d.rounded_rectangle([0, 0, W - 1, W - 1], radius=W * 0.22, fill=(28, 20, 50, 255))
-    c, r = W / 2, W * 0.36
-    d.ellipse([c - r, c - r, c + r, c + r], fill=(12, 12, 16, 255))
-    for k in range(1, 5):
-        q = r * (0.45 + k * 0.12)
-        d.ellipse([c - q, c - q, c + q, c + q], outline=(48, 48, 60, 255), width=max(1, int(W * 0.012)))
-    lr = r * 0.36
-    d.ellipse([c - lr, c - lr, c + lr, c + lr], fill=(236, 92, 150, 255))
-    d.ellipse([c - lr * 0.2, c - lr * 0.2, c + lr * 0.2, c + lr * 0.2], fill=(12, 12, 16, 255))
-    return im.resize((sz, sz), Image.LANCZOS)
-big = icon(256)
-big.save(os.path.join(OUT, 'gatefold.ico'), sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
-big.save(os.path.join(OUT, 'gatefold-256.png'))
+# the icon (gatefold.ico, gatefold-256.png) and the small wizard images: tools/make_app_icon.py
 print('ok', sorted(os.listdir(OUT)))

@@ -1,0 +1,8 @@
+<!-- Gatefold mark: a G whose lower-right corner folds over like the panel of a gatefold sleeve.
+     The master for the app icon (tools/make_app_icon.py) and, tinted with the cover's colour, the
+     mark next to the name in the window (theme/index.html). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs><clipPath id="g"><path d="M19 0H81A19 19 0 0 1 100 19V28A8.75 8.75 0 0 1 82.5 28V22.5A5 5 0 0 0 77.5 17.5H22.5A5 5 0 0 0 17.5 22.5V75.5A5 5 0 0 0 22.5 80.5H68L82.5 66.2H62A5 5 0 0 1 57 61.2V55A5 5 0 0 1 62 50H95A5 5 0 0 1 100 55V81A19 19 0 0 1 81 100H19A19 19 0 0 1 0 81V19A19 19 0 0 1 19 0Z"/></clipPath></defs>
+  <path fill="#b3c6e8" d="M19 0H81A19 19 0 0 1 100 19V28A8.75 8.75 0 0 1 82.5 28V22.5A5 5 0 0 0 77.5 17.5H22.5A5 5 0 0 0 17.5 22.5V75.5A5 5 0 0 0 22.5 80.5H68L82.5 66.2H62A5 5 0 0 1 57 61.2V55A5 5 0 0 1 62 50H95A5 5 0 0 1 100 55V81A19 19 0 0 1 81 100H19A19 19 0 0 1 0 81V19A19 19 0 0 1 19 0Z"/>
+  <path fill="#7d88b8" clip-path="url(#g)" d="M101 50L69 82Q60 97 46 101H101Z"/>
+</svg>

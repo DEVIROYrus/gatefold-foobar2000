@@ -139,8 +139,11 @@ body.no-ambient #bg .aurora, body.no-ambient #bg .bg-art { display: none; }
 }
 .tb-left { display: flex; align-items: center; gap: 6px; min-width: calc(var(--side-w) - 10px); transition: min-width 260ms var(--ease); }
 .brand { display: flex; align-items: center; gap: 9px; font-family: var(--font-display); font-weight: 650; letter-spacing: -.01em; font-size: var(--fs-md); white-space: nowrap; overflow: hidden; }
-.brand-mark { width: 18px; height: 18px; border-radius: 6px; flex: none;
-  background: conic-gradient(from 210deg, var(--accent), var(--accent-2), var(--accent)); box-shadow: 0 0 14px -2px var(--glow); }
+/* the Gatefold mark (installer/assets/gatefold.svg) in the colours of the cover: the G in the accent,
+   its folded corner the same colour, darker — and a soft glow */
+.brand-mark { width: 19px; height: 19px; flex: none; overflow: visible; filter: drop-shadow(0 0 6px color-mix(in oklab, var(--glow) 70%, transparent)); }
+.brand-mark .bm-g { fill: var(--accent); transition: fill 600ms var(--ease); }
+.brand-mark .bm-fold { fill: color-mix(in oklab, var(--accent) 62%, #000 38%); transition: fill 600ms var(--ease); }
 body.side-collapsed .brand span { display: none; }
 .tb-center { flex: 1; display: flex; justify-content: center; min-width: 0; }
 .search {

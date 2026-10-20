@@ -41,7 +41,7 @@ def serve():
 
 failures = []
 def check(cond, msg):
-    print(('  ok   ' if cond else '  FAIL ') + msg)
+    print(('  ok   ' if cond else '  FAIL ') + msg, flush=True)
     if not cond: failures.append(msg)
 
 async def page(browser, port, settings, setup=None, pre=''):
@@ -752,21 +752,30 @@ async def test_layout(browser, port):
             await ctx.close()
     check(not found, f'no text or control overlaps another, sticks out of its box or is cut {[f"{k} @ {v}" for k, v in list(found.items())[:6]]}')
 
+async def timed(name, coro, limit=int(os.environ.get('TEST_TIMEOUT', 480))):
+    # a test that hangs fails by name instead of holding the whole run (page.evaluate has no timeout)
+    import time
+    t0 = time.time()
+    try: await asyncio.wait_for(coro, limit)
+    except asyncio.TimeoutError: check(False, f'{name}: still running after {limit} s — stopped')
+    print(f'  ({time.time() - t0:.0f} s)', flush=True)
+
 async def main():
     httpd = serve(); port = httpd.server_address[1]
     async with async_playwright() as p:
         kw = {'executable_path': os.environ['CHROMIUM']} if os.environ.get('CHROMIUM') else {}
-        browser = await p.chromium.launch(**kw)
+        # nothing leaves the machine: in CI a click could otherwise download models, ask GitHub or
+        # YouTube, and the run would differ from (and wait longer than) an offline one
+        browser = await p.chromium.launch(args=['--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1'], **kw)
         only = os.environ.get('ONLY', '')
         run = lambda name: not only or any(o in name for o in only.split(','))
-        import time
         for lang in ('ru', 'en'):
-            if run('language'): t0 = time.time(); await test_language(browser, port, lang); print(f'  ({time.time() - t0:.0f} s)')
+            if run('language'): await timed(f'language {lang}', test_language(browser, port, lang))
         for name, fn in [('playlists', test_playlists), ('youtube', test_youtube), ('settings', test_settings), ('updates', test_updates),
                          ('tooltips', test_tooltips), ('canvas_volume', test_canvas_volume), ('fb2k_prefs', test_fb2k_prefs), ('welcome', test_welcome),
                          ('playlist_editing', test_playlist_editing), ('windows', test_windows), ('smart_color_radio', test_smart_color_radio),
                          ('sound_ai', test_sound_ai), ('layout', test_layout), ('stability', test_stability)]:
-            if run(name): t0 = time.time(); await fn(browser, port); print(f'  ({time.time() - t0:.0f} s)')
+            if run(name): await timed(name, fn(browser, port))
         await browser.close()
     httpd.shutdown()
     print(f'\n{len(failures)} failure(s)')
