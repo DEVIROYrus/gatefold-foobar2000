@@ -19,6 +19,7 @@ All notable changes are listed here. Versions follow [Semantic Versioning](https
 - Smart playlists from recipes, with a live match count.
 - Library → «By cover colour» with a colour ribbon filter.
 - «More like this» radio from your own library: Deezer related artists (two steps), IDF-weighted genres as a fallback, every candidate track measured by sound (vibe.js) and kept close to the seed's feel; skips lower an artist; tops itself up.
+- Radio, second pass: second-step related artists only when several related artists point to them; major/minor key from the chroma as a sound feature; the target stays at the seed's feel; «Not this — no more <artist>» in a radio's context menu.
 - The theme's own drop-down lists: the native ones opened away from the control and were cut off.
 - Fix: two different albums with the same title in one folder (e.g. «Eternity» by Anathema and by Kamelot) were merged into one.
 - Menus open above dialogs.

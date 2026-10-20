@@ -1022,5 +1022,7 @@ export default {
  "Радио «{0}»: {1} похожих исполнителей из вашей медиатеки.": "“{0}” radio: {1} similar artists from your library.",
  "Радио «{0}»: Deezer не знает похожих исполнителей из вашей медиатеки — подбираю по жанру.": "“{0}” radio: Deezer knows no similar artists in your library — picking by genre.",
  "Треки подбираются и по звучанию — плейлист пополняется, пока играет музыка": "Tracks are also matched by how they sound; the playlist grows while the music plays",
- "Плейлист пополняется, пока играет музыка": "The playlist grows while the music plays"
+ "Плейлист пополняется, пока играет музыка": "The playlist grows while the music plays",
+ "{0} больше не попадёт в это радио": "{0} won’t come up in this radio again",
+ "Не то — больше не ставить {0}": "Not this — no more {0}"
 };
