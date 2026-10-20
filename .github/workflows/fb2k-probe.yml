@@ -1,0 +1,44 @@
+# What foobar2000 does on its first start after the Gatefold installer, and where it keeps the
+# chosen user interface (tools/fb2k-probe.ps1). The result is pushed to the probe-log branch.
+name: fb2k probe
+on:
+  workflow_dispatch:
+  push:
+    paths: ['.github/workflows/fb2k-probe.yml', 'tools/fb2k-probe.ps1', 'tools/fb2k-probe-scan.py']
+permissions:
+  contents: write
+jobs:
+  probe:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch and verify bundled software
+        shell: pwsh
+        env: { GITHUB_TOKEN: '${{ github.token }}' }
+        run: |
+          $lock = Get-Content installer/deps.lock.json | ConvertFrom-Json
+          ./installer/fetch-deps.ps1 -Fb2kVersion $lock.foobar2000 -ComponentTag $lock.foo_ui_webview2
+      - name: Inno Setup 6.6
+        shell: pwsh
+        run: choco upgrade innosetup -y --no-progress
+      - name: Build and install silently
+        shell: pwsh
+        run: |
+          $v = (Get-Content package.json | ConvertFrom-Json).version
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /Qp "/DAppVersion=$v" installer/gatefold.iss
+          $exe = Get-ChildItem dist/Gatefold-Setup-*.exe | Select-Object -First 1
+          $p = Start-Process $exe.FullName -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/LOG=setup.log' -Wait -PassThru
+          "setup exit code $($p.ExitCode)"
+      - name: Probe
+        shell: powershell
+        run: .\tools\fb2k-probe.ps1 *>&1 | Tee-Object -FilePath probe.log
+      - name: Publish
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p /tmp/log && cp -r probe/. /tmp/log/ 2>/dev/null; cp probe.log setup.log /tmp/log/ 2>/dev/null || true
+          echo "${{ job.status }} ${GITHUB_SHA} $(date -u +%FT%TZ)" > /tmp/log/STATUS
+          cd /tmp/log && git init -q -b probe-log
+          git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A && git commit -qm "fb2k probe ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" probe-log
