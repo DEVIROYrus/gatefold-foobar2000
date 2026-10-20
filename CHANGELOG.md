@@ -23,6 +23,9 @@ All notable changes are listed here. Versions follow [Semantic Versioning](https
 - The theme's own drop-down lists: the native ones opened away from the control and were cut off.
 - Fix: two different albums with the same title in one folder (e.g. «Eternity» by Anathema and by Kamelot) were merged into one.
 - Menus open above dialogs.
+- **Sound analysis (AI)**, optional: Discogs-EffNet and its mood heads run in a Web Worker (onnxruntime-web, WebAssembly, one thread) over three 6-second pieces of every track, decoded by foobar2000 at 16 kHz; the mel front end matches Essentia's to 4·10⁻⁶. A background indexer (playing track and radio candidates first; ≤ ¼ core while you work, ≤ ½ when away, paused on battery) keeps the results in IndexedDB. The models are built and checked against Essentia by the «ML assets» workflow and downloaded on request.
+- Radio v3 (with the analysis): artists that sound like the seed join the candidates; of each artist the closest-sounding analysed track is played; at most 4 tracks per artist in any 25.
+- «Similar tracks» (Now playing, track menu), mood and style playlists (Smart playlist → By sound), style and mood chips on Now playing.
 - Settings → foobar2000: output device and buffer, ReplayGain, DSP preset, playlist cursor behaviour, library folders and the whole Advanced tree with search — in the theme instead of the native Preferences dialog, which stays one click away.
 
 The history before the public release (in Russian) is in [docs/HISTORY.ru.md](docs/HISTORY.ru.md).

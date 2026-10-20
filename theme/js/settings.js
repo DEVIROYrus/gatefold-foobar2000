@@ -66,6 +66,8 @@ export const DEFAULTS = {
   canvasLyrics: true,
   canvasClock: false,
   canvasIdleMin: 5,         // enter Canvas after N idle minutes while playing and focused (0 = off)
+  soundAI: false,          // sound analysis with a neural network (ml/sound.js): models downloaded on request
+  soundPaused: false,
   plViewDefault: 'auto',   // playlist view when the playlist has none of its own: auto | albums | covers | grid | compact
   fullscreenTopmost: false, // true: fullscreen stays above every other window (the component's default)
 };

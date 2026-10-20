@@ -45,9 +45,10 @@ function wire() {
   on('audio:pcmReady', (d) => { const w = waiting.get(d.taskId); if (!w) return; w.ready = true; if (w.pcm) { waiting.delete(d.taskId); w.resolve(w.pcm); } });
   on('audio:pcmFailed', (d) => { const w = waiting.get(d.taskId); if (w) { waiting.delete(d.taskId); w.resolve(null); } });
 }
-async function decode(path, start, end) {
+/** mono PCM of path[start…end] s at `sr` Hz, decoded by foobar2000 (a copy), or null */
+export async function decode(path, start, end, sr = SR) {
   wire();
-  const r = await call('audio.decodePcm', { path, start, end, sampleRate: SR, mono: true });
+  const r = await call('audio.decodePcm', { path, start, end, sampleRate: sr, mono: true });
   if (!ok(r) || !r.taskId) return null;
   return new Promise((resolve) => {
     waiting.set(r.taskId, { resolve, pcm: null, ready: false });
