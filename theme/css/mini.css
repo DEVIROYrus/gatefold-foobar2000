@@ -1,0 +1,36 @@
+/* Gatefold · mini player (mini.html) */
+html, body { background: transparent; overflow: hidden; height: 100%; margin: 0; }
+body.mini-popup { background: color-mix(in oklab, var(--bg) 82%, transparent); color: var(--text); user-select: none; }
+.mini { position: fixed; inset: 0; display: flex; gap: 12px; padding: 10px; box-sizing: border-box; cursor: default;
+  background: radial-gradient(120% 140% at 0% 0%, color-mix(in oklab, var(--accent) 22%, transparent), transparent 60%); }
+.mi-art { position: relative; flex: none; height: 100%; aspect-ratio: 1; border-radius: 10px; overflow: hidden; background: var(--surface); box-shadow: 0 8px 22px -10px rgb(0 0 0 / .6); }
+.mi-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 260ms var(--ease); }
+.mi-art img.on { opacity: 1; }
+.mi-ph { position: absolute; inset: 0; display: grid; place-items: center; font-weight: 800; font-size: 22px; color: rgb(255 255 255 / .85); }
+.mi-body { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: space-between; }
+.mi-top { display: flex; gap: 6px; align-items: flex-start; min-width: 0; }
+.mi-meta { flex: 1; min-width: 0; padding-top: 2px; }
+.mi-title { font-weight: 700; font-size: 14px; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mi-sub { margin-top: 2px; font-size: 12px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mi-win { display: flex; gap: 2px; opacity: 0; transition: opacity 160ms; }
+.mini:hover .mi-win, .mini:focus-within .mi-win { opacity: 1; }
+.mi-ib { width: 28px; height: 28px; flex: none; display: grid; place-items: center; border: 0; border-radius: 8px; background: transparent; color: var(--text-2); cursor: pointer; }
+.mi-ib svg { width: 16px; height: 16px; }
+.mi-ib:hover { background: var(--hover); color: var(--text); }
+.mi-ib.on { color: var(--accent); }
+#miLike.on { color: var(--like, var(--accent)); }
+.mi-play { width: 36px; height: 36px; flex: none; display: grid; place-items: center; border: 0; border-radius: 50%; background: var(--text); color: var(--bg); cursor: pointer; transition: transform 120ms; }
+.mi-play:active { transform: scale(.94); }
+.mi-play svg { width: 16px; height: 16px; }
+.mi-seek { position: relative; height: 14px; cursor: pointer; }
+.mi-seek::before { content: ''; position: absolute; left: 0; right: 0; top: 6px; height: 3px; border-radius: 3px; background: color-mix(in oklab, var(--text) 18%, transparent); }
+.mi-seek i { position: absolute; left: 0; top: 6px; height: 3px; border-radius: 3px; background: var(--accent); width: 0; }
+.mi-seek:hover::before, .mi-seek:hover i { top: 5px; height: 5px; }
+.mi-ctl { display: flex; align-items: center; gap: 4px; }
+.mi-gap { flex: 1; }
+.mi-time { font-size: 11px; color: var(--text-3); font-variant-numeric: tabular-nums; min-width: 34px; }
+.mi-time.r { text-align: right; }
+.mi-vol-tip { position: fixed; right: 12px; bottom: 50px; padding: 3px 8px; border-radius: 6px; font-size: 11px; background: var(--surface); border: 1px solid var(--line); pointer-events: none; }
+/* narrow: drop the cover; short: drop the times */
+@media (max-width: 300px) { .mi-art { display: none; } }
+@media (max-height: 84px) { .mi-time, #miLike, #miVol { display: none; } .mi-sub { display: none; } }

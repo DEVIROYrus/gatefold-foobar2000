@@ -141,12 +141,14 @@ async function artistMenu(x, px, py) {
   const id = await popupMenu([
     { id: 'open', label: $t('Открыть') },
     { id: 'play', label: $t('Слушать всё') },
+    ...(Lib.shared.radioFor ? [{ id: 'radio', label: $t('Радио «Похожее на это»') }] : []),
     { type: 'sep' },
     { id: 'photo', label: $t('Найти фото заново') },
     { id: 'folder', label: $t('Открыть папку с фото') },
   ], px, py);
   if (id === 'open') router.go('artist', x);
   if (id === 'play') playArtist(x, false);
+  if (id === 'radio') Lib.shared.radioFor(x.name);
   if (id === 'photo') { AA.refetch(jobOf(x)); toast(`${$t('Ищу фото:')} <b>${esc(x.name)}</b>`); }
   if (id === 'folder') openFolder();
 }

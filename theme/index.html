@@ -172,9 +172,11 @@
           <option value="added">Недавно добавленные</option>
           <option value="played">Недавно проигранные</option>
           <option value="trackCount">По числу треков</option>
+          <option value="color">По цвету обложки</option>
         </select>
       </div>
     </div>
+    <div class="color-ribbon" id="libRibbon" hidden></div>
     <div class="scroller" id="libScroller"><div class="vlist" id="libGrid"></div></div>
   </section>
 
@@ -269,6 +271,7 @@
       <button class="icon-btn" id="btnMute" title="Без звука"><svg><use id="volIcon" href="#i-vol"/></svg></button>
       <input class="range" id="vol" type="range" min="0" max="100" step="1" value="100" aria-label="Громкость">
     </div>
+    <button class="icon-btn" id="btnMini" title="Мини-плеер (Shift+щелчок — свернуть основное окно)"><svg><use href="#i-pip"/></svg></button>
     <button class="icon-btn" id="btnFull" title="Холст — полноэкранный режим (F)"><svg><use href="#i-canvas"/></svg></button>
   </div>
 </footer>
