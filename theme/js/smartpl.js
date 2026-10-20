@@ -51,8 +51,8 @@ const RECIPES = [
 const SIZE = { kind: 'seg', def: 50, opts: [[25, '25'], [50, '50'], [100, '100']] };
 const AI = [
   ...SoundUI.MOOD_RECIPES().map(([k, title, desc]) => ({ id: 'ai-' + k, ai: true, ic: 'sparkle', title, desc, param: SIZE, name: () => title, make: (n) => ({ ai: k, n }) })),
-  { id: 'ai-style', ai: true, ic: 'sparkle', title: $t('Стиль по звучанию'), desc: $t('Один из 400 стилей Discogs — как его слышит нейросеть'),
-    param: { kind: 'style' }, name: (v) => (v >= 0 ? Sound.styleNames()[v] : $t('Стиль')), make: (v) => (v >= 0 ? { ai: 'style', style: v, n: 100 } : null) },
+  { id: 'ai-style', ai: true, ic: 'sparkle', title: $t('Жанр по звучанию'), desc: $t('Жанры MusicBrainz и нейросети — и для треков без тегов'),
+    param: { kind: 'style' }, name: (v) => v || $t('Жанр'), make: (v) => (v ? { ai: 'style', style: v, n: 100 } : null) },
 ];
 RECIPES.push(...AI);
 
@@ -100,10 +100,10 @@ function paramUI(r) {
     });
     sel.onchange = () => { val = sel.value; syncName(); countFor(r); };
   } else if (p.kind === 'style') {
-    val = -1;
-    const st = Sound.libraryStyles();
-    const sel = h(`<select class="st-input sp-style">${st.length ? `<option value="-1">${$t('Выберите стиль')}</option>` + st.slice(0, 120).map((x) => `<option value="${x.i}">${esc(x.name)} · ${esc(x.genre)} · ${x.n}</option>`).join('') : `<option value="-1">${$t('Пока нет проанализированных треков')}</option>`}</select>`);
-    sel.onchange = () => { val = +sel.value; syncName(); countFor(r); };
+    val = '';
+    const st = SoundUI.libraryGenres();
+    const sel = h(`<select class="st-input sp-style">${st.length ? `<option value="">${$t('Выберите жанр')}</option>` + st.slice(0, 150).map((x) => `<option value="${esc(x.name)}">${esc(x.name)} · ${x.n}</option>`).join('') : `<option value="">${$t('Пока нет проанализированных треков')}</option>`}</select>`);
+    sel.onchange = () => { val = sel.value; syncName(); countFor(r); };
     box.append(sel);
   } else if (p.kind === 'text') {
     val = '';

@@ -8,9 +8,10 @@
 import { call, ok, esc, plural } from '../bridge.js';
 import { h, icon, toast, router } from '../ui.js';
 import { norm, cleanArtist } from '../match.js';
-import { settings } from '../settings.js';
+import { settings, setSetting } from '../settings.js';
 import { $t } from '../i18n.js';
 import * as Sound from './sound.js';
+import * as Genres from './genres.js';
 
 export const MOOD_LABEL = () => ({ aggressive: $t('агрессивное'), relaxed: $t('спокойное'), sad: $t('грустное'), happy: $t('радостное'), party: $t('для вечеринки'),
   danceable: $t('танцевальное'), instrumental: $t('инструментальное'), acoustic: $t('акустическое'), electronic: $t('электронное') });
@@ -44,9 +45,15 @@ function statusHtml() {
     }
   }
 }
+function genresHtml() {
+  const g = Genres.state;
+  return $t('Жанр — это то, что о музыке говорят люди: сеть хорошо слышит звучание, но путает поджанры. Gatefold берёт жанры исполнителей и альбомов из MusicBrainz (запросы по имени исполнителя) и упорядочивает их по звучанию трека')
+    + (g.artists ? '<br><span class="dim">' + $t('Исполнителей уточнено: {0} из {1}', g.done, g.artists) + '</span>' : '');
+}
 let wired = false;
 function wire() {
   if (wired) return; wired = true;
+  Genres.events.addEventListener('change', () => { const el = document.getElementById('sndGenres'); if (el) el.innerHTML = genresHtml(); });
   Sound.events.addEventListener('change', () => { const el = document.getElementById('sndStatus'); if (el) el.innerHTML = statusHtml(); });
 }
 /** the settings section (panels.js passes its builders) */
@@ -67,11 +74,13 @@ export function settingsSection({ section, group, actions, button, rerender }) {
     b.onclick = () => { speedRow.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); speedRow.querySelector('.snd-hint').textContent = HINT[v]; Sound.setSpeed(v); };
     speedRow.querySelector('.seg').append(b);
   }
+  const gen = h(`<div class="row"><div class="lbl"><b>${$t('Жанры из MusicBrainz')}</b><small id="sndGenres">${genresHtml()}</small></div><label class="toggle"><input type="checkbox"><i></i></label></div>`);
+  const gin = gen.querySelector('input'); gin.checked = settings.soundGenresOnline !== false; gin.onchange = () => { setSetting('soundGenresOnline', gin.checked); if (gin.checked) Genres.start(); };
   const pause = h(`<div class="row"><div class="lbl"><b>${$t('Пауза')}</b><small>${$t('Анализ остановится; играющий трек и радио всё равно анализируются')}</small></div><label class="toggle"><input type="checkbox"><i></i></label></div>`);
   const pin = pause.querySelector('input'); pin.checked = !!settings.soundPaused; pin.onchange = () => Sound.pause(pin.checked);
   const note = h(`<div class="row st-note"><small>${$t('Работает полностью на вашем компьютере, ничего не отправляется. Нагрузка — не больше четверти одного ядра процессора, пока вы за компьютером, и половины, когда вас нет; на батарее анализ ждёт. Модели (≈ 30 МБ) скачиваются один раз из репозитория Gatefold на GitHub.')}<br>${$t('Нейросеть Discogs-EffNet и классификаторы — Music Technology Group, Университет Помпеу Фабра (Essentia). Лицензия CC BY-NC-SA 4.0: только некоммерческое использование.')}</small></div>`);
   section('sound', 'sparkle', $t('Анализ звука (ИИ)'), $t('Радио и подборки по тому, как музыка звучит, а не по тегам'),
-    group('', sw, ...(on ? [status, speedRow, pause] : []), note,
+    group('', sw, ...(on ? [status, speedRow, gen, pause] : []), note,
       ...(on ? [actions(
         button($t('{0}Пересканировать медиатеку', icon('refresh')), () => { Sound.rescan(); toast($t('Ищу новые треки')); }),
         button($t('Удалить модели и результаты'), async () => { await Sound.removeAll(); rerender(); toast($t('Модели и результаты анализа удалены')); }, 'danger'))] : [])));
@@ -79,11 +88,14 @@ export function settingsSection({ section, group, actions, button, rerender }) {
 
 /* ---------------------------------------------------------------- Now Playing chips */
 export function chips(t) {
-  const r = t && Sound.get(t);
-  if (!r) return '';
+  if (!t || !settings.soundAI) return '';
+  const r = Sound.get(t);
   const L = MOOD_LABEL();
-  const raw = Sound.topStyles(r, 6, 0.05).map((s) => `${s.name} ${Math.round(s.p * 100)}%`).join(' · ');
-  const st = Sound.describeStyles(r, 2, t.genre || '').map((s) => `<span class="chip ai" title="${$t('Стиль по звучанию (Discogs), с учётом альбома и вашей медиатеки')}&#10;${esc($t('Сеть слышит: {0}', raw))}">${esc(s.name)}</span>`);
+  const SRC = { tag: $t('Из вашего тега жанра'), musicbrainz: $t('Жанр по MusicBrainz — голоса его редакторов; порядок — по звучанию этого трека'),
+    sound: $t('У MusicBrainz нет этого исполнителя: жанры тех, кто звучит похоже'), network: $t('Стиль по звучанию (Discogs), с учётом альбома и вашей медиатеки') };
+  const raw = r ? Sound.topStyles(r, 6, 0.05).map((s) => `${s.name} ${Math.round(s.p * 100)}%`).join(' · ') : '';
+  const st = Genres.describe(t, r, 2).map((g) => `<span class="chip ai" title="${esc(SRC[g.src])}${raw ? '&#10;' + esc($t('Сеть слышит: {0}', raw)) : ''}">${esc(g.name)}</span>`);
+  if (!r) return st.join('');
   const md = Sound.moodNames().filter((n) => Sound.hasMood(n) && n !== 'instrumental').map((n) => [n, Sound.mood(r, n)]).filter(([, v]) => v >= 0.65)
     .sort((a, b) => b[1] - a[1]).slice(0, 2).map(([n, v]) => `<span class="chip ai" title="${$t('Настроение по звучанию')} · ${Math.round(v * 100)}%">${esc(L[n])}</span>`);
   return [...st, ...md].join('');
@@ -99,12 +111,12 @@ async function makePlaylist(name, recs) {
   return c.guid;
 }
 /** variety: at most `cap` tracks per artist, no title twice */
-function vary(list, n, cap = 3, seen = new Set()) {
-  const per = new Map(), out = [];
+function vary(list, n, cap = 3, seen = new Set(), albumCap = 2) {
+  const per = new Map(), perAlb = new Map(), out = [];
   for (const r of list) {
-    const a = artistKey(r), dup = a + '|' + norm(r.ti || '');
-    if ((per.get(a) || 0) >= cap || seen.has(dup)) continue;
-    per.set(a, (per.get(a) || 0) + 1); seen.add(dup); out.push(r);
+    const a = artistKey(r), dup = a + '|' + norm(r.ti || ''), al = a + '|' + norm(r.al || '');
+    if ((per.get(a) || 0) >= cap || (perAlb.get(al) || 0) >= albumCap || seen.has(dup)) continue;
+    per.set(a, (per.get(a) || 0) + 1); perAlb.set(al, (perAlb.get(al) || 0) + 1); seen.add(dup); out.push(r);
     if (out.length >= n) break;
   }
   return out;
@@ -129,8 +141,13 @@ export async function similar(t) {
 }
 
 /* mood and style recipes for the smart-playlist sheet */
+/* a mood playlist is made of songs: intros, interludes, outros and other short pieces are quiet
+   and atmospheric, so they would otherwise fill «Calm» */
+const BRIDGE = /\b(intro|introduction|interlude|outro|prelude|overture|skit|reprise|segue|intermezzo|interval|coda|hidden track|интро|вступление|интерлюдия|аутро|увертюра)\b|^(intro|outro)\s*[-–:]/i;
+export const isSong = (r) => !BRIDGE.test(r.ti || '') && (!(r.du > 0) || r.du >= 140);
 const SCORE = {
-  calm: (r) => Sound.mood(r, 'relaxed') - 0.6 * Sound.mood(r, 'aggressive'),
+  // calm with a voice: «Calm» means ballads and quiet songs, not ambient pieces (those are in «Instrumental»)
+  calm: (r) => Sound.mood(r, 'relaxed') - 0.6 * Sound.mood(r, 'aggressive') - 0.15 * Sound.mood(r, 'instrumental'),
   energy: (r) => 0.6 * Sound.mood(r, 'aggressive') + 0.3 * Sound.mood(r, 'party') + 0.2 * Sound.mood(r, 'danceable') - 0.3 * Sound.mood(r, 'relaxed'),
   sad: (r) => Sound.mood(r, 'sad') - 0.5 * Sound.mood(r, 'happy'),
   happy: (r) => Sound.mood(r, 'happy') - 0.5 * Sound.mood(r, 'sad'),
@@ -146,12 +163,12 @@ export const MOOD_RECIPES = () => [
 ];
 function ranked(kind, style) {
   const list = Sound.all();
-  if (kind === 'style') return list.map((r) => ({ r, d: Sound.describeStyles(r, 3).find((x) => x.i === style) })).filter((x) => x.d).sort((a, b) => b.d.p - a.d.p).map((x) => x.r);
+  if (kind === 'style') return list.filter(isSong).map((r) => ({ r, d: Genres.describe(null, r, 3, { neighbours: false }).find((x) => x.name === style) })).filter((x) => x.d).sort((a, b) => b.d.w - a.d.w).map((x) => x.r);
   const f = SCORE[kind]; if (!f) return [];
-  return list.map((r) => ({ r, s: f(r) })).filter((x) => x.s >= 0.35).sort((a, b) => b.s - a.s).map((x) => x.r);
+  return list.filter(isSong).map((r) => ({ r, s: f(r) })).filter((x) => x.s >= 0.35).sort((a, b) => b.s - a.s).map((x) => x.r);
 }
 export const countFor = (kind, style) => (Sound.ready() ? ranked(kind, style).length : 0);
-export async function moodPlaylist(kind, name, n = 50, style = -1) {
+export async function moodPlaylist(kind, name, n = 50, style = '') {
   if (!Sound.ready()) return needSound();
   const list = vary(ranked(kind, style), n, 4);
   if (!list.length) { toast($t('Пока ничего не подходит') + coverNote(), { ms: 6000 }); return; }
@@ -159,4 +176,11 @@ export async function moodPlaylist(kind, name, n = 50, style = -1) {
   for (let i = list.length - 1; i > 0; i--) { const j = Math.max(0, i - 6 + Math.floor(Math.random() * 7)); [list[i], list[j]] = [list[j], list[i]]; }
   await makePlaylist(name, list);
   toast($t('Плейлист «{0}»: {1} {2}', esc(name), list.length, plural(list.length, 'трек', 'трека', 'треков')) + coverNote(), { ms: 6000 });
+}
+
+/** the genres of the analysed library: [{ name, n }] (tracks whose first two genres include it) */
+export function libraryGenres() {
+  const cnt = new Map();
+  for (const r of Sound.all()) for (const g of Genres.describe(null, r, 2, { neighbours: false })) cnt.set(g.name, (cnt.get(g.name) || 0) + 1);
+  return [...cnt].map(([name, n]) => ({ name, n })).sort((a, b) => b.n - a.n);
 }

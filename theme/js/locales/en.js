@@ -1029,10 +1029,6 @@ export default {
  "Похожие треки по звучанию": "Similar-sounding tracks",
  "Радио «{0}»: {1} исполнителей вашей медиатеки звучат похоже.": "Radio «{0}»: {1} artists in your library sound alike.",
  "Треки подбирает нейросеть по звучанию — плейлист пополняется, пока играет музыка": "A neural network picks the tracks by how they sound — the playlist grows while the music plays",
- "Стиль по звучанию": "Style by sound",
- "Один из 400 стилей Discogs — как его слышит нейросеть": "One of 400 Discogs styles — as the neural network hears it",
- "Стиль": "Style",
- "Выберите стиль": "Choose a style",
  "Пока нет проанализированных треков": "No analysed tracks yet",
  "Эти плейлисты собирает нейросеть, которая слушает вашу медиатеку. Она выключена — включите «Анализ звука (ИИ)» в настройках.": "These playlists are made by a neural network that listens to your library. It is off — turn on «Sound analysis (AI)» in Settings.",
  "Открыть настройки": "Open Settings",
@@ -1126,5 +1122,13 @@ export default {
  "Без пауз, до трёх нейросетей сразу и на батарее тоже — вентилятор может зашуметь. Для того, чтобы проанализировать всё за один вечер": "No pauses, up to three networks at once, on battery too — the fan may get loud. For analysing everything in one evening",
  "Скорость анализа": "Analysis speed",
  "Стиль по звучанию (Discogs), с учётом альбома и вашей медиатеки": "Style by sound (Discogs), weighed with the album and your library",
- "Сеть слышит: {0}": "The network hears: {0}"
+ "Сеть слышит: {0}": "The network hears: {0}",
+ "Жанр по звучанию": "Genre by sound",
+ "Жанры MusicBrainz и нейросети — и для треков без тегов": "Genres from MusicBrainz and the network — for untagged tracks too",
+ "Жанр — это то, что о музыке говорят люди: сеть хорошо слышит звучание, но путает поджанры. Gatefold берёт жанры исполнителей и альбомов из MusicBrainz (запросы по имени исполнителя) и упорядочивает их по звучанию трека": "A genre is what people say about music: the network hears the sound well but mixes up subgenres. Gatefold takes artist and album genres from MusicBrainz (requests by artist name) and orders them by how the track sounds",
+ "Исполнителей уточнено: {0} из {1}": "Artists looked up: {0} of {1}",
+ "Жанры из MusicBrainz": "Genres from MusicBrainz",
+ "Из вашего тега жанра": "From your genre tag",
+ "Жанр по MusicBrainz — голоса его редакторов; порядок — по звучанию этого трека": "Genre from MusicBrainz — voted by its editors; ordered by how this track sounds",
+ "У MusicBrainz нет этого исполнителя: жанры тех, кто звучит похоже": "MusicBrainz does not know this artist: the genres of artists that sound alike"
 };

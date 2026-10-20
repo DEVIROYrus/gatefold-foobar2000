@@ -12,6 +12,7 @@ import * as Radio from './radio.js';
 import * as Ambient from './ambient.js';
 import * as Sound from './ml/sound.js';
 import * as SoundUI from './ml/sound-ui.js';
+import * as Genres from './ml/genres.js';
 import { waitForBridge, call, on, ok, normTrack, esc, fmtTime, debounce, log, albumKeyOf, hasBridge, artUrl, plural } from './bridge.js';
 import { settings, setSetting, onSettings } from './settings.js';
 import { router, onRoute, $, h, icon, toast, popupMenu, closeMenus } from './ui.js';
@@ -268,6 +269,7 @@ async function setTrack(t, { fromEvent = false } = {}) {
   Viz.setProgress(fromEvent ? 0 : Viz.getPosition(), t.duration, app.state === 'playing');
   $('tTot').textContent = fmtTime(t.duration);
   renderBadges(t);
+  if (settings.soundAI) Genres.want(t.albumArtist || t.artist, t.album);
   const key = albumKeyOf(t.albumArtist, t.album);
   if (key !== prevKey || !app.art.key) await loadArt(t);
   Viz.loadWaveform(t);
@@ -292,10 +294,17 @@ async function renderBadges(t) {
   $('npBadges').innerHTML = b.join('');
 }
 /* the sound-analysis chips appear as soon as the playing track has been analysed */
-Sound.events.addEventListener('change', () => {
+let genresStarted = false;
+const refreshSoundChips = () => {
   const box = document.querySelector('#npBadges .np-sound');
-  if (box && app.track && !box.childElementCount) { const html = SoundUI.chips(app.track); if (html) box.innerHTML = html; }
+  if (box && app.track) { const html = SoundUI.chips(app.track); if (html !== box.innerHTML) box.innerHTML = html; }
+};
+Sound.events.addEventListener('change', () => {
+  if (!genresStarted && Sound.ready()) { genresStarted = true; Genres.start(); }
+  const box = document.querySelector('#npBadges .np-sound');
+  if (box && app.track && !box.childElementCount) refreshSoundChips();
 });
+Genres.events.addEventListener('change', refreshSoundChips);
 
 // ---------------------------------------------------------------- next album, prepared ahead
 /* While a track plays, the next album's cover is fetched at the exact URL the
@@ -781,6 +790,7 @@ Lib.shared.onPlayAlbum = () => { if (router.current !== 'now') toast($t('Вос�
   Lib.shared.radioBan = (name) => Radio.ban(name);
   Lib.shared.similarFor = (t) => SoundUI.similar(t);
   Sound.init();
+  Genres.init({ getAllAlbums: Lib.getAllAlbums });
   WinInteg.init({
     state: () => app.state, track: () => app.track, pos: () => Viz.getPosition(),
     dur: () => Viz.progressState.dur || (app.track && app.track.duration) || 0,

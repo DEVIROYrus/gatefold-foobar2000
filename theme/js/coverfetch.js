@@ -62,9 +62,11 @@ const GAP = { 'itunes.apple.com': 3200, 'api.deezer.com': 250, 'musicbrainz.org'
 const lastHit = {};
 async function throttle(url) {
   let host = ''; try { host = new URL(url).host; } catch {}
-  const wait = (lastHit[host] || 0) + (GAP[host] || 250) - Date.now();
-  if (wait > 0) await sleep(wait);
-  lastHit[host] = Date.now();
+  // the slot is reserved before waiting, so callers running side by side (covers, artist photos,
+  // genres) still keep to the host's rate instead of all firing when the same wait ends
+  const now = Date.now(), at = Math.max(now, (lastHit[host] || 0) + (GAP[host] || 250));
+  lastHit[host] = at;
+  if (at > now) await sleep(at - now);
 }
 function backoff(url, ms) { try { lastHit[new URL(url).host] = Date.now() + ms; } catch {} }
 

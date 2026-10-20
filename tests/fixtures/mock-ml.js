@@ -18,3 +18,26 @@
     return base(m, p);
   };
 })();
+// MusicBrainz: genres for some artists of the mock library; «Тихий Час» and «Неизвестный Бэнд» are unknown to it
+(() => {
+  if (window.__emptyMusic) return;
+  const base = window.fb2k.invoke.bind(window.fb2k);
+  const MB = { 'Lumen Arcade': ['synthwave', 'outrun'], 'Mirage Theory': ['dark ambient', 'synthwave'], 'Fern Assembly': ['post-rock', 'math rock'], 'Blue Hours': ['industrial', 'ebm'] };
+  const ALB = { 'Lumen Arcade': 'Nightdrive', 'Mirage Theory': 'Sand & Signal', 'Fern Assembly': 'Under Canopy', 'Blue Hours': 'Tidal Lines' };
+  const ok = (body) => Promise.resolve({ success: true, status: 200, body: JSON.stringify(body) });
+  window.__mbCalls = [];
+  window.fb2k.invoke = async (m, p = {}) => {
+    if (m === 'http.get' && /musicbrainz\.org\/ws\/2\/(artist|release-group)/.test(p.url)) {
+      window.__mbCalls.push(p.url);
+      const u = decodeURIComponent(p.url);
+      const q = u.match(/artist:"([^"]+)"/);
+      if (q) { const n = q[1].trim(); return ok({ artists: MB[n] ? [{ id: 'mb-' + n, name: n, score: 100, tags: [{ name: MB[n][0], count: 3 }] }] : [] }); }
+      const rg = u.match(/release-group\?artist=mb-([^&]+)/);
+      if (rg) { const n = rg[1]; return ok({ 'release-groups': [{ id: 'rg-' + n, title: ALB[n], genres: [{ name: MB[n][1], count: 4 }, { name: MB[n][0], count: 2 }] }] }); }
+      const art = u.match(/artist\/mb-([^?]+)\?inc=genres/);
+      if (art) { const n = art[1]; return ok({ id: 'mb-' + n, name: n, genres: [{ name: MB[n][0], count: 9 }, { name: MB[n][1], count: 3 }] }); }
+      return ok({});
+    }
+    return base(m, p);
+  };
+})();

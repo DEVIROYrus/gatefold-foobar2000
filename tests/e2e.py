@@ -547,9 +547,22 @@ async def test_sound_ai(browser, port):
     w = await pg.evaluate("(async () => { const S = await import('/theme/js/ml/sound.js'); S.prioritize(S.all().slice(0, 30).map(r => ({ absolutePath: r.p + '.x', duration: 200, title: 'x' }))); await new Promise(r => setTimeout(r, 3000)); return S.state.workers; })()")
     check(w >= 2, f'«Maximum» runs several networks at once ({w})')
     await pg.click("#st-sound .seg button:has-text('Normal')"); await pg.wait_for_timeout(300)
-    # chips on Now Playing
+    # chips on Now Playing: genres from MusicBrainz (album first, then artist), ordered by the sound
     await nav(pg, 'now', 1200)
-    check(await pg.evaluate("document.querySelectorAll('#npBadges .chip.ai').length") >= 1, 'Now Playing shows the style and mood the network hears')
+    for _ in range(30):
+        chips = await pg.evaluate("[...document.querySelectorAll('#npBadges .chip.ai')].map(c => [c.textContent, c.title])")
+        if any(c[0] in ('Outrun', 'Synthwave') for c in chips): break
+        await pg.wait_for_timeout(1000)
+    check(chips and chips[0][0] in ('Outrun', 'Synthwave') and 'MusicBrainz' in chips[0][1], f'Now Playing shows the genre from MusicBrainz {chips[:2]}')
+    check(any('The network hears' in c[1] for c in chips), 'and what the network hears, on hover')
+    mb = await pg.evaluate("window.__mbCalls.length")
+    check(mb >= 3, f'MusicBrainz is asked by artist name ({mb} requests)')
+    # an artist MusicBrainz does not know gets the genres of the artists that sound like it
+    for _ in range(40):
+        g = await pg.evaluate("(async () => { const S = await import('/theme/js/ml/sound.js'); const G = await import('/theme/js/ml/genres.js'); const r = S.all().find(x => x.aa === 'Тихий Час'); return r ? G.describe({ albumArtist: 'Тихий Час', album: r.al }, r, 2) : []; })()")
+        if g and g[0]['src'] == 'sound': break
+        await pg.wait_for_timeout(1000)
+    check(g and g[0]['src'] == 'sound' and g[0]['name'] in ('Synthwave', 'Outrun', 'Dark Ambient'), f'unknown artists get the genres of close-sounding ones {g}')
     # similar tracks
     await pg.click("#npActions .btn:has-text('Similar')"); await pg.wait_for_timeout(1500)
     made = await pg.evaluate("window.__ml.created")
@@ -571,6 +584,8 @@ async def test_sound_ai(browser, port):
     check(harsh <= len(arts) * 0.1, f'tracks that sound different stay out ({harsh} of {len(arts)})')
     check(all(arts[i] != arts[i + 1] for i in range(1, len(arts) - 1)), 'never the same artist twice in a row')
     check('neural network' in toast, f'the radio says the network picks the tracks {toast[-140:]}')
+    songs = await pg.evaluate("(async () => { const U = await import('/theme/js/ml/sound-ui.js'); return [['Mourning Heart - Interlude', 110], ['Im Fackelschein', 95], ['Intro', 300], ['Nocturne (Intro)', 260], ['Solitude', 470], ['Sunrise', 210]].map(([ti, du]) => U.isSong({ ti, du })); })()")
+    check(songs == [False, False, False, False, True, True], f'intros, interludes and short pieces stay out of mood playlists {songs}')
     # mood playlist from the smart playlist sheet
     await pg.click('#btnNewPl'); await pg.wait_for_timeout(300)
     await pg.click("#layer .menu .mi:has-text('Smart playlist')"); await pg.wait_for_timeout(400)
