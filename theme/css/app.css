@@ -116,19 +116,10 @@ img { display: block; }
 #bg .bg-art.on { opacity: .62; }
 :root[data-scheme='light'] #bg .bg-art.on { opacity: .5; }
 #bg .aurora { position: absolute; inset: 0; }
-#bg .blob {
-  position: absolute; width: 78vmax; height: 78vmax; border-radius: 50%;
-  opacity: .62; will-change: transform;
-}
-#bg .b1 { background: radial-gradient(closest-side, var(--blob-1), transparent); left: -24vmax; top: -30vmax; animation: drift1 46s var(--ease) infinite alternate; }
-#bg .b2 { background: radial-gradient(closest-side, var(--blob-2), transparent); right: -30vmax; top: -18vmax; animation: drift2 58s var(--ease) infinite alternate; }
-#bg .b3 { background: radial-gradient(closest-side, var(--blob-3), transparent); left: 8vmax; bottom: -44vmax; animation: drift3 64s var(--ease) infinite alternate; }
-#bg .b4 { background: radial-gradient(closest-side, var(--blob-4), transparent); right: -18vmax; bottom: -36vmax; opacity: .5; animation: drift4 52s var(--ease) infinite alternate; }
+#bg .aurora-c { position: absolute; inset: 0; width: 100%; height: 100%; }   /* painted by ambient.js */
+/* the Canvas screen's glows still drift with CSS (two layers, only while it is open) */
 @keyframes drift1 { to { transform: translate3d(14vmax, 10vmax, 0) scale(1.15); } }
-@keyframes drift2 { to { transform: translate3d(-12vmax, 14vmax, 0) scale(.9); } }
 @keyframes drift3 { to { transform: translate3d(16vmax, -12vmax, 0) scale(1.1); } }
-@keyframes drift4 { to { transform: translate3d(-14vmax, -8vmax, 0) scale(1.2); } }
-body.no-motion #bg .blob, body.paused-bg #bg .blob { animation-play-state: paused; }
 body.no-ambient #bg .aurora, body.no-ambient #bg .bg-art { display: none; }
 #bg .veil {
   position: absolute; inset: 0;
@@ -985,12 +976,15 @@ select.st-input { height: 34px; }
 /* ================= Library → by cover colour (colors.js) ================= */
 .color-ribbon { flex: none; display: flex; align-items: center; gap: 14px; padding: 0 28px 12px; flex-wrap: wrap; }
 .color-ribbon[hidden] { display: none; }
-.cr-sw { display: flex; gap: 6px; padding: 5px; border-radius: 99px; background: var(--hover); }
-.cr-b { width: 24px; height: 24px; border-radius: 50%; border: 0; cursor: pointer; background: var(--c); box-shadow: inset 0 0 0 1px rgb(255 255 255 / .12); transition: transform 140ms var(--ease), box-shadow 140ms; }
-.cr-b.n { background: conic-gradient(from 200deg, #f4f4f4, #8a8a8a, #141414, #f4f4f4); }
-.cr-b:hover { transform: scale(1.18); }
-.cr-b.on { transform: scale(1.18); box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--text); }
-.color-ribbon.picked .cr-b:not(.on) { opacity: .45; }
+.cr-sw { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; border-radius: 14px; background: var(--hover); }
+.cr-b { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px 0 5px; border-radius: 99px; border: 0; cursor: pointer; background: transparent; color: var(--text-2);
+  font: inherit; font-size: var(--fs-xs); font-weight: 600; transition: background 140ms, color 140ms, opacity 140ms; }
+.cr-b i { width: 18px; height: 18px; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 1px rgb(127 127 127 / .35); flex: none; transition: transform 140ms var(--ease); }
+.cr-b small { color: var(--text-3); font-weight: 500; font-variant-numeric: tabular-nums; }
+.cr-b:hover { background: var(--hover); color: var(--text); }
+.cr-b:hover i { transform: scale(1.12); }
+.cr-b.on { background: color-mix(in oklab, var(--text) 14%, transparent); color: var(--text); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--text) 30%, transparent); }
+.cr-b.empty { opacity: .4; }
 .cr-info { display: flex; align-items: center; gap: 8px; color: var(--text-3); font-size: var(--fs-sm); }
 
 /* ================= own drop-down lists (select.js) ================= */

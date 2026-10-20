@@ -9,6 +9,7 @@ import * as Welcome from './welcome.js';
 import * as WinInteg from './wininteg.js';
 import * as Mini from './mini.js';
 import * as Radio from './radio.js';
+import * as Ambient from './ambient.js';
 import * as Sound from './ml/sound.js';
 import * as SoundUI from './ml/sound-ui.js';
 import { waitForBridge, call, on, ok, normTrack, esc, fmtTime, debounce, log, albumKeyOf, hasBridge, artUrl, plural } from './bridge.js';
@@ -755,6 +756,7 @@ Lib.shared.onPlayAlbum = () => { if (router.current !== 'now') toast($t('Вос�
 (async function boot() {
   applyAppearance('*');
   makeGrain();
+  Ambient.init();
   const bridged = await waitForBridge();
   if (!bridged) {
     body.classList.remove('booting');

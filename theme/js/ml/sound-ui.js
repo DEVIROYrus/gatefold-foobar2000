@@ -33,13 +33,13 @@ function statusHtml() {
     case 'error': return `<span class="sp-bad">${$t('Не получилось: {0}', esc(s.error))}</span>` + (/404|HTTP 4/.test(s.error) ? `<br>${$t('Модели ещё не опубликованы в репозитории Gatefold — попробуйте позже')}` : '');
     default: {
       const left = Math.max(0, s.total - s.done);
-      const eta = left && s.wall ? left * s.wall / 1000 : 0;
+      const eta = left && s.rate ? left / s.rate : 0;
       const etaTxt = eta > 5400 ? $t('≈ {0} ч', Math.round(eta / 3600)) : eta > 90 ? $t('≈ {0} мин', Math.round(eta / 60)) : '';
       let t = !s.total ? $t('Ищу треки медиатеки…')
         : !left ? $t('Вся медиатека проанализирована: {0} {1}', s.total.toLocaleString(), plural(s.total, 'трек', 'трека', 'треков'))
           : $t('Проанализировано {0} из {1}', s.done.toLocaleString(), s.total.toLocaleString()) + (etaTxt ? ' · ' + $t('осталось {0}', etaTxt) : '');
       if (s.phase === 'paused') t += ' · ' + (s.why === 'battery' ? $t('пауза: компьютер работает от батареи') : $t('на паузе'));
-      if (s.msPerTrack) t += `<br><span class="dim">${$t('{0} мс работы нейросети на трек', Math.round(s.msPerTrack))}${s.fake ? ' · ' + $t('тестовые модели') : ''}</span>`;
+      if (s.msPerTrack) t += `<br><span class="dim">${$t('На трек: нейросеть {0} мс, чтение файла foobar2000 {1} мс', Math.round(s.msPerTrack), Math.round(s.decodeMs))}${s.rate ? ' · ' + $t('{0} треков в минуту', (s.rate * 60).toFixed(s.rate * 60 < 10 ? 1 : 0)) : ''}${s.fake ? ' · ' + $t('тестовые модели') : ''}</span>`;
       return t + (s.total && left ? bar(s.done / s.total) : '');
     }
   }

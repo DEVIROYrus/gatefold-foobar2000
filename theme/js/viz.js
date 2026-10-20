@@ -364,24 +364,39 @@ export function refreshWaveVisibility() { showWave(!!waveData); }
 export const waveform = () => waveData;
 
 // ---------------------------------------------------------------- shared rAF loop
-let raf = 0;
+let raf = 0, timer = 0, lastSpec = 0;
 export const vizState = { nowVisible: false, windowVisible: true, extra: new Set() }; // extra: other consumers that need the spectrum
-function frame() {
+/* the progress alone moves one pixel every dur/width seconds: no need to wake 60–144 times a second for it */
+function pixelInterval() {
+  const width = seek.classList.contains('wave') ? ww : seek.clientWidth * dpr();
+  return clamp((prog.dur * 1000) / Math.max(1, width), 16, 1000);
+}
+function frame(now) {
   raf = 0;
-  let again = false;
+  let again = false, needFrames = false;
   if (vizState.windowVisible) {
     drawProgress();
     if (prog.playing) again = true;
     const needSpec = spec.subscribed || spec.beat > 0.002;
     if (needSpec) {
-      pumpStream();
-      const live = stepSpectrum();
-      if (vizState.nowVisible && settings.visualizer) drawSpectrum();
-      if (vizState.nowVisible) applyBeat();
-      if (live || prog.playing) again = true;
+      // high-refresh screens: the spectrum is drawn at most ~60 times a second
+      if (now - lastSpec >= 15) {
+        lastSpec = now;
+        pumpStream();
+        const live = stepSpectrum();
+        if (vizState.nowVisible && settings.visualizer) drawSpectrum();
+        if (vizState.nowVisible) applyBeat();
+        if (live) needFrames = true;
+      } else needFrames = true;
+      if (prog.playing) needFrames = true;
     }
+    if (prog.hover >= 0 || prog.dragFrac >= 0) needFrames = true;
   }
-  if (again) raf = requestAnimationFrame(frame);
+  if (needFrames) raf = requestAnimationFrame(frame);
+  else if (again) timer = setTimeout(() => { timer = 0; kick(); }, pixelInterval());
 }
-export function kick() { if (!raf) raf = requestAnimationFrame(frame); }
+export function kick() {
+  if (timer) { clearTimeout(timer); timer = 0; }
+  if (!raf) raf = requestAnimationFrame(frame);
+}
 export function resizeAll() { sizeViz(); waveDirty = true; lastWaveX = -1; kick(); }

@@ -97,6 +97,26 @@ export async function getAll(store) {
     catch { res([]); }
   });
 }
+/** Every row of a store, `n` at a time (fn(rows) per batch, a breather in between): no long freeze for a big store. */
+export async function eachBatch(store, n, fn) {
+  const d = await db(); if (!d) return;
+  let after = null;
+  for (;;) {
+    const rows = await new Promise((res) => {
+      try {
+        const range = after == null ? null : IDBKeyRange.lowerBound(after, true);
+        const r = d.transaction(store).objectStore(store).getAll(range, n);
+        r.onsuccess = () => res(r.result || []); r.onerror = () => res([]);
+      } catch { res([]); }
+    });
+    if (!rows.length) return;
+    await fn(rows);
+    if (rows.length < n) return;
+    const last = rows[rows.length - 1];
+    after = last.k ?? last.key;
+    await new Promise((r) => setTimeout(r, 0));
+  }
+}
 export async function clearStore(store) {
   const d = await db(); if (!d) return false;
   try { const tx = d.transaction(store, 'readwrite'); tx.objectStore(store).clear(); return done(tx); } catch { return false; }

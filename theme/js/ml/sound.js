@@ -5,7 +5,7 @@
  * 400 Discogs styles) turns ~2-second mel patches into a 1280-number embedding — tracks that sound
  * alike get nearby embeddings — plus style probabilities; small heads on top estimate moods
  * (aggressive, relaxed, sad, happy, party), danceability, voice/instrumental, acoustic/electronic.
- * Three 6-second pieces of each track (at ¼, ½ and ¾) are decoded by foobar2000 at 16 kHz and
+ * Two 8-second pieces of each track (at 35 % and 70 %) are decoded by foobar2000 at 16 kHz and
  * analysed in a Web Worker with onnxruntime-web: one thread, never the interface thread.
  *
  * Gentle on the computer: one track at a time; while you use the computer the analysis keeps to
@@ -30,11 +30,13 @@ export const MOODS = [['aggressive', 'mood_aggressive', 'aggressive'], ['relaxed
   ['instrumental', 'voice_instrumental', 'instrumental'], ['acoustic', 'mood_acoustic', 'acoustic'], ['electronic', 'mood_electronic', 'electronic']];
 const MW = [1.7, 1.3, 1.3, 1.0, 0.7, 0.8, 0.6, 0.8, 0.8];
 const MWS = MW.reduce((s, v) => s + v, 0);
-const STORE = 'sound', PIECE = 6;
+const STORE = 'sound', PIECE = 8;
+/* how tracks are sampled; part of the record's version, so a change re-analyses them */
+const SAMPLING = 's2';
 const FIELDS = ['handle', 'absolutePath', 'subsong', 'title', 'artist', 'albumArtist', 'album', 'duration'];
 
 export const events = new EventTarget();
-export const state = { phase: 'off', dlDone: 0, dlTotal: 0, done: 0, total: 0, error: '', why: '', msPerTrack: 0, wall: 0, modelId: '', fake: false };
+export const state = { phase: 'off', dlDone: 0, dlTotal: 0, done: 0, total: 0, error: '', why: '', msPerTrack: 0, decodeMs: 0, rate: 0, modelId: '', fake: false };
 const emit = () => events.dispatchEvent(new Event('change'));
 /* pacing multiplier (1 = normal); the end-to-end tests set 0 through localStorage to run at full speed */
 const pace = () => { try { const v = localStorage.getItem('gatefold.ml.pace'); return v == null ? 1 : +v; } catch { return 1; } };
@@ -118,7 +120,7 @@ export function nearest(T, n = 50, filter = null) {
 export const get = (t) => { const r = recs.get(keyOf(t)); return r && r.e ? fresh(r) : null; };
 export const ready = () => state.phase === 'ready' || state.phase === 'indexing' || state.phase === 'paused';
 export const count = () => muCount;
-export const queued = () => Q.size;
+export const queued = () => Q.size + inflight.size;
 export const all = () => [...recs.values()].filter((r) => r.e);
 export const moodNames = () => MOODS.map((x) => x[0]);
 export const mood = (r, name) => { const i = MOODS.findIndex((x) => x[0] === name); return r && r.m && i >= 0 ? r.m[i] / 255 : 0; };
@@ -155,31 +157,42 @@ async function startWorker(bundle) {
   return post({ type: 'init', manifest: bundle.manifest, wasm, models }, [wasm, ...Object.values(models)]);
 }
 
-/** decode three pieces and run the network → a record (or a «bad» one when the file cannot be read) */
-async function analyze(t) {
-  const k = keyOf(t); if (!k) return null;
-  const path = pathOf(t), dur = +t.duration || 0;
-  const starts = dur > 30 ? [0.25, 0.5, 0.75].map((f) => Math.max(0, dur * f - PIECE / 2)) : [0];
-  const pieces = [];
-  for (const s of starts) {
-    const x = await decode(path, s, s + (dur > 30 ? PIECE : Math.min(30, dur || 30)), SR);
-    if (x && x.length >= SR * 2.2) pieces.push(x);
-  }
-  const base = { k, v: state.modelId, p: t.absolutePath || t.path || '', s: t.subsong || 0, ar: t.artist || '', aa: t.albumArtist || '', al: t.album || '', ti: t.title || '', du: dur, at: Date.now() };
-  if (!pieces.length) return { ...base, bad: 1 };
+/* Two stages that overlap: foobar2000 decodes the next tracks (one at a time on its own worker
+   thread, so its latency hides behind the network) while the network analyses the current one. */
+
+/** decode the three pieces of a track (requested together: foobar2000 queues them without round trips) */
+async function decodeJob(job) {
+  const t = job.q.t, path = pathOf(t), dur = +t.duration || 0;
+  // two pieces, not more: every piece costs foobar2000 a file open and a seek, which is most of the time
+  const starts = dur > 30 ? [0.35, 0.7].map((f) => Math.max(0, dur * f - PIECE / 2)) : [0];
+  const t0 = performance.now();
+  const xs = await Promise.all(starts.map((s) => decode(path, s, s + (dur > 30 ? PIECE : Math.min(30, dur || 30)), SR).catch(() => null)));
+  const ms = performance.now() - t0;
+  state.decodeMs = state.decodeMs ? state.decodeMs * 0.85 + ms * 0.15 : ms;
+  return { job, pieces: xs.filter((x) => x && x.length >= SR * 2.2), decMs: ms };
+}
+/** run the network on decoded pieces → a record (or a «bad» one when the file could not be read) */
+async function infer({ job, pieces }) {
+  const t = job.q.t, k = job.k;
+  const base = { k, v: state.modelId, p: t.absolutePath || t.path || '', s: t.subsong || 0, ar: t.artist || '', aa: t.albumArtist || '', al: t.album || '', ti: t.title || '', du: +t.duration || 0, at: Date.now() };
+  if (!pieces.length) return { rec: { ...base, bad: 1 }, ms: 0 };
   const res = await post({ type: 'analyze', pieces }, pieces.map((p) => p.buffer));
-  if (!res.emb) return { ...base, bad: 1 };
+  if (!res.emb) return { rec: { ...base, bad: 1 }, ms: res.ms || 0 };
   state.msPerTrack = state.msPerTrack ? state.msPerTrack * 0.8 + res.ms * 0.2 : res.ms;
   let mx = 0; for (const v of res.emb) mx = Math.max(mx, Math.abs(v));
   const q = mx / 127 || 1;
   const m = new Uint8Array(MOODS.length);
   MOODS.forEach((x, i) => { const hi = moodIdx[i]; const out = hi && res.heads[hi[0]]; m[i] = out ? Math.round(Math.max(0, Math.min(1, out[hi[1]])) * 255) : 128; });
-  return { ...base, e: Int8Array.from(res.emb, (v) => Math.round(v / q)), q, st: res.styles ? Uint8Array.from(res.styles, (v) => Math.round(Math.max(0, Math.min(1, v)) * 255)) : null, m };
+  return { rec: { ...base, e: Int8Array.from(res.emb, (v) => Math.round(v / q)), q, st: res.styles ? Uint8Array.from(res.styles, (v) => Math.round(Math.max(0, Math.min(1, v)) * 255)) : null, m }, ms: res.ms };
 }
 
 /* ---------------------------------------------------------------- the indexer */
-const Q = new Map();               // key → { t, pri, waiters }
+const Q = new Map();               // key → { t, pri, waiters }   waiting
+const inflight = new Map();        // key → job                    being decoded / decoded, not analysed yet
+const decoded = [];                // [{ job, pieces, decMs }]     ready for the network
+const AHEAD = 2;                   // tracks decoded ahead of the network
 let running = false, wake = null, pending = [], saveT = 0, libKeys = null;
+const doneAt = [];                 // completion times of background tracks → throughput and time left
 const signal = () => { if (wake) { const w = wake; wake = null; w(); } };
 const flush = () => { clearTimeout(saveT); const b = pending; pending = []; if (b.length) IDB.putMany(STORE, b.map(({ _am, _n, _v, ...r }) => r)); };
 
@@ -188,6 +201,7 @@ export function prioritize(tracks, pri = 20) {
   for (const t of tracks || []) {
     const k = keyOf(t); if (!k) continue;
     const r = recs.get(k); if (r && (r.e || r.bad)) continue;
+    const f = inflight.get(k); if (f) { f.q.pri = Math.max(f.q.pri, pri); continue; }
     const q = Q.get(k);
     if (q) q.pri = Math.max(q.pri, pri); else Q.set(k, { t, pri, waiters: [] });
   }
@@ -199,38 +213,62 @@ export function analyzeNow(t, ms = 15000) {
   const k = keyOf(t); if (!k || !ready()) return Promise.resolve(null);
   if (recs.get(k) && recs.get(k).bad) return Promise.resolve(null);
   return new Promise((res) => {
-    let q = Q.get(k);
+    const f = inflight.get(k);
+    let q = f ? f.q : Q.get(k);
     if (!q) Q.set(k, (q = { t, pri: 100, waiters: [] })); else q.pri = 100;
     q.waiters.push(res);
     setTimeout(() => res(null), ms);
     signal();
   });
 }
-function next() {
+function next(minPri = -Infinity) {
   let best = null;
-  for (const [k, q] of Q) if (!best || q.pri > best.q.pri) { best = { k, q }; if (q.pri >= 100) break; }
+  for (const [k, q] of Q) if (q.pri >= minPri && (!best || q.pri > best.q.pri)) { best = { k, q }; if (q.pri >= 100) break; }
   if (best) Q.delete(best.k);
   return best;
 }
+const urgent = () => { for (const q of Q.values()) if (q.pri >= 100) return true; return false; };
 async function onBattery() {
   try { const b = navigator.getBattery && await navigator.getBattery(); return !!(b && b.charging === false); } catch { return false; }
 }
+/** keep `AHEAD` tracks decoding / decoded ahead of the network */
+function prefetch(minPri) {
+  while (running && inflight.size < AHEAD && Q.size) {
+    const job = next(minPri); if (!job) return;
+    inflight.set(job.k, job);
+    decodeJob(job).then((d) => { decoded.push(d); signal(); }, () => { decoded.push({ job, pieces: [], decMs: 0 }); signal(); });
+  }
+}
+function takeDecoded() {
+  if (!decoded.length) return null;
+  let i = 0;                                       // the most urgent decoded one first
+  for (let j = 1; j < decoded.length; j++) if (decoded[j].job.q.pri > decoded[i].job.q.pri) i = j;
+  return decoded.splice(i, 1)[0];
+}
+const waitWake = (ms) => new Promise((r) => { wake = r; if (ms) setTimeout(r, ms); });
+
 async function loop() {
   while (running) {
-    if (settings.soundPaused && ![...Q.values()].some((q) => q.pri >= 50)) { setPhase('paused'); await new Promise((r) => { wake = r; }); continue; }
-    if (!Q.size) { setPhase('ready'); await new Promise((r) => { wake = r; setTimeout(r, 60000); }); continue; }
-    const job = next(); if (!job) continue;
-    if (job.q.pri < 50) {
-      if (await onBattery()) { Q.set(job.k, job.q); state.why = 'battery'; setPhase('paused'); await sleep(60000); continue; }
+    const paused = settings.soundPaused;
+    if (paused && !urgent() && !decoded.some((d) => d.job.q.pri >= 50)) { setPhase('paused'); await waitWake(30000); continue; }
+    if (!Q.size && !inflight.size) { setPhase('ready'); await waitWake(60000); continue; }
+    // background work waits for a pause in the user's input and for mains power; urgent work does not
+    if (!urgent() && !paused) {
+      if (await onBattery()) { state.why = 'battery'; setPhase('paused'); await sleep(60000); continue; }
       state.why = '';
-      if (pace()) await slot('low');                       // wait for a pause in the user's input
+      if (pace()) await slot('low');
     }
     if (!running) break;
+    prefetch(paused || settings.soundPaused ? 50 : -Infinity);
+    if (urgent() && inflight.size >= AHEAD) { const j = next(100); if (j) { inflight.set(j.k, j); decodeJob(j).then((d) => { decoded.push(d); signal(); }); } }
+    let item = takeDecoded();
+    if (!item) { await waitWake(20000); continue; }
     setPhase(settings.soundPaused ? 'paused' : 'indexing');
-    const t0 = performance.now();
-    let rec = null;
-    try { rec = await analyze(job.q.t); } catch (e) { log('ml analyze', e.message || e); state.error = String(e.message || e); }
-    const ms = performance.now() - t0;
+    const job = item.job;
+    let out = { rec: null, ms: 0 };
+    try { out = await infer(item); } catch (e) { log('ml analyze', e.message || e); state.error = String(e.message || e); }
+    inflight.delete(job.k);
+    const rec = out.rec;
     if (rec) {
       recs.set(rec.k, rec); pending.push(rec);
       if (rec.e) { if (mu) stats(rec); maybeRecompute(); }
@@ -238,13 +276,17 @@ async function loop() {
       clearTimeout(saveT); saveT = setTimeout(flush, 4000); if (pending.length >= 25) flush();
     }
     for (const w of job.q.waiters) w(rec && rec.e ? rec : null);
+    prefetch(settings.soundPaused ? 50 : -Infinity);      // the next decodes run while we rest
+    if (job.q.pri < 50) { doneAt.push(performance.now()); if (doneAt.length > 60) doneAt.shift(); }
+    state.rate = doneAt.length > 4 ? (doneAt.length - 1) / ((doneAt[doneAt.length - 1] - doneAt[0]) / 1000) : 0;   // tracks per second
     emit();
     if (job.q.pri >= 100) continue;
-    // pacing: busy ≤ ~25 % of one core while the computer is in use, ≤ ~50 % when nobody is at it
+    // pacing by the work actually done — the network's time plus foobar2000's share of decoding
+    // (its waiting time is not work): busy ≤ ~25 % of one core while the computer is in use,
+    // ≤ ~50 % when nobody is at it
+    const cpu = out.ms + Math.min(item.decMs, 40 * item.pieces.length);
     const away = document.visibilityState === 'hidden' || userIdleFor() > 30000;
-    await sleep(Math.min(20000, ms * (job.q.pri >= 50 ? 0.5 : away ? 1 : 3) * pace()));
-    const wall = performance.now() - t0;
-    if (job.q.pri < 50) state.wall = state.wall ? state.wall * 0.9 + wall * 0.1 : wall;
+    await sleep(Math.min(20000, cpu * (job.q.pri >= 50 ? 0.5 : away ? 1 : 3) * pace()));
   }
 }
 function setPhase(p) { if (state.phase !== p) { state.phase = p; emit(); } }
@@ -281,12 +323,12 @@ export function start() {
       const bundle = await Models.load((d, t) => { state.dlDone = d; state.dlTotal = t; emit(); }, { refresh });
       try { localStorage.setItem('gatefold.ml.checked', String(Date.now())); } catch {}
       setPhase('loading');
-      M = bundle.manifest; state.modelId = bundle.id; state.fake = !!M.fake;
+      M = bundle.manifest; state.modelId = bundle.id + '.' + SAMPLING; state.fake = !!M.fake;
       MOODS.forEach(([, head, cls], i) => { const h = M.heads.find((x) => x.id === head); const ci = h ? h.classes.indexOf(cls) : -1; moodIdx[i] = h && ci >= 0 ? [head, ci] : null; });
       await startWorker(bundle);
       recs.clear();
       const stale = [];
-      for (const r of await IDB.getAll(STORE)) { if (r.v === state.modelId) recs.set(r.k, r); else stale.push(r.k); }
+      await IDB.eachBatch(STORE, 1500, (rows) => { for (const r of rows) { if (r.v === state.modelId) recs.set(r.k, r); else stale.push(r.k); } });
       if (stale.length) IDB.delMany(STORE, stale);
       recompute();
       running = true; setPhase('ready');
@@ -301,7 +343,7 @@ export function start() {
 }
 function stopWorker() { running = false; signal(); if (worker) { worker.terminate(); worker = null; } for (const r of reqs.values()) r.rej(new Error('stopped')); reqs.clear(); }
 export async function enable() { setSetting('soundAI', true); return start(); }
-export function disable() { flush(); setSetting('soundAI', false); stopWorker(); Q.clear(); setPhase('off'); }
+export function disable() { flush(); setSetting('soundAI', false); stopWorker(); Q.clear(); inflight.clear(); decoded.length = 0; setPhase('off'); }
 export function pause(p) { setSetting('soundPaused', !!p); signal(); emit(); }
 /** forget everything: the analysis results and the downloaded models */
 export async function removeAll() { disable(); recs.clear(); mu = null; muCount = 0; await IDB.clearStore(STORE); await Models.remove(); state.done = 0; emit(); }

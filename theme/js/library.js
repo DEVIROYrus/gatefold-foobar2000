@@ -965,8 +965,9 @@ async function sortLib() {
   LIB.needResort = false;
   ribbon();
 }
-/* «By cover colour»: a ribbon of hues above the grid filters the wall to one colour */
-const HUES = Array.from({ length: 12 }, (_, i) => 15 + i * 30);
+/* «By cover colour»: twelve named colours above the grid; a click keeps only that colour */
+const COLOR_NAMES = () => ({ red: $t('Красный'), orange: $t('Оранжевый'), yellow: $t('Жёлтый'), green: $t('Зелёный'), teal: $t('Бирюзовый'), blue: $t('Синий'),
+  purple: $t('Фиолетовый'), pink: $t('Розовый'), brown: $t('Коричневый'), white: $t('Белый'), grey: $t('Серый'), black: $t('Чёрный') });
 function ribbon() {
   const el = $('libRibbon');
   const on = settings.librarySort === 'color';
@@ -974,11 +975,11 @@ function ribbon() {
   if (!on) { if (LIB.hue != null) { LIB.hue = null; } return; }
   if (!el.dataset.built) {
     el.dataset.built = '1';
-    el.innerHTML = `<div class="cr-sw">${HUES.map((h) => `<button class="cr-b" data-h="${h}" style="--c:oklch(70% 0.16 ${h})" title="${$t('Только этот цвет')}"></button>`).join('')}<button class="cr-b n" data-h="neutral" title="${$t('Чёрно-белые и серые обложки')}"></button></div><span class="cr-info"></span>`;
+    const names = COLOR_NAMES();
+    el.innerHTML = `<div class="cr-sw">${Colors.CATS.map((c) => `<button class="cr-b" data-c="${c.id}" title="${$t('Только этот цвет')}"><i style="--c:${c.sw}"></i><span>${names[c.id]}</span><small></small></button>`).join('')}</div><span class="cr-info"></span>`;
     el.addEventListener('click', (e) => {
       const b = e.target.closest('.cr-b'); if (!b) return;
-      const h = b.dataset.h === 'neutral' ? 'neutral' : +b.dataset.h;
-      LIB.hue = LIB.hue === h ? null : h;
+      LIB.hue = LIB.hue === b.dataset.c ? null : b.dataset.c;
       libScroller.scrollTop = 0; applyFilter(); ribbonInfo();
     });
   }
@@ -986,7 +987,8 @@ function ribbon() {
 }
 function ribbonInfo() {
   const el = $('libRibbon'); if (el.hidden) return;
-  el.querySelectorAll('.cr-b').forEach((b) => b.classList.toggle('on', String(LIB.hue) === b.dataset.h));
+  const n = Colors.counts(LIB.albums);
+  el.querySelectorAll('.cr-b').forEach((b, i) => { b.classList.toggle('on', LIB.hue === b.dataset.c); b.querySelector('small').textContent = n[i] ? n[i] : ''; b.classList.toggle('empty', !n[i]); });
   el.classList.toggle('picked', LIB.hue != null);
   const st = Colors.state;
   el.querySelector('.cr-info').innerHTML = st.running
@@ -1016,7 +1018,12 @@ function applyFilter() {
   const q = $('libFilter').value.trim().toLowerCase();
   const base = LIB.sorted || LIB.albums;
   let view = q ? base.filter((a) => (a.name + ' ' + a.artist + ' ' + (a.year || '') + ' ' + (a.genre || '')).toLowerCase().includes(q)) : base;
-  if (LIB.hue != null && settings.librarySort === 'color') view = view.filter((a) => Colors.matches(a, LIB.hue));
+  if (LIB.hue != null && settings.librarySort === 'color') {
+    // the covers of which it is the main colour first, then those where it is a strong second one
+    const main = [], second = [];
+    for (const a of view) { const m = Colors.matches(a, LIB.hue); if (m === 2) main.push(a); else if (m === 1) second.push(a); }
+    view = main.concat(second);
+  }
   LIB.view = view;
   libGrid.querySelectorAll('.tile').forEach((t) => t.remove()); LIB.nodes.clear();
   layoutLib();
