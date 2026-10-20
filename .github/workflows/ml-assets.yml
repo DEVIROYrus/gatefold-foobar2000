@@ -27,7 +27,10 @@ jobs:
       - name: Build
         shell: bash
         env: { TF_PYTHON: /tmp/tf/bin/python }
-        run: python tools/ml/build_assets.py out | tee build.log
+        run: |
+          set -o pipefail
+          { echo "== pip (tools)"; pip freeze | grep -iE 'essentia|onnx|numpy|tensorflow' ; /tmp/tf/bin/pip freeze | grep -iE 'onnx|numpy|tensorflow|protobuf'; } > build.log 2>&1 || true
+          python -u -X faulthandler tools/ml/build_assets.py out 2>&1 | tee -a build.log
       - name: Show the manifest
         run: |
           python - <<'EOF'
@@ -54,3 +57,13 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: ml-build-log, path: build.log }
+      # the log also goes to the `ml-log` branch, readable with plain git (no sign-in), success or not
+      - name: Publish the log
+        if: always()
+        run: |
+          mkdir -p /tmp/log && cp build.log /tmp/log/ 2>/dev/null || echo "no build.log" > /tmp/log/build.log
+          echo "${{ job.status }} ${GITHUB_SHA} $(date -u +%FT%TZ)" > /tmp/log/STATUS
+          cd /tmp/log && git init -q -b ml-log
+          git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A && git commit -qm "ML build log ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ml-log
