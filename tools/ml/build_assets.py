@@ -36,7 +36,10 @@ def get(url):
 
 def sha(b): return hashlib.sha256(b).hexdigest()
 
+def stage(name): print(f'\n== {name}', flush=True)
+
 def main():
+    stage('EffNet')
     (OUT / 'models').mkdir(parents=True, exist_ok=True)
     (OUT / 'reference').mkdir(parents=True, exist_ok=True)
     work = Path('work'); work.mkdir(exist_ok=True)
@@ -60,6 +63,7 @@ def main():
     manifest['effnet']['activationOutput'] = act_out
 
     # ---------------------------------------------------------------- heads → ONNX
+    stage('heads')
     for h in HEADS:
         d = HEAD_DIR.get(h, h)
         try:
@@ -82,6 +86,7 @@ def main():
         print('head', h, 'classes', len(hj.get('classes', [])))
 
     # ---------------------------------------------------------------- framing: match Essentia exactly
+    stage('framing (Essentia reference)')
     import essentia.standard as es
     import onnxruntime as ort
     sess = ort.InferenceSession(str(OUT / 'models' / 'discogs-effnet.onnx'))
@@ -117,6 +122,7 @@ def main():
     print('framing', manifest['framing'])
 
     # ---------------------------------------------------------------- reference data for the JS side
+    stage('reference data')
     ref = {}
     for name, x in signals.items():
         (OUT / 'reference' / f'{name}.f32').write_bytes(x.astype('<f4').tobytes())
@@ -131,6 +137,7 @@ def main():
     (OUT / 'reference' / 'reference.json').write_text(json.dumps(ref))
 
     # ---------------------------------------------------------------- onnxruntime-web WebAssembly
+    stage('onnxruntime-web')
     tgz = get(f'https://registry.npmjs.org/onnxruntime-web/-/onnxruntime-web-{ORT_VERSION}.tgz')
     with tarfile.open(fileobj=io.BytesIO(tgz)) as t:
         wasm = t.extractfile('package/dist/ort-wasm-simd-threaded.wasm').read()
