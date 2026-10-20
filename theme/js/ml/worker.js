@@ -6,7 +6,7 @@
  * «Maximum» speed runs several); the window and foobar2000 never wait for it.
  *
  *   → { type:'init', manifest, wasm:ArrayBuffer, models:{ file → ArrayBuffer } }   ← { type:'ready', heads:[ids] }
- *   → { id, type:'analyze', pieces:[Float32Array], rates:[Hz] }   ← { id, emb, styles, heads:{ id → Float32Array }, patches, ms }
+ *   → { id, type:'analyze', pieces:[Float32Array], rates:[Hz] }   ← { id, emb, styles, heads:{ id → Float32Array }, share:{ id → Float32Array }, patches, ms }
  *     (pieces not at 16 kHz are resampled here)
  */
 import * as ort from '../vendor/ort/ort.wasm.min.mjs';
@@ -58,7 +58,14 @@ async function analyze(pieces, rates, hop) {
     try {
       const r = await h.s.run({ [h.input]: new ort.Tensor('float32', E.data, [n, D]) });
       const y = r[h.output];
-      res.heads[h.id] = mean(y.data, n, y.dims[y.dims.length - 1] || 1);
+      const C = y.dims[y.dims.length - 1] || 1;
+      res.heads[h.id] = mean(y.data, n, C);
+      // and how much of the track each class wins: a song with a long guitar solo averages
+      // «half instrumental», but its voice still wins most patches
+      const won = new Float32Array(C);
+      for (let r = 0; r < n; r++) { let b = 0; for (let c = 1; c < C; c++) if (y.data[r * C + c] > y.data[r * C + b]) b = c; won[b]++; }
+      for (let c = 0; c < C; c++) won[c] /= n || 1;
+      (res.share ||= {})[h.id] = won;
     } catch (e) { console.warn('head run', h.id, e); }
   }
   res.ms = Math.round(performance.now() - t0);
@@ -71,7 +78,7 @@ self.onmessage = async (e) => {
     if (m.type === 'init') postMessage({ id: m.id, ...(await init(m)) });
     else if (m.type === 'analyze') {
       const r = await analyze(m.pieces, m.rates, m.hop);
-      const tr = [r.emb, r.styles, ...Object.values(r.heads || {})].filter(Boolean).map((a) => a.buffer);
+      const tr = [r.emb, r.styles, ...Object.values(r.heads || {}), ...Object.values(r.share || {})].filter(Boolean).map((a) => a.buffer);
       postMessage({ id: m.id, type: 'result', ...r }, tr);
     }
   } catch (err) { postMessage({ id: m.id, type: 'error', error: String((err && err.message) || err) }); }

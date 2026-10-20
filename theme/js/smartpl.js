@@ -22,65 +22,69 @@ const DECADES = [1950, 1960, 1970, 1980, 1990, 2000, 2010, 2020];
 
 /* every recipe: query(param) → { query, sort } — `sort` may be a SORT clause (tried first) */
 const RECIPES = [
-  { id: 'recent', ic: 'sparkle', stats: true, title: $t('Недавно добавленные'), desc: '' /* Новое в медиатеке, свежее сверху */,
-    param: { kind: 'seg', def: 30, opts: [[7, $t('7 дней')], [30, $t('30 дней')], [90, $t('3 месяца')]] },
+  { id: 'recent', g: 'listen', ic: 'inbox', stats: true, title: $t('Недавно добавленные'), desc: '' /* Новое в медиатеке, свежее сверху */,
+    param: { kind: 'seg', label: $t('Период'), def: 30, opts: [[7, $t('7 дней')], [30, $t('30 дней')], [90, $t('3 месяца')]] },
     name: (n) => $t('Новое за {0} дн.', n), make: (n) => ({ query: `%added% DURING LAST ${n} DAYS`, sortDesc: '%added%' }) },
-  { id: 'top', ic: 'heart-f', stats: true, title: $t('Самое любимое'), desc: '' /* Чаще всего слушаете — по числу прослушиваний */,
-    param: { kind: 'seg', def: 10, opts: [[5, $t('от 5 раз')], [10, $t('от 10')], [25, $t('от 25')]] },
+  { id: 'top', g: 'listen', ic: 'heart-f', stats: true, title: $t('Самое любимое'), desc: '' /* Чаще всего слушаете — по числу прослушиваний */,
+    param: { kind: 'seg', label: $t('Сколько раз слушали'), def: 10, opts: [[5, $t('от 5 раз')], [10, $t('от 10')], [25, $t('от 25')]] },
     name: () => $t('Самое любимое'), make: (n) => ({ query: `%play_count% GREATER ${n - 1}`, sortDesc: '%play_count%' }) },
-  { id: 'forgot', ic: 'history', stats: true, title: $t('Забытые любимцы'), desc: '' /* Слушали много раз, но не включали полгода */,
+  { id: 'forgot', g: 'listen', ic: 'history', stats: true, title: $t('Забытые любимцы'), desc: '' /* Слушали много раз, но не включали полгода */,
     name: () => $t('Забытые любимцы'), make: () => ({ query: '%play_count% GREATER 4 AND NOT %last_played% DURING LAST 26 WEEKS', sort: '%last_played%' }) },
-  { id: 'never', ic: 'disc', stats: true, title: $t('Ни разу не слушал'), desc: '' /* Всё, что лежит в медиатеке нетронутым */,
+  { id: 'never', g: 'listen', ic: 'unheard', stats: true, title: $t('Ни разу не слушал'), desc: '' /* Всё, что лежит в медиатеке нетронутым */,
     name: () => $t('Ещё не слушал'), make: () => ({ query: 'NOT %play_count% GREATER 0', sort: ALBUM_ORDER }) },
-  { id: 'rated', ic: 'sparkle', stats: true, title: $t('Высокая оценка'), desc: '' /* Оценка 4 и 5 звёзд */,
+  { id: 'rated', g: 'listen', ic: 'star', stats: true, title: $t('Высокая оценка'), desc: '' /* Оценка 4 и 5 звёзд */,
     name: () => $t('Высокая оценка'), make: () => ({ query: '%rating% GREATER 3', sortDesc: '%rating%' }) },
-  { id: 'genre', ic: 'music', title: $t('Жанр'), desc: '' /* Один жанр из вашей медиатеки */,
-    param: { kind: 'genre' }, name: (g) => g || $t('Жанр'), make: (g) => (g ? { query: `genre IS ${q(g)}`, sort: ALBUM_ORDER } : null) },
-  { id: 'decade', ic: 'history', title: $t('Десятилетие'), desc: '' /* Музыка одного десятилетия по дате релиза */,
-    param: { kind: 'seg', def: 1990, opts: DECADES.map((d) => [d, `${String(d).slice(2)}-е`]) },
+  { id: 'genre', g: 'tags', ic: 'tag', title: $t('Жанр'), desc: '' /* Один жанр из вашей медиатеки */,
+    param: { kind: 'genre', label: $t('Жанр') }, name: (g) => g || $t('Жанр'), make: (g) => (g ? { query: `genre IS ${q(g)}`, sort: ALBUM_ORDER } : null) },
+  { id: 'decade', g: 'tags', ic: 'calendar', title: $t('Десятилетие'), desc: '' /* Музыка одного десятилетия по дате релиза */,
+    param: { kind: 'seg', label: $t('Десятилетие'), def: 1990, opts: DECADES.map((d) => [d, `${String(d).slice(2)}-е`]) },
     name: (d) => $t('{0}-е', d), make: (d) => ({ query: `%date% GREATER ${d - 1} AND %date% LESS ${d + 10}`, sort: '%date% | ' + ALBUM_ORDER }) },
-  { id: 'lossless', ic: 'hd', title: $t('Без потерь'), desc: '' /* FLAC, ALAC, WavPack, APE, WAV… */,
+  { id: 'lossless', g: 'tags', ic: 'wave', title: $t('Без потерь'), desc: '' /* FLAC, ALAC, WavPack, APE, WAV… */,
     name: () => $t('Без потерь'), make: () => ({ query: '%__encoding% IS lossless', sort: ALBUM_ORDER }) },
-  { id: 'hires', ic: 'hd', title: 'Hi-Res', desc: '' /* Выше 48 кГц или глубже 16 бит */,
+  { id: 'hires', g: 'tags', ic: 'hd', title: 'Hi-Res', desc: '' /* Выше 48 кГц или глубже 16 бит */,
     name: () => 'Hi-Res', make: () => ({ query: '%samplerate% GREATER 48000 OR %__bitspersample% GREATER 16', sort: ALBUM_ORDER }) },
-  { id: 'long', ic: 'queue', title: $t('Длинные треки'), desc: '' /* Дольше 10 минут: сюиты, миксы, эпики */,
+  { id: 'long', g: 'tags', ic: 'hourglass', title: $t('Длинные треки'), desc: '' /* Дольше 10 минут: сюиты, миксы, эпики */,
     name: () => $t('Длинные треки'), make: () => ({ query: '%length_seconds% GREATER 599', sort: ALBUM_ORDER }) },
-  { id: 'custom', ic: 'search', title: $t('Свой запрос'), desc: '' /* Язык запросов foobar2000 — для тех, кто его знает */,
-    param: { kind: 'text' }, name: () => $t('Умный плейлист'), make: (s) => (s && s.trim() ? { query: s.trim() } : null) },
+  { id: 'custom', g: 'tags', ic: 'code', title: $t('Свой запрос'), desc: '' /* Язык запросов foobar2000 — для тех, кто его знает */,
+    param: { kind: 'text', label: $t('Запрос foobar2000') }, name: () => $t('Умный плейлист'), make: (s) => (s && s.trim() ? { query: s.trim() } : null) },
 ];
-const SIZE = { kind: 'seg', def: 50, opts: [[25, '25'], [50, '50'], [100, '100']] };
+const MOOD_IC = { calm: 'moon', energy: 'bolt', sad: 'rain', happy: 'sun', party: 'party', instrumental: 'piano', acoustic: 'guitar' };
+const SIZE = { kind: 'seg', label: $t('Треков в плейлисте'), def: 50, opts: [[25, '25'], [50, '50'], [100, '100']] };
 const AI = [
-  ...SoundUI.MOOD_RECIPES().map(([k, title, desc]) => ({ id: 'ai-' + k, ai: true, ic: 'sparkle', title, desc, param: SIZE, name: () => title, make: (n) => ({ ai: k, n }) })),
-  { id: 'ai-style', ai: true, ic: 'sparkle', title: $t('Жанр по звучанию'), desc: '' /* Жанры MusicBrainz и нейросети — и для треков без тегов */,
-    param: { kind: 'style' }, name: (v) => v || $t('Жанр'), make: (v) => (v ? { ai: 'style', style: v, n: 100 } : null) },
+  ...SoundUI.MOOD_RECIPES().map(([k, title, desc]) => ({ id: 'ai-' + k, g: 'ai', ai: true, ic: MOOD_IC[k] || 'sparkle', tone: k, title, desc, param: SIZE, name: () => title, make: (n) => ({ ai: k, n }) })),
+  { id: 'ai-style', g: 'ai', ai: true, ic: 'radar', tone: 'style', title: $t('Жанр по звучанию'), desc: '' /* Жанры MusicBrainz и нейросети — и для треков без тегов */,
+    param: { kind: 'style', label: $t('Жанр') }, name: (v) => v || $t('Жанр'), make: (v) => (v ? { ai: 'style', style: v, n: 100 } : null) },
 ];
 RECIPES.push(...AI);
+const GROUPS = [['listen', $t('По прослушиваниям')], ['tags', $t('По тегам')], ['ai', $t('По звучанию')]];
 
 let veil = null, cur = null, val = null, genres = null;
 
+const tracksWord = (n) => plural(n, 'трек', 'трека', 'треков');
+/* the live answer: how many tracks match, and a few of them */
 const countFor = debounce(async (r) => {
-  const out = veil && veil.querySelector('.sp-count');
+  const out = veil && veil.querySelector('.sp-count'), pv = veil && veil.querySelector('.sp-preview');
   if (!out) return;
   const spec = r.make(val);
-  if (!spec) { out.textContent = ''; return; }
-  if (spec.ai) {
-    const n = SoundUI.countFor(spec.ai, spec.style);
-    out.innerHTML = n ? `<span>${$t('Сейчас подходит: <b>{0}</b> {1}', n.toLocaleString(), plural(n, 'трек', 'трека', 'треков'))}</span>` : `<span class="sp-bad">${$t('Пока ничего не подходит')}</span>`;
-    return;
-  }
-  out.innerHTML = `<span class="spinner"></span>`;
-  const res = await call('library.query', { query: spec.query, limit: 0, fields: ['title'] });
+  const show = (n, top, bad) => {
+    out.classList.toggle('none', !n);
+    out.innerHTML = n ? `<b>${n.toLocaleString()}</b><span>${$t('{0} подходит сейчас', tracksWord(n))}</span>` : `<span class="sp-bad">${bad || $t('Пока ничего не подходит')}</span>`;
+    pv.innerHTML = (top || []).filter((t) => t.title).slice(0, 5).map((t) => `<li><span class="t">${esc(t.title)}</span><span class="a">${esc(t.artist)}</span></li>`).join('');
+  };
+  if (!spec) { out.classList.add('none'); out.innerHTML = ''; pv.innerHTML = ''; return; }
+  if (spec.ai) { const m = SoundUI.matching(spec.ai, spec.style); show(m.n, m.top); return; }
+  out.innerHTML = '<span class="spinner"></span>';
+  const res = await call('library.query', { query: spec.query, limit: 6, fields: ['title', 'artist'], sort: spec.sort || '' });
   if (cur !== r) return;
-  if (!ok(res)) { out.innerHTML = `<span class="sp-bad">${$t('foobar2000 не понял запрос')}</span>`; return; }
-  const n = res.total || 0;
-  out.innerHTML = n ? `<span>${$t('Сейчас подходит: <b>{0}</b> {1}', n.toLocaleString(), plural(n, 'трек', 'трека', 'треков'))}</span>`
-    : `<span class="sp-bad">${r.stats ? $t('Нужен foo_playcount') : $t('Пока ничего не подходит')}</span>`;
+  if (!ok(res)) { show(0, [], $t('foobar2000 не понял запрос')); return; }
+  show(res.total || 0, res.tracks || [], r.stats ? $t('Нужен foo_playcount') : '');
 }, 250);
 
 function paramUI(r) {
   const box = h('<div class="sp-param"></div>');
   const p = r.param;
   if (!p) return box;
+  if (p.label) box.append(h(`<label class="sp-label">${p.label}</label>`));
   if (p.kind === 'seg') {
     val = p.def;
     const seg = h('<div class="seg"></div>');
@@ -122,20 +126,22 @@ function syncName() {
 
 function pick(r) {
   cur = r; nameTouched = false;
-  veil.querySelectorAll('.sp-card').forEach((c) => c.classList.toggle('on', c.dataset.id === r.id));
+  veil.querySelectorAll('.sp-card').forEach((c) => { c.classList.toggle('on', c.dataset.id === r.id); c.setAttribute('aria-selected', c.dataset.id === r.id); });
   const form = veil.querySelector('.sp-form');
+  form.dataset.tone = r.tone || r.g;
   form.innerHTML = '';
+  const hero = h(`<div class="sp-hero"><div class="sp-ic">${icon(r.ic, 26)}</div><div class="sp-hero-t"><div class="kicker">${GROUPS.find((x) => x[0] === r.g)[1]}</div><h4>${r.title}</h4></div></div>`);
   if (r.ai && !Sound.ready()) {
-    form.append(h(`<div class="sp-form-h"><b>${r.title}</b></div>`),
-      h(`<div class="sp-ai-off">${$t('Нужен анализ звука')} <button class="btn sm primary">${$t('Открыть настройки')}</button></div>`));
+    form.append(hero, h(`<div class="sp-ai-off">${$t('Нужен анализ звука')} <button class="btn sm primary">${$t('Открыть настройки')}</button></div>`));
     form.querySelector('.sp-ai-off button').onclick = () => { close(); SoundUI.openSettings(); };
     return;
   }
   form.append(
-    h(`<div class="sp-form-h"><b>${r.title}</b></div>`),
+    hero,
+    h('<div class="sp-count none"></div>'),
     paramUI(r),
-    h(`<div class="sp-row"><input class="st-input sp-name" spellcheck="false" placeholder="${$t('Название')}"><button class="btn primary sp-go">${icon('plus')}${$t('Создать')}</button></div>`),
-    h('<div class="sp-count"></div>'),
+    h(`<div class="sp-pv"><div class="sp-label">${$t('Например')}</div><ol class="sp-preview"></ol></div>`),
+    h(`<div class="sp-foot"><input class="st-input sp-name" spellcheck="false" placeholder="${$t('Название')}" aria-label="${$t('Название')}"><button class="btn primary sp-go">${icon('plus')}${$t('Создать')}</button></div>`),
   );
   const name = form.querySelector('.sp-name');
   name.value = r.name(val);
@@ -166,21 +172,29 @@ async function create() {
 
 export function open(preset) {
   if (!veil) {
-    veil = h(`<div class="upd-veil sp-veil"><div class="upd-sheet sp-sheet" role="dialog" aria-modal="true">
-      <button class="icon-btn upd-x" title="${$t('Закрыть')}">${icon('x', 16)}</button>
-      <div class="sp-head"><div class="upd-badge">${icon('sparkle', 22)}</div><div><div class="kicker">${$t('Умный плейлист')}</div><h3>${$t('Выберите рецепт')}</h3></div></div>
-      <div class="sp-grid">${RECIPES.map((r, i) => `${r.ai && !(RECIPES[i - 1] || {}).ai ? `<div class="sp-sep">${icon('sparkle', 14)}${$t('По звучанию')}</div>` : ''}<button class="sp-card${r.ai ? ' ai' : ''}" data-id="${r.id}">${icon(r.ic, 18)}<b>${r.title}</b></button>`).join('')}</div>
-      <div class="sp-form"></div></div></div>`);
+    const list = GROUPS.map(([g, title]) => `<div class="sp-group" role="group" aria-label="${esc(title)}"><div class="sp-gh">${title}</div>${RECIPES.filter((r) => r.g === g)
+      .map((r) => `<button class="sp-card${r.ai ? ' ai' : ''}" data-id="${r.id}" data-tone="${r.tone || r.g}" role="option" title="${esc(r.title)}"><span class="sp-ic">${icon(r.ic, 16)}</span><b>${r.title}</b></button>`).join('')}</div>`).join('');
+    veil = h(`<div class="upd-veil sp-veil"><div class="upd-sheet sp-sheet" role="dialog" aria-modal="true" aria-label="${$t('Умный плейлист')}">
+      <header class="sp-top"><div class="kicker">${$t('Умный плейлист')}</div><button class="icon-btn sp-x" title="${$t('Закрыть')}">${icon('x', 16)}</button></header>
+      <div class="sp-body"><nav class="sp-list" role="listbox">${list}</nav><section class="sp-form"></section></div></div></div>`);
     document.body.append(veil);
     veil.addEventListener('click', (e) => {
-      if (e.target === veil || e.target.closest('.upd-x')) return close();
+      if (e.target === veil || e.target.closest('.sp-x')) return close();
       const c = e.target.closest('.sp-card'); if (c) pick(RECIPES.find((r) => r.id === c.dataset.id));
       const a = e.target.closest('a[data-href]'); if (a) { e.preventDefault(); call('shell.openExternal', { url: a.dataset.href }); }
+    });
+    // ↑/↓ walk the recipes
+    veil.querySelector('.sp-list').addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+      e.preventDefault(); e.stopPropagation();
+      const all = [...veil.querySelectorAll('.sp-card')]; const i = all.findIndex((c) => c.dataset.id === cur.id);
+      const nx = all[Math.max(0, Math.min(all.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))];
+      pick(RECIPES.find((r) => r.id === nx.dataset.id)); nx.focus();
     });
     addEventListener('keydown', (e) => { if (veil && veil.classList.contains('on') && e.key === 'Escape') { e.stopPropagation(); close(); } }, true);
   }
   pick(RECIPES.find((r) => r.id === preset) || RECIPES[0]);
-  requestAnimationFrame(() => veil.classList.add('on'));
+  requestAnimationFrame(() => { veil.classList.add('on'); const on = veil.querySelector('.sp-card.on'); on && on.scrollIntoView({ block: 'nearest' }); });
 }
 export function close() { veil && veil.classList.remove('on'); }
 export const recipes = RECIPES;

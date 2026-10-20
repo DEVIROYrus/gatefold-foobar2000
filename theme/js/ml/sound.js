@@ -126,6 +126,8 @@ export const queued = () => Q.size + inflight.size;
 export const all = () => [...recs.values()].filter((r) => r.e);
 export const moodNames = () => MOODS.map((x) => x[0]);
 export const mood = (r, name) => { const i = MOODS.findIndex((x) => x[0] === name); return r && r.m && i >= 0 ? r.m[i] / 255 : 0; };
+/** the share of the track's patches the mood wins (0…1), or null for records made before it was kept */
+export const moodShare = (r, name) => { const i = MOODS.findIndex((x) => x[0] === name); return r && r.mq && i >= 0 ? r.mq[i] / 255 : null; };
 export const hasMood = (name) => { const i = MOODS.findIndex((x) => x[0] === name); return i >= 0 && !!moodIdx[i]; };
 
 /* Discogs styles: «Rock---Doom Metal» → genre «Rock», style «Doom Metal» */
@@ -285,8 +287,13 @@ async function infer({ job, pieces, rates }) {
   let mx = 0; for (const v of res.emb) mx = Math.max(mx, Math.abs(v));
   const q = mx / 127 || 1;
   const m = new Uint8Array(MOODS.length);
-  MOODS.forEach((x, i) => { const hi = moodIdx[i]; const out = hi && res.heads[hi[0]]; m[i] = out ? Math.round(Math.max(0, Math.min(1, out[hi[1]])) * 255) : 128; });
-  return { rec: { ...base, e: Int8Array.from(res.emb, (v) => Math.round(v / q)), q, st: res.styles ? Uint8Array.from(res.styles, (v) => Math.round(Math.max(0, Math.min(1, v)) * 255)) : null, m }, ms: res.ms };
+  const mq = new Uint8Array(MOODS.length);         // share of the patches the mood wins (see worker.js)
+  MOODS.forEach((x, i) => {
+    const hi = moodIdx[i]; const out = hi && res.heads[hi[0]]; const sh = hi && res.share && res.share[hi[0]];
+    m[i] = out ? Math.round(Math.max(0, Math.min(1, out[hi[1]])) * 255) : 128;
+    mq[i] = sh ? Math.round(Math.max(0, Math.min(1, sh[hi[1]])) * 255) : 128;
+  });
+  return { rec: { ...base, e: Int8Array.from(res.emb, (v) => Math.round(v / q)), q, st: res.styles ? Uint8Array.from(res.styles, (v) => Math.round(Math.max(0, Math.min(1, v)) * 255)) : null, m, mq: res.share ? mq : undefined }, ms: res.ms };
 }
 
 /* ---------------------------------------------------------------- the indexer */
@@ -385,7 +392,7 @@ async function run(item) {
   if (rec) {
     recs.set(rec.k, rec); pending.push(rec);
     if (rec.e) { if (mu) stats(rec); maybeRecompute(); }
-    if (libKeys && libKeys.has(rec.k)) state.done++;
+    if (libKeys && libKeys.has(rec.k) && !job.q.redo) state.done++;
     clearTimeout(saveT); saveT = setTimeout(flush, 4000); if (pending.length >= 50) flush();
   }
   for (const w of job.q.waiters) w(rec && rec.e ? rec : null);
@@ -417,7 +424,13 @@ async function scanLibrary() {
     const k = keyOf(t); if (!k || libKeys.has(k)) continue;
     libKeys.add(k);
     const x = recs.get(k);
-    if (x && (x.e || x.bad)) { done++; continue; }
+    if (x && (x.e || x.bad)) {
+      done++;
+      // made before the per-patch shares were kept, and possibly instrumental: look again, after
+      // everything new (only these need the voice share; see sound-ui.js, «Instrumental»)
+      if (x.e && !x.mq && mood(x, 'instrumental') >= 0.5 && !Q.has(k)) Q.set(k, { t, pri: -1, waiters: [], redo: true });
+      continue;
+    }
     if (!Q.has(k)) Q.set(k, { t, pri: 0, waiters: [] });
   }
   state.total = libKeys.size; state.done = done;

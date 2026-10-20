@@ -2,7 +2,7 @@
 .cv {
   position: fixed; inset: 0; z-index: 900; display: none; overflow: hidden; color: var(--text);
   background: var(--bg); isolation: isolate; user-select: none; -webkit-user-select: none;
-  --art: min(62vh, 44vw, 860px);
+  --art: min(62vh, 44vw, 860px, calc(100vh - 190px));
 }
 .cv.on { display: block; animation: cvIn 520ms var(--ease) both; }
 @keyframes cvIn { from { opacity: 0; transform: scale(1.015); } to { opacity: 1; transform: none; } }
@@ -28,7 +28,7 @@ body.canvas-open #toasts { z-index: 950; }
 
 /* ---------- stage & layouts ---------- */
 .cv-stage { position: absolute; inset: 0; display: grid; align-items: center; justify-content: center;
-  grid-template-columns: var(--art) minmax(0, min(46vw, 760px)); gap: clamp(32px, 6vw, 110px); padding: 5vh 6vw 19vh; }
+  grid-template-columns: var(--art) minmax(0, min(46vw, 760px)); gap: clamp(32px, 6vw, 110px); padding: 5vh 6vw max(19vh, 170px); }
 .cv-art { width: var(--art); aspect-ratio: 1; position: relative; }
 .cv.motion .cv-art { animation: cvFloat 14s ease-in-out infinite alternate; }
 @keyframes cvFloat { from { transform: translateY(-5px); } to { transform: translateY(6px); } }
@@ -132,3 +132,19 @@ body.canvas-open #toasts { z-index: 950; }
 .cv-range::-webkit-slider-runnable-track { height: 4px; border-radius: 4px; background: linear-gradient(90deg, var(--text) var(--p, 50%), color-mix(in oklab, var(--text) 22%, transparent) var(--p, 50%)); }
 .cv-range::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5px; border-radius: 50%; background: var(--text); box-shadow: 0 1px 4px rgb(0 0 0 / .45); border: 0; transition: transform 120ms; }
 .cv-range:hover::-webkit-slider-thumb { transform: scale(1.15); }
+/* small windows (the popup can be 480 × 300): the controls keep their room, nothing runs into them */
+@media (max-height: 460px), (max-width: 640px) {
+  .cv { --art: min(56vh, 40vw, calc(100vh - 150px)); }
+  .cv-stage { padding: 4vh 5vw 142px; gap: clamp(18px, 4vw, 48px); }
+  .cv:not([data-layout=lyrics]) .cv-lyrics { display: none; }
+  .cv-title { font-size: clamp(20px, 5vh, 40px); }
+  .cv-chrome { padding: 0 3vw 10px; }
+  .cv-progress { margin-bottom: 4px; }
+  .cv-btn { width: 34px; height: 34px; } .cv-btn svg { width: 16px; height: 16px; }
+  .cv-btn.big { width: 46px; height: 46px; }
+  .cv-transport { gap: 8px; }
+  .cv-tools { margin-top: 2px; gap: 6px; flex-wrap: nowrap; }
+  .cv-seg button { padding: 6px 9px; font-size: 12px; }
+  .cv-vol .cv-range { width: 70px; }
+}
+@media (max-width: 560px) { .cv-vol .cv-range, .cv-btn[data-a=screen] { display: none; } .cv-vol { padding-right: 0; } }

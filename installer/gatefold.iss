@@ -141,6 +141,8 @@ en.WvFailed=The WebView2 Runtime could not be installed (code %1). Install it fr
 ru.WvFailed=Не удалось установить среду WebView2 (код %1). Установите её с сайта Microsoft: https://go.microsoft.com/fwlink/p/?LinkId=2124703
 en.LastStepTitle=One last step in foobar2000
 ru.LastStepTitle=Последний шаг в foobar2000
+en.ShortcutComment=foobar2000 with the Gatefold interface
+ru.ShortcutComment=foobar2000 с интерфейсом Gatefold
 en.LastStep1=In foobar2000 open File → Preferences → Display, choose “Webview2 UI” as the Default User Interface and press OK. foobar2000 does not let other programs change this setting, so it takes one click — only once.
 ru.LastStep1=В foobar2000 откройте File → Preferences → Display, выберите «Webview2 UI» в списке Default User Interface и нажмите OK. foobar2000 не даёт другим программам менять этот параметр, поэтому нужен один щелчок — только один раз.
 en.LastStep2=Then on the Display → WebView2 UI page choose the “%1” template and press Apply.
@@ -170,6 +172,15 @@ Root: HKCU; Subkey: "Software\Gatefold"; ValueType: string; ValueName: "ThemeDir
 Root: HKCU; Subkey: "Software\Gatefold"; ValueType: string; ValueName: "Profile"; ValueData: "{code:ProfileDir}"
 Root: HKCU; Subkey: "Software\Gatefold"; ValueType: string; ValueName: "Foobar2000"; ValueData: "{code:FoobarDir}"
 Root: HKCU; Subkey: "Software\Gatefold"; ValueType: string; ValueName: "Version"; ValueData: "{#AppVersion}"
+
+[Tasks]
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
+
+[Icons]
+; foobar2000 started under Gatefold's own name and icon; pinned to the taskbar, the button keeps
+; this icon (the window itself shows foobar2000's: the component offers no way to change it yet)
+Name: "{userprograms}\Gatefold"; Filename: "{code:FoobarExe}"; WorkingDir: "{code:FoobarDir}"; IconFilename: "{app}\gatefold.ico"; Comment: "{cm:ShortcutComment}"; Check: HaveFoobar
+Name: "{userdesktop}\Gatefold"; Filename: "{code:FoobarExe}"; WorkingDir: "{code:FoobarDir}"; IconFilename: "{app}\gatefold.ico"; Comment: "{cm:ShortcutComment}"; Tasks: desktopicon; Check: HaveFoobar
 
 [Run]
 Filename: "{code:FoobarExe}"; Description: "{cm:Launch}"; Flags: postinstall nowait skipifsilent unchecked; Check: HaveFoobar

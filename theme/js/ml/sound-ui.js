@@ -93,7 +93,11 @@ export function chips(t) {
   const raw = r ? Sound.topStyles(r, 6, 0.05).map((s) => `${s.name} ${Math.round(s.p * 100)}%`).join(' · ') : '';
   const st = Genres.describe(t, r, 2).map((g) => `<span class="chip ai" title="${esc(SRC[g.src])}${raw ? '&#10;' + esc($t('Сеть: {0}', raw)) : ''}">${esc(g.name)}</span>`);
   if (!r) return st.join('');
-  const md = Sound.moodNames().filter((n) => Sound.hasMood(n) && n !== 'instrumental').map((n) => [n, Sound.mood(r, n)]).filter(([, v]) => v >= 0.65)
+  // a mood is named only when it is clear and its opposite is not heard too (the same idea as the
+  // gates of the mood playlists below)
+  const OPP = { sad: ['happy', 'party'], happy: ['sad'], relaxed: ['aggressive', 'party'], aggressive: ['relaxed'], party: ['sad', 'relaxed'], danceable: [], acoustic: ['electronic'], electronic: ['acoustic'] };
+  const md = Sound.moodNames().filter((n) => Sound.hasMood(n) && n !== 'instrumental').map((n) => [n, Sound.mood(r, n)])
+    .filter(([n, v]) => v >= 0.7 && (OPP[n] || []).every((o) => Sound.mood(r, o) <= 0.4))
     .sort((a, b) => b[1] - a[1]).slice(0, 2).map(([n, v]) => `<span class="chip ai" title="${Math.round(v * 100)}%">${esc(L[n])}</span>`);
   return [...st, ...md].join('');
 }
@@ -142,15 +146,48 @@ export async function similar(t) {
    and atmospheric, so they would otherwise fill «Calm» */
 const BRIDGE = /\b(intro|introduction|interlude|outro|prelude|overture|skit|reprise|segue|intermezzo|interval|coda|hidden track|интро|вступление|интерлюдия|аутро|увертюра)\b|^(intro|outro)\s*[-–:]/i;
 export const isSong = (r) => !BRIDGE.test(r.ti || '') && (!(r.du > 0) || r.du >= 140);
-const SCORE = {
+/* Each mood playlist: a gate (hard limits — a track that fails one is not that mood, however it
+   ranks) and a score that orders the ones inside. The heads are binary classifiers whose outputs
+   are averaged over the patches of a track (sound.js); the gates keep them away from the
+   middle, where they are guesses: Essentia's mood models are 87–98 % accurate on clear cases and
+   say ~0.5 for distorted guitars and dense electronics, whatever is sung over them. */
+const m = (r, n) => Sound.mood(r, n), share = (r, n) => Sound.moodShare(r, n);
+/* «(Instrumental)», «Instrumental version», «инструментал» in the title */
+const INSTR_TITLE = /\binstrumental\b|\binst\.?\)|\boff ?vocal\b|\bkaraoke\b|инструментал|минус(?:овка)?\b/i;
+/** no voice in it: the voice must win (almost) no patch, not merely lose on average — a song with
+    a long solo averages «half instrumental». Records made before the share was kept need a
+    clearer average (they are re-analysed in the background, sound.js). */
+export function instrumental(r, vocalArtist = false) {
+  if (INSTR_TITLE.test(r.ti || '')) return true;
+  const s = share(r, 'instrumental'), v = m(r, 'instrumental');
+  // a band that sings on (nearly) everything else needs a clearer case: one odd track is more
+  // likely a voice the network missed than an instrumental
+  if (vocalArtist) return s == null ? v >= 0.95 : s >= 0.97 && v >= 0.9;
+  return s == null ? v >= 0.88 : s >= 0.88 && v >= 0.8;
+}
+/** artists whose analysed tracks are mostly sung (median «instrumental» under 0.4, four tracks or more) */
+function vocalArtists(list) {
+  const by = new Map();
+  for (const r of list) { const k = (r.aa || r.ar || '').toLowerCase(); if (!k) continue; (by.get(k) || by.set(k, []).get(k)).push(m(r, 'instrumental')); }
+  const out = new Set();
+  for (const [k, v] of by) if (v.length >= 4) { v.sort((a, b) => a - b); if (v[v.length >> 1] < 0.4) out.add(k); }
+  return out;
+}
+const RECIPE = {
   // calm with a voice: «Calm» means ballads and quiet songs, not ambient pieces (those are in «Instrumental»)
-  calm: (r) => Sound.mood(r, 'relaxed') - 0.6 * Sound.mood(r, 'aggressive') - 0.15 * Sound.mood(r, 'instrumental'),
-  energy: (r) => 0.6 * Sound.mood(r, 'aggressive') + 0.3 * Sound.mood(r, 'party') + 0.2 * Sound.mood(r, 'danceable') - 0.3 * Sound.mood(r, 'relaxed'),
-  sad: (r) => Sound.mood(r, 'sad') - 0.5 * Sound.mood(r, 'happy'),
-  happy: (r) => Sound.mood(r, 'happy') - 0.5 * Sound.mood(r, 'sad'),
-  party: (r) => 0.6 * Sound.mood(r, 'party') + 0.5 * Sound.mood(r, 'danceable'),
-  instrumental: (r) => Sound.mood(r, 'instrumental'),
-  acoustic: (r) => Sound.mood(r, 'acoustic') - 0.3 * Sound.mood(r, 'electronic'),
+  calm: { gate: (r) => m(r, 'relaxed') >= 0.65 && m(r, 'aggressive') <= 0.25 && m(r, 'party') <= 0.5 && m(r, 'danceable') <= 0.75,
+    score: (r) => m(r, 'relaxed') - 0.6 * m(r, 'aggressive') - 0.3 * m(r, 'party') - 0.15 * m(r, 'instrumental') },
+  energy: { gate: (r) => (m(r, 'aggressive') >= 0.6 || (m(r, 'party') >= 0.65 && m(r, 'danceable') >= 0.6)) && m(r, 'relaxed') <= 0.4,
+    score: (r) => 0.6 * m(r, 'aggressive') + 0.3 * m(r, 'party') + 0.2 * m(r, 'danceable') - 0.3 * m(r, 'relaxed') },
+  sad: { gate: (r) => m(r, 'sad') >= 0.65 && m(r, 'happy') <= 0.35 && m(r, 'party') <= 0.35 && m(r, 'aggressive') <= 0.6,
+    score: (r) => m(r, 'sad') - 0.5 * m(r, 'happy') },
+  happy: { gate: (r) => m(r, 'happy') >= 0.6 && m(r, 'sad') <= 0.4 && m(r, 'aggressive') <= 0.5,
+    score: (r) => m(r, 'happy') - 0.5 * m(r, 'sad') },
+  party: { gate: (r) => m(r, 'party') >= 0.65 && m(r, 'danceable') >= 0.65 && m(r, 'sad') <= 0.5 && m(r, 'relaxed') <= 0.6,
+    score: (r) => 0.6 * m(r, 'party') + 0.5 * m(r, 'danceable') },
+  instrumental: { gate: (r, ctx) => instrumental(r, ctx.vocal.has((r.aa || r.ar || '').toLowerCase())), score: (r) => m(r, 'instrumental') + (share(r, 'instrumental') ?? 0) },
+  acoustic: { gate: (r) => m(r, 'acoustic') >= 0.75 && m(r, 'electronic') <= 0.25 && (share(r, 'acoustic') ?? 1) >= 0.7,
+    score: (r) => m(r, 'acoustic') - 0.3 * m(r, 'electronic') },
 };
 export const MOOD_RECIPES = () => [
   ['calm', $t('Спокойное'), ''], ['energy', $t('Энергичное'), ''], ['sad', $t('Грустное'), ''], ['happy', $t('Радостное'), ''],
@@ -159,10 +196,19 @@ export const MOOD_RECIPES = () => [
 function ranked(kind, style) {
   const list = Sound.all();
   if (kind === 'style') return list.filter(isSong).map((r) => ({ r, d: Genres.describe(null, r, 3, { neighbours: false }).find((x) => x.name === style) })).filter((x) => x.d).sort((a, b) => b.d.w - a.d.w).map((x) => x.r);
-  const f = SCORE[kind]; if (!f) return [];
-  return list.filter(isSong).map((r) => ({ r, s: f(r) })).filter((x) => x.s >= 0.35).sort((a, b) => b.s - a.s).map((x) => x.r);
+  const R = RECIPE[kind]; if (!R) return [];
+  // instrumental pieces may be shorter than songs, but album intros and interludes still stay out
+  const keep = kind === 'instrumental' ? (r) => !BRIDGE.test(r.ti || '') && (!(r.du > 0) || r.du >= 90) : isSong;
+  const ctx = { vocal: kind === 'instrumental' ? vocalArtists(list) : new Set() };
+  return list.filter((r) => keep(r) && R.gate(r, ctx)).map((r) => ({ r, s: R.score(r) })).sort((a, b) => b.s - a.s).map((x) => x.r);
 }
 export const countFor = (kind, style) => (Sound.ready() ? ranked(kind, style).length : 0);
+/** what the recipe picks right now (best first): the count and a few examples for the smart-playlist sheet */
+export function matching(kind, style) {
+  if (!Sound.ready()) return { n: 0, top: [] };
+  const list = ranked(kind, style);
+  return { n: list.length, top: vary(list, 6, 1).map((r) => ({ artist: r.aa || r.ar || '', title: r.ti || '' })) };
+}
 export async function moodPlaylist(kind, name, n = 50, style = '') {
   if (!Sound.ready()) return needSound();
   const list = vary(ranked(kind, style), n, 4);

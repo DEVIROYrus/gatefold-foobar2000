@@ -470,6 +470,7 @@ async def test_smart_color_radio(browser, port):
     await pg.click(".sp-card[data-id=genre]"); await pg.wait_for_timeout(500)
     await choose(pg, '.sp-genre', 'Ambient'); await pg.wait_for_timeout(700)
     check('137' in await pg.inner_text('.sp-count'), 'it shows how many tracks match right now')
+    check('Low Tide' in await pg.inner_text('.sp-preview'), 'and a few of them')
     check(await pg.input_value('.sp-name') == 'Ambient', 'and names the playlist after the choice')
     await pg.click('.sp-go'); await pg.wait_for_timeout(700)
     auto = await pg.evaluate("window.__more.auto")
@@ -586,6 +587,11 @@ async def test_sound_ai(browser, port):
     check(all(arts[i] != arts[i + 1] for i in range(1, len(arts) - 1)), 'never the same artist twice in a row')
     songs = await pg.evaluate("(async () => { const U = await import('/theme/js/ml/sound-ui.js'); return [['Mourning Heart - Interlude', 110], ['Im Fackelschein', 95], ['Intro', 300], ['Nocturne (Intro)', 260], ['Solitude', 470], ['Sunrise', 210]].map(([ti, du]) => U.isSong({ ti, du })); })()")
     check(songs == [False, False, False, False, True, True], f'intros, interludes and short pieces stay out of mood playlists {songs}')
+    # «Instrumental» means no voice: a sung track never gets in on an average (the bug: vocal metal songs)
+    inst = await pg.evaluate("""(async () => { const U = await import('/theme/js/ml/sound-ui.js'); const S = await import('/theme/js/ml/sound.js');
+      const i = S.moodNames().indexOf('instrumental'); const rec = (mean, share, ti = 'Song') => { const m = new Uint8Array(9).fill(128); m[i] = Math.round(mean * 255); const r = { ti, m }; if (share != null) { r.mq = new Uint8Array(9).fill(128); r.mq[i] = Math.round(share * 255); } return r; };
+      return [U.instrumental(rec(0.55, 0.4)), U.instrumental(rec(0.7)), U.instrumental(rec(0.82, 0.8)), U.instrumental(rec(0.9)), U.instrumental(rec(0.95, 1)), U.instrumental(rec(0.2, 0.1, 'Song (Instrumental)')), U.instrumental(rec(0.92, 0.95), true)]; })()""")
+    check(inst == [False, False, False, True, True, True, False], f'instrumental = the voice wins (almost) no part of the track, not «half instrumental» on average {inst}')
     # mood playlist from the smart playlist sheet
     await pg.click('#btnNewPl'); await pg.wait_for_timeout(300)
     await pg.click("#layer .menu .mi:has-text('Smart playlist')"); await pg.wait_for_timeout(400)
@@ -713,6 +719,39 @@ async def test_stability(browser, port):
     print('    clicked:', Counter(log).most_common(12))
     await ctx.close()
 
+async def test_layout(browser, port):
+    print('· layout: nothing overlaps (every screen, large text, narrow and wide windows; mini player, Canvas window)')
+    audit = (FIX / 'overlap-audit.js').read_text(encoding='utf-8').split('\n', 2)[2]
+    found = {}
+    for lang in ('ru', 'en'):
+        ctx, pg, errs = await page(browser, port, {'language': lang, 'baseSize': 20, 'soundAI': True})
+        for w in (820, 1280):
+            await pg.set_viewport_size({'width': w, 'height': 860}); await pg.wait_for_timeout(300)
+            for v in VIEWS + ['lyrics', 'smart']:
+                if v == 'lyrics':
+                    await nav(pg, 'now', 500); await pg.evaluate("document.querySelector('[data-tab=lyrics]')?.click()"); await pg.wait_for_timeout(700)
+                elif v == 'smart':
+                    await pg.evaluate("import('/theme/js/smartpl.js').then(m => m.open('ai-instrumental'))"); await pg.wait_for_timeout(700)
+                else:
+                    await nav(pg, v, 600)
+                for step in range(6):
+                    for x in await pg.evaluate(audit): found.setdefault(x, f'{lang}/{w}/{v}')
+                    more = await pg.evaluate("(() => { const a = document.querySelector('.view.active'); const sc = [a, ...a.querySelectorAll('*')].find(e => e.scrollHeight > e.clientHeight + 40 && /auto|scroll/.test(getComputedStyle(e).overflowY)); if (!sc || sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 2) return false; sc.scrollTop += sc.clientHeight * 0.8; return true; })()")
+                    if not more or v == 'smart': break
+                    await pg.wait_for_timeout(150)
+                if v == 'smart': await pg.keyboard.press('Escape'); await pg.wait_for_timeout(250)
+        check(not errs, f'{lang}: no page errors {errs[:2]}')
+        await ctx.close()
+    for pagefile, sizes in (('mini.html', [(240, 72), (320, 90), (400, 200)]), ('canvas.html', [(480, 300), (900, 560)])):
+        for (w, h) in sizes:
+            ctx = await browser.new_context(viewport={'width': w, 'height': h}); pg = await ctx.new_page()
+            await pg.add_init_script("localStorage.setItem('aurora.settings.v1', JSON.stringify({language: 'ru', baseSize: 20}));" + MOCK)
+            await pg.goto(f'http://127.0.0.1:{port}/theme/{pagefile}'); await pg.wait_for_timeout(1500)
+            await pg.mouse.move(w / 2, h / 2); await pg.wait_for_timeout(200)
+            for x in await pg.evaluate(audit): found.setdefault(x, f'{pagefile} {w}×{h}')
+            await ctx.close()
+    check(not found, f'no text or control overlaps another, sticks out of its box or is cut {[f"{k} @ {v}" for k, v in list(found.items())[:6]]}')
+
 async def main():
     httpd = serve(); port = httpd.server_address[1]
     async with async_playwright() as p:
@@ -725,7 +764,7 @@ async def main():
         for name, fn in [('playlists', test_playlists), ('youtube', test_youtube), ('settings', test_settings), ('updates', test_updates),
                          ('tooltips', test_tooltips), ('canvas_volume', test_canvas_volume), ('fb2k_prefs', test_fb2k_prefs), ('welcome', test_welcome),
                          ('playlist_editing', test_playlist_editing), ('windows', test_windows), ('smart_color_radio', test_smart_color_radio),
-                         ('sound_ai', test_sound_ai), ('stability', test_stability)]:
+                         ('sound_ai', test_sound_ai), ('layout', test_layout), ('stability', test_stability)]:
             if run(name): await fn(browser, port)
         await browser.close()
     httpd.shutdown()

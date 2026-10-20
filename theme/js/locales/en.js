@@ -869,7 +869,6 @@ export default {
  "Свой запрос": "Your own query",
  "Умный плейлист": "Smart playlist",
  "foobar2000 не понял запрос": "foobar2000 didn’t understand the query",
- "Сейчас подходит: <b>{0}</b> {1}": "Matching now: <b>{0}</b> {1}",
  "Пока ничего не подходит": "Nothing matches yet",
  "Загружаю жанры…": "Loading genres…",
  "Выберите жанр": "Choose a genre",
@@ -878,7 +877,6 @@ export default {
  "Создать": "Create",
  "Введите запрос": "Type a query",
  "foobar2000 не создал плейлист: {0}": "foobar2000 didn’t create the playlist: {0}",
- "Выберите рецепт": "Pick a recipe",
  "По цвету обложки": "By cover colour",
  "{0} больше не попадёт в это радио": "{0} won’t come up in this radio again",
  "Не то — больше не ставить {0}": "Not this — no more {0}",
@@ -963,5 +961,13 @@ export default {
  "Сеть: {0}": "Network: {0}",
  "Пока не с чем сравнить": "Nothing to compare with yet",
  "Случайный порядок": "Random order",
- "По звучанию": "By sound"
+ "По звучанию": "By sound",
+ "Период": "Period",
+ "Сколько раз слушали": "Times played",
+ "Запрос foobar2000": "foobar2000 query",
+ "Треков в плейлисте": "Tracks in the playlist",
+ "По прослушиваниям": "By listening",
+ "По тегам": "By tags",
+ "{0} подходит сейчас": "{0} match right now",
+ "Например": "For example"
 };

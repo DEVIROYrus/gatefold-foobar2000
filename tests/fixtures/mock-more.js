@@ -35,7 +35,11 @@
     }
     if (m === 'library.getGenres') return ok({ genres: [{ name: 'Synthwave', trackCount: 120 }, { name: 'Ambient', trackCount: 80 }, { name: 'Post-rock', trackCount: 40 }] });
     if (m === 'playlist.createAutoplaylist') { rec(m, p); M.auto.push(p); return ok({ index: 9, playlist: 9, guid: '{AUTO' + M.auto.length + '}', name: p.name, query: p.query }); }
-    if (m === 'library.query' && p.limit === 0) { rec('count', p); return ok({ total: /play_count|added/.test(p.query) ? 0 : 137, tracks: [] }); }
+    // the smart-playlist sheet: a count and a few examples
+    if (m === 'library.query' && (p.limit === 0 || (p.limit <= 6 && (p.fields || []).join() === 'title,artist'))) {
+      rec('count', p); const n = /play_count|added/.test(p.query) ? 0 : 137;
+      return ok({ total: n, tracks: n ? [{ title: 'Low Tide', artist: 'Lumen Arcade' }, { title: 'Northbound', artist: 'Mirage Theory' }].slice(0, p.limit) : [] });
+    }
     if (m === 'library.query' && /"album artist" IS/.test(p.query)) {
       const name = p.query.match(/"album artist" IS "([^"]+)"/)[1];
       const all = (await base('playlist.getTracks', { start: 0, count: 100000 })).tracks;
