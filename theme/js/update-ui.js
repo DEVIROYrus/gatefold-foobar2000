@@ -64,8 +64,7 @@ function fillSheet() {
       <button class="btn" data-u="page" ${busy ? 'disabled' : ''}>${icon('link')}${$t('Страница релиза')}</button>
       <span class="upd-gap"></span>
       <button class="btn" data-u="later" ${busy ? 'disabled' : ''}>${$t('Позже')}</button>
-    </div>
-    <p class="upd-fine">${$t('Скачивается с GitHub, проверяется по контрольной сумме; прежняя версия сохраняется и её можно вернуть в Настройках.')}</p>`;
+    </div>`;
 }
 
 /* Settings → «Обновления» */
@@ -77,13 +76,13 @@ export function settingsSection() {
 function renderSettingsInto(el) {
   const a = U.available(), st = U.state, info = st.info;
   const when = info && info.checkedAt ? new Date(info.checkedAt).toLocaleString(lang, { dateStyle: 'short', timeStyle: 'short' }) : '';
-  const status = !U.enabled() ? $t('Проверка обновлений появится в опубликованной версии')
+  const status = !U.enabled() ? $t('Недоступно в этой сборке')
     : st.checking ? $t('Проверяю…') : a ? $t('Доступна версия {0}', a.version) : st.error ? $t('Не удалось проверить: {0}', st.error) : when ? $t('Установлена последняя версия · проверено {0}', when) : $t('Ещё не проверялось');
   el.innerHTML = `
     <div class="row"><div class="lbl"><b>Gatefold ${esc(VERSION)}</b><small>${esc(status)}</small></div>
       ${a ? `<button class="btn sm primary" data-x="open">${icon('download')}${$t('Обновить до {0}', esc(a.version))}</button>` : `<button class="btn sm" data-x="check" ${!U.enabled() || st.checking ? 'disabled' : ''}>${icon('refresh')}${$t('Проверить')}</button>`}</div>
-    <div class="row"><div class="lbl"><b>${$t('Проверять автоматически')}</b><small>${$t('Раз в 12 часов спрашивает GitHub о новом релизе. Устанавливается только по вашей кнопке')}</small></div><label class="toggle"><input type="checkbox" ${settings.updateCheck ? 'checked' : ''} data-x="auto"><i></i></label></div>
-    ${U.canRollback() ? `<div class="row"><div class="lbl"><b>${$t('Вернуть предыдущую версию')}</b><small>${$t('Резервная копия, сохранённая перед обновлением')}</small></div><button class="btn sm" data-x="rollback">${$t('Вернуть')}</button></div>` : ''}
+    <div class="row"><div class="lbl"><b>${$t('Проверять автоматически')}</b></div><label class="toggle"><input type="checkbox" ${settings.updateCheck ? 'checked' : ''} data-x="auto"><i></i></label></div>
+    ${U.canRollback() ? `<div class="row"><div class="lbl"><b>${$t('Вернуть предыдущую версию')}</b></div><button class="btn sm" data-x="rollback">${$t('Вернуть')}</button></div>` : ''}
     ${U.enabled() ? `<div class="row"><div class="lbl"><b>${$t('Все релизы и история изменений')}</b><small>github.com/${esc(REPO)}</small></div><button class="btn sm" data-x="page">${icon('link')}GitHub</button></div>` : ''}`;
   el.onclick = (e) => {
     const b = e.target.closest('[data-x]'); if (!b || b.tagName === 'INPUT') return;

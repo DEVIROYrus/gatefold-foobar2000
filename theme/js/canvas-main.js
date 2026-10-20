@@ -86,7 +86,7 @@ function bind() {
 function firstRunTip() {
   const tip = document.createElement('div');
   tip.className = 'cv-tip';
-  tip.innerHTML = `<b>${$t('Холст в отдельном окне')}</b>${$t('Перетащите окно на нужный монитор и нажмите <kbd>F</kbd> или дважды щёлкните — оно развернётся на весь экран и запомнит место.')}<br><span style="color:var(--text-3)">${$t('Esc — выйти из полноэкранного режима, ещё раз Esc — закрыть.')}</span>`;
+  tip.innerHTML = `<b>${$t('Холст в отдельном окне')}</b>${$t('<kbd>F</kbd> — на весь экран')}`;
   document.body.appendChild(tip);
   const kill = () => tip.remove();
   setTimeout(kill, 15000);

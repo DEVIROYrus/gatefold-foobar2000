@@ -202,7 +202,7 @@ export async function openArtist(arg) {
     const id = await popupMenu([{ id: 'refetch', label: $t('Найти фото заново') }, { id: 'folder', label: $t('Открыть папку с фото') }, { type: 'sep' }, { id: 'help', label: $t('Как поставить своё фото') }], r.left, r.bottom + 4);
     if (id === 'refetch') { AA.refetch(jobOf(x)); toast(`${$t('Ищу фото:')} <b>${esc(x.name)}</b>`); }
     if (id === 'folder') openFolder();
-    if (id === 'help') toast($t('Положите картинку <b>{0}</b> (или .png) в папку с фото и перезапустите интерфейс (Ctrl+R). Своё фото никогда не перезаписывается.', esc(AA.fileNameFor(x.name))), { ms: 9000 });
+    if (id === 'help') toast($t('Своё фото: <b>{0}</b> в папке с фото, затем Ctrl+R', esc(AA.fileNameFor(x.name))), { ms: 9000 });
   };
   const avImg = document.querySelector('#artistHero .artist-av img');
   avImg.onload = () => { avImg.classList.add('on'); document.querySelector('#artistHero .artist-av span')?.remove(); };

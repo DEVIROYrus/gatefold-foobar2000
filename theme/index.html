@@ -149,7 +149,7 @@
       <div class="pl-ttl"><div class="kicker" id="plKicker">Плейлист</div><h2 id="plTitle">—</h2><div class="sub" id="plSub"></div>
         <div class="pl-acts">
           <button class="btn primary" id="plPlay"><svg><use href="#i-play"/></svg>Слушать</button>
-          <button class="btn" id="plShuffle" title="Случайный порядок — сам плейлист не перемешивается"><svg><use href="#i-shuffle"/></svg>Вперемешку</button>
+          <button class="btn" id="plShuffle" title="Случайный порядок"><svg><use href="#i-shuffle"/></svg>Вперемешку</button>
           <button class="btn" id="plJump" title="К играющему треку"><svg><use href="#i-disc"/></svg>К текущему</button>
         </div>
       </div>
@@ -231,7 +231,7 @@
 
   <!-- COVERS -->
   <section class="view" id="view-covers">
-    <div class="view-head"><div><div class="kicker">Автоматизация</div><h2>Обложки</h2><div class="sub">Поиск и установка недостающих обложек: iTunes · Deezer · MusicBrainz / Cover Art Archive</div></div></div>
+    <div class="view-head"><div><div class="kicker">Автоматизация</div><h2>Обложки</h2><div class="sub">Обложки</div></div></div>
     <div class="scroller"><div class="cards" id="coversBody"></div></div>
   </section>
 
@@ -240,7 +240,7 @@
 
   <!-- SETTINGS -->
   <section class="view" id="view-settings">
-    <div class="view-head"><div><div class="kicker">Gatefold</div><h2>Настройки</h2><div class="sub">Изменения применяются сразу</div></div></div>
+    <div class="view-head"><div><div class="kicker">Gatefold</div><h2>Настройки</h2></div></div>
     <div class="scroller st-scroller"><div class="st-wrap" id="settingsBody"></div></div>
   </section>
 </main>
@@ -271,13 +271,13 @@
       <button class="icon-btn" id="btnMute" title="Без звука"><svg><use id="volIcon" href="#i-vol"/></svg></button>
       <input class="range" id="vol" type="range" min="0" max="100" step="1" value="100" aria-label="Громкость">
     </div>
-    <button class="icon-btn" id="btnMini" title="Мини-плеер (Shift+щелчок — свернуть основное окно)"><svg><use href="#i-pip"/></svg></button>
+    <button class="icon-btn" id="btnMini" title="Мини-плеер"><svg><use href="#i-pip"/></svg></button>
     <button class="icon-btn" id="btnFull" title="Холст — полноэкранный режим (F)"><svg><use href="#i-canvas"/></svg></button>
   </div>
 </footer>
 
 <div id="dropOverlay" aria-hidden="true">
-  <div class="drop-zone" data-target="new"><svg width="44" height="44"><use href="#i-plus"/></svg><b>Новый плейлист «Импорт»</b><small>для пакетной конвертации — удобно держать отдельно</small></div>
+  <div class="drop-zone" data-target="new"><svg width="44" height="44"><use href="#i-plus"/></svg><b>Новый плейлист «Импорт»</b></div>
   <div class="drop-zone" data-target="current"><svg width="44" height="44"><use href="#i-list"/></svg><b>В текущий плейлист</b><small>или отпустите на нужном плейлисте слева</small></div>
 </div>
 <div id="batchBar"></div>

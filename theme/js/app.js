@@ -404,8 +404,8 @@ function renderNpActions() {
   if (t.album) btn($t('{0}Альбом', icon('grid')), openNpAlbum).id = 'npAlbumBtn';
   function openNpAlbum() { openTrackAlbum(t); }
   if (!app.art.available && t.album) btn($t('{0}Найти обложку', icon('image')), () => router.go('covers', { manual: CF.jobFromTrack(t) }), 'primary');
-  if (t.artist) btn($t('{0}Радио', icon('sparkle')), () => Radio.start(t)).title = $t('Похожая музыка из вашей медиатеки — бесконечно');
-  if (settings.soundAI) btn($t('{0}Похожие', icon('queue')), () => SoundUI.similar(t)).title = $t('Плейлист из треков, которые звучат похоже');
+  if (t.artist) btn($t('{0}Радио', icon('sparkle')), () => Radio.start(t));
+  if (settings.soundAI) btn($t('{0}Похожие', icon('queue')), () => SoundUI.similar(t));
   btn(`${icon('more')}`, () => call('menu.showNativePopup', { mode: 'nowPlaying' }));
 }
 
@@ -500,7 +500,7 @@ async function renderLyricsTab(force) {
   lyrDoc = doc;
   const off = doc && doc.synced ? await LY.getOffset(t) : 0;
   if (doc) lyrView.show(doc, off);
-  else lyrView.message(`<b>${$t('Текста нет')}</b><span>${settings.lyricsOnline ? $t('Ни в тегах, ни в .lrc рядом с файлом, ни в онлайн-источниках (LRCLIB, Musixmatch, NetEase, QQ, Kugou)') : $t('Ни в тегах, ни в .lrc рядом с файлом · онлайн-поиск выключен в настройках')}</span>`);
+  else lyrView.message(`<b>${$t('Текста нет')}</b>`);
   renderLyrBar(doc, t, false, off);
 }
 function renderLyrBar(doc, t, loading, off = 0) {

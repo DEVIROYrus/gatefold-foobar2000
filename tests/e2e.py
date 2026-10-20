@@ -464,7 +464,7 @@ async def test_smart_color_radio(browser, port):
     check(await pg.evaluate("document.querySelector('.sp-veil').classList.contains('on') && document.querySelectorAll('.sp-card:not(.ai)').length") == 11, 'the smart playlist sheet offers eleven recipes')
     check(await pg.evaluate("document.querySelectorAll('.sp-card.ai').length") == 8, 'and eight made by sound (neural analysis)')
     await pg.click(".sp-card[data-id=ai-calm]"); await pg.wait_for_timeout(300)
-    check('Sound analysis' in await pg.inner_text('.sp-form'), 'with the analysis off, a sound recipe points to the setting')
+    check('sound analysis' in (await pg.inner_text('.sp-form')).lower(), 'with the analysis off, a sound recipe points to the setting')
     await pg.click(".sp-card[data-id=genre]"); await pg.wait_for_timeout(500)
     await choose(pg, '.sp-genre', 'Ambient'); await pg.wait_for_timeout(700)
     check('137' in await pg.inner_text('.sp-count'), 'it shows how many tracks match right now')
@@ -475,7 +475,7 @@ async def test_smart_color_radio(browser, port):
     check(await pg.evaluate("document.querySelector('.view.active')?.id") == 'view-playlist', 'and opened')
     await pg.click('#btnNewPl'); await pg.wait_for_timeout(300); await pg.click("#layer .menu .mi:has-text('Smart playlist')"); await pg.wait_for_timeout(400)
     await pg.click(".sp-card[data-id=recent]"); await pg.wait_for_timeout(200); await pg.click(".sp-param .seg button:has-text('7 days')"); await pg.wait_for_timeout(600)
-    check('Playback Statistics' in await pg.inner_text('.sp-count'), 'recipes that need play statistics say so when nothing matches')
+    check('foo_playcount' in await pg.inner_text('.sp-count'), 'recipes that need play statistics say so when nothing matches')
     await pg.click('.sp-go'); await pg.wait_for_timeout(600)
     check(await pg.evaluate("window.__more.auto.at(-1).query") == '%added% DURING LAST 7 DAYS SORT DESCENDING BY %added%', 'newest first through a SORT clause')
     # two «Eternity» by unrelated artists in one flat folder stay two albums
@@ -513,7 +513,6 @@ async def test_smart_color_radio(browser, port):
     check('Mirage Theory' in arts, 'a similar artist that also sounds alike is played')
     check(all(arts[i] != arts[i + 1] for i in range(1, len(arts) - 1)), 'never the same artist twice in a row')
     check('Unknown Elsewhere' not in arts, 'only artists you have')
-    check('by how they sound' in toast, f'it says that tracks are matched by sound {toast[-160:]}')
     check(not errs, f'no page errors {errs[:2]}')
     await ctx.close()
 
@@ -535,11 +534,11 @@ async def test_sound_ai(browser, port):
     await pg.evaluate("document.querySelector('#st-sound').scrollIntoView()")
     for _ in range(60):
         st = await pg.evaluate("document.getElementById('sndStatus')?.innerText || ''")
-        if 'whole library' in st: break
+        if 'Done' in st: break
         await pg.wait_for_timeout(1000)
-    check('whole library is analysed' in st, f'every track of the library gets analysed ({st[:120]})')
+    check('Done: 143' in st, f'every track of the library gets analysed ({st[:120]})')
     check('manifest.json' in served and 'discogs-effnet.onnx' in served and 'ort-wasm-simd-threaded.wasm' in served, f'the models come from the ml-assets branch {served[:5]}')
-    check('Per track: network' in st and 'test models' in st, 'the status shows the cost per track')
+    check('ms' in await pg.evaluate("(e => e.dataset.tip || e.title)(document.getElementById('sndStatus'))"), 'the cost per track is on the status tooltip')
     if os.environ.get('SHOTS'): await pg.screenshot(path=os.environ['SHOTS'] + '/sound-settings.png')
     # «Maximum» speed: several networks; the libraries' remaining tracks still get analysed
     await pg.click("#st-sound .seg button:has-text('Maximum')"); await pg.wait_for_timeout(300)
@@ -554,7 +553,7 @@ async def test_sound_ai(browser, port):
         if any(c[0] in ('Outrun', 'Synthwave') for c in chips): break
         await pg.wait_for_timeout(1000)
     check(chips and chips[0][0] in ('Outrun', 'Synthwave') and 'MusicBrainz' in chips[0][1], f'Now Playing shows the genre from MusicBrainz {chips[:2]}')
-    check(any('The network hears' in c[1] for c in chips), 'and what the network hears, on hover')
+    check(any('Network:' in c[1] for c in chips), 'and what the network hears, on hover')
     mb = await pg.evaluate("window.__mbCalls.length")
     check(mb >= 3, f'MusicBrainz is asked by artist name ({mb} requests)')
     # an artist MusicBrainz does not know gets the genres of the artists that sound like it
@@ -583,7 +582,6 @@ async def test_sound_ai(browser, port):
     check(r and len(r['handles']) >= 15, f'the radio fills up ({r and len(r["handles"])})')
     check(harsh <= len(arts) * 0.1, f'tracks that sound different stay out ({harsh} of {len(arts)})')
     check(all(arts[i] != arts[i + 1] for i in range(1, len(arts) - 1)), 'never the same artist twice in a row')
-    check('neural network' in toast, f'the radio says the network picks the tracks {toast[-140:]}')
     songs = await pg.evaluate("(async () => { const U = await import('/theme/js/ml/sound-ui.js'); return [['Mourning Heart - Interlude', 110], ['Im Fackelschein', 95], ['Intro', 300], ['Nocturne (Intro)', 260], ['Solitude', 470], ['Sunrise', 210]].map(([ti, du]) => U.isSong({ ti, du })); })()")
     check(songs == [False, False, False, False, True, True], f'intros, interludes and short pieces stay out of mood playlists {songs}')
     # mood playlist from the smart playlist sheet
@@ -609,7 +607,7 @@ async def test_sound_ai(browser, port):
     # turning it off and removing everything
     await nav(pg, 'settings', 800)
     await pg.evaluate("document.querySelector('#st-sound').scrollIntoView()")
-    await pg.click("#st-sound .btn:has-text('Remove the models')"); await pg.wait_for_timeout(1200)
+    await pg.click("#st-sound .btn:has-text('Remove data')"); await pg.wait_for_timeout(1200)
     left = await pg.evaluate("(async () => { const m = await import('/theme/js/idb.js'); return [(await m.getAll('sound')).length, await m.kvGet('ml.manifest', null)]; })()")
     check(left[0] == 0 and left[1] is None, f'«Remove» deletes the results and the models {left[0]}')
     check(not errs, f'no page errors {errs[:2]}')

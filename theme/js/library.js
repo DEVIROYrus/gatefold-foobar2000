@@ -226,8 +226,8 @@ export async function openPlaylist(guid) {
   if (!pl.trackCount) {
     plList.style.height = '';
     plList.innerHTML = isLiked
-      ? `<div class="empty"><b>${$t('Пока нет лайков')}</b><span>${$t('Нажмите ♡ рядом с треком в панели плеера или клавишу L')}</span></div>`
-      : `<div class="empty"><b>${$t('Плейлист пуст')}</b><span>${$t('Добавьте сюда папку или файлы — или перетащите их в окно')}</span>${emptyActions({ library: false, guid: pl.guid })}</div>`;
+      ? `<div class="empty"><b>${$t('Пока нет лайков')}</b></div>`
+      : `<div class="empty"><b>${$t('Плейлист пуст')}</b>${emptyActions({ library: false, guid: pl.guid })}</div>`;
   }
 }
 
@@ -816,7 +816,7 @@ async function fromSnapshot() {
   setTimeout(() => idle(3000).then(() => loadLibrary(true, true)), 1500);
   return true;
 }
-const emptyLib = () => { libGrid.innerHTML = `<div class="empty"><b>${$t('Медиатека пуста')}</b><span>${$t('Подключите папку с музыкой — foobar2000 будет следить за ней сам')}</span>${emptyActions()}</div>`; libGrid.style.height = ''; };
+const emptyLib = () => { libGrid.innerHTML = `<div class="empty"><b>${$t('Медиатека пуста')}</b>${emptyActions()}</div>`; libGrid.style.height = ''; };
 function ensureTiles() {
   if (router.current !== 'library' || !LIB.loaded) return layoutLib();
   if (!LIB.albums.length) return emptyLib();
@@ -958,7 +958,7 @@ async function sortLib() {
   const by = settings.librarySort;
   if (by === 'added' || by === 'played') {
     const has = await SORT.ensure(by, LIB.albums);
-    if (!has && !warnedNoStats) { warnedNoStats = true; toast($t('Нет данных о добавлении/прослушивании: нужен компонент Playback Statistics (foo_playcount). Альбомы упорядочены по исполнителю.'), { ms: 7000 }); }
+    if (!has && !warnedNoStats) { warnedNoStats = true; toast($t('Нужен foo_playcount'), { ms: 7000 }); }
   }
   if (by === 'color') { await Colors.ensure([]); Colors.ensure(LIB.albums); }
   LIB.sorted = SORT.sortAlbums(LIB.albums, by);
@@ -993,7 +993,7 @@ function ribbonInfo() {
   const st = Colors.state;
   el.querySelector('.cr-info').innerHTML = st.running
     ? `<span class="spinner"></span>${$t('Разбираю цвета обложек: {0} из {1}', st.done, st.total)}`
-    : LIB.hue != null ? $t('{0} {1} этого цвета · щёлкните ещё раз, чтобы показать все', LIB.view.length, plural(LIB.view.length, 'альбом', 'альбома', 'альбомов')) : $t('Выберите цвет, чтобы оставить только его');
+    : LIB.hue != null ? `${LIB.view.length} ${plural(LIB.view.length, 'альбом', 'альбома', 'альбомов')}` : '';
 }
 let lastColorSort = 0;
 Colors.events.addEventListener('progress', () => {
@@ -1276,7 +1276,7 @@ export async function renderQueue() {
   if (router.current !== 'queue') return;
   $('queueSub').textContent = items.length ? `${items.length} ${plural(items.length, 'трек', 'трека', 'треков')} · ${fmtDuration(items.reduce((s, t) => s + (t.duration || 0), 0))}` : '';
   const body = $('queueBody');
-  if (!items.length) { body.innerHTML = `<div class="empty"><b>${$t('Очередь пуста')}</b><span>${$t('Правый клик по альбому → «Добавить в очередь»')}</span></div>`; body.style.height = ''; return; }
+  if (!items.length) { body.innerHTML = `<div class="empty"><b>${$t('Очередь пуста')}</b></div>`; body.style.height = ''; return; }
   body.style.position = 'relative'; body.style.height = items.length * ROW + 10 + 'px';
   body.innerHTML = items.map((t, i) => `<div class="vrow" style="transform:translateY(${i * ROW}px)"><div class="c-n num">${i + 1}</div><div class="c-title">${esc(t.title)}</div><div class="c-artist">${esc(t.artist)}</div><div class="c-album">${esc(t.album)}</div><div class="c-dur num">${fmtTime(t.duration)}</div></div>`).join('');
 }

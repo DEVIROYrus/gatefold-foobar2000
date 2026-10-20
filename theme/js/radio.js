@@ -288,7 +288,7 @@ export async function start(seed) {
     R.played = new Set(); R.recentArtists = []; R.recentAlbums = []; R.dists = []; R.penalty = new Map(); R.sd = [];
     R.seedSound = null; R.sTarget = null; R.seedVibe = null;
     const soundOn = Sound.ready();
-    if (!R.pool.pool.length && !soundOn) { toast($t('Для «{0}» не нашлось похожей музыки в медиатеке', esc(seedName))); return; }
+    if (!R.pool.pool.length && !soundOn) { toast($t('Похожей музыки не нашлось')); return; }
     const name = PREFIX() + cleanArtist(seedName);
     const guid = await radioPlaylist(name);
     if (!guid) { toast($t('Не удалось создать плейлист радио')); return; }
@@ -309,15 +309,10 @@ export async function start(seed) {
       if (R.seedSound) { R.sTarget = R.seedSound; R.pool.soundHits = soundNeighbours(R.pool, R.seedSound); }
       warm(R.pool, gen);
     }
-    if (!R.pool.pool.length) { toast($t('Для «{0}» не нашлось похожей музыки в медиатеке', esc(seedName))); R.guid = ''; return; }
+    if (!R.pool.pool.length) { toast($t('Похожей музыки не нашлось')); R.guid = ''; return; }
     if (seedTrack && !R.seedSound) R.seedVibe = await Vibe.of(seedTrack);
     R.target = R.seedVibe;
-    const kin = R.pool.relatedHits;
-    toast((kin ? $t('Радио «{0}»: {1} похожих исполнителей из вашей медиатеки.', esc(cleanArtist(seedName)), kin)
-      : R.pool.soundHits ? $t('Радио «{0}»: {1} исполнителей вашей медиатеки звучат похоже.', esc(cleanArtist(seedName)), R.pool.soundHits)
-      : $t('Радио «{0}»: Deezer не знает похожих исполнителей из вашей медиатеки — подбираю по жанру.', esc(cleanArtist(seedName))))
-      + ' ' + (R.sTarget ? $t('Треки подбирает нейросеть по звучанию — плейлист пополняется, пока играет музыка')
-        : R.seedVibe ? $t('Треки подбираются и по звучанию — плейлист пополняется, пока играет музыка') : $t('Плейлист пополняется, пока играет музыка')), { ms: 8000 });
+    // (no second toast: «Collecting radio…» said it; the playlist appears and fills by itself)
     if (!seedTrack) {
       await fill(1);
       await call('playlist.setActive', { playlistGuid: guid });

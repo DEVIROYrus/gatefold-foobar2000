@@ -68,6 +68,13 @@ for (const lf of fs.readdirSync(locDir).filter((x) => x.endsWith('.js'))) {
   const badPh = Object.entries(dict).filter(([k, v]) => JSON.stringify((k.match(/\{\d+\}/g) || []).sort()) !== JSON.stringify((v.match(/\{\d+\}/g) || []).sort()));
   const badPl = Object.entries(dict).filter(([k, v]) => k.split('|').length === 3 && v.split('|').length !== 2);
   if (missing.length) fail(`${lf}: ${missing.length} untranslated — ${missing.slice(0, 5).map((x) => JSON.stringify(x)).join(', ')}`);
+  if (stale.length && process.argv.includes('--prune')) {
+    // node tools/check.mjs --prune: drop entries no source string uses any more
+    const file = path.join(locDir, lf), drop = new Set(stale.map((k) => JSON.stringify(k)));
+    const lines = fs.readFileSync(file, 'utf8').split('\n').filter((l) => { const m = l.match(/^\s*("(?:[^"\\]|\\.)*")\s*:/); return !(m && drop.has(m[1])); });
+    fs.writeFileSync(file, lines.join('\n').replace(/,(\s*\n};)/, '$1'));
+    console.log(`✓ ${lf}: pruned ${stale.length} unused strings`); stale.length = 0;
+  }
   if (stale.length) fail(`${lf}: ${stale.length} stale — ${stale.slice(0, 5).map((x) => JSON.stringify(x)).join(', ')}`);
   if (badPh.length) fail(`${lf}: placeholders differ — ${badPh.slice(0, 3).map(([k]) => JSON.stringify(k)).join(', ')}`);
   if (badPl.length) fail(`${lf}: plural entries must be "one|other" — ${badPl.slice(0, 3).map(([k]) => k).join(', ')}`);

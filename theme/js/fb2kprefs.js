@@ -16,7 +16,7 @@ import { $t } from './i18n.js';
 
 const row = (label, hint, ctl = '') => h(`<div class="row"><div class="lbl"><b>${label}</b>${hint ? `<small>${hint}</small>` : ''}</div>${ctl}</div>`);
 const note = (text) => h(`<div class="row st-note"><div class="lbl"><small>${text}</small></div></div>`);
-const unavailable = () => note($t('Недоступно в установленной версии компонента WebView2 UI.'));
+const unavailable = () => note($t('Недоступно в этой версии WebView2 UI'));
 const fail = (r) => toast($t('foobar2000 не принял изменение: {0}', esc((r && (r.error || r.code)) || '?')));
 const nativePrefs = () => call('misc.showPreferences');
 
@@ -55,7 +55,7 @@ async function fillOutput(g) {
   const devs = dv.devices || [];
   const cur = devs.find((d) => d.isCurrent) || null;
   const name = cur ? cur.name : [cf.outputName, cf.deviceName].filter(Boolean).join(' · ') || $t('Не выбрано');
-  const dev = row($t('Устройство'), $t('Куда foobar2000 выводит звук. WASAPI exclusive отдаёт поток в обход микшера Windows'),
+  const dev = row($t('Устройство'), '' /* Куда foobar2000 выводит звук. WASAPI exclusive отдаёт поток в обход микшера Windows */,
     `<button class="btn sm st-pick"><span class="st-pick-t">${esc(name)}</span>${icon('chev', 14)}</button>`);
   const btn = dev.querySelector('.st-pick');
   btn.onclick = async () => {
@@ -77,10 +77,10 @@ async function fillOutput(g) {
   };
   const ms = Math.round((cf.bufferLength || 1) * 1000);
   g.append(dev,
-    sliderRow($t('Буфер вывода'), $t('Больше — устойчивее к нагрузке на компьютер, меньше — быстрее отклик на перемотку и громкость'),
+    sliderRow($t('Буфер вывода'), '' /* Больше — устойчивее к нагрузке на компьютер, меньше — быстрее отклик на перемотку и громкость */,
       { min: 50, max: 2000, step: 10, value: ms, fmt: (v) => v + ' ' + $t('мс'),
         commit: async (v) => { const r = await call('config.setOutputBuffer', { milliseconds: v }); if (!ok(r)) fail(r); } }));
-  if (cf.bitDepth) g.append(note($t('Разрядность {0} бит · дизеринг {1} · плавные переходы {2} — меняются в родном окне (Playback → Output).', cf.bitDepth, cf.useDither ? $t('вкл.') : $t('выкл.'), cf.useFades ? $t('вкл.') : $t('выкл.'))));
+  // (bit depth, dither and fades are changed in foobar2000's own window: Playback → Output)
 }
 
 /* ---------------------------------------------------------------- ReplayGain */
@@ -90,12 +90,12 @@ async function fillReplayGain(g) {
   const setMode = async (p) => { const r = await call('replaygain.setMode', p); if (!ok(r)) { fail(r); return false; } return true; };
   const setPre = async (p) => { const r = await call('replaygain.setPreamp', p); if (!ok(r)) fail(r); };
   g.append(
-    row($t('Источник'), $t('Выравнивает громкость по меткам ReplayGain в файлах. «По порядку»: трек при случайном порядке, альбом при обычном'),
+    row($t('Источник'), '' /* Выравнивает громкость по меткам ReplayGain в файлах. «По порядку»: трек при случайном порядке, альбом при обычном */,
       '').appendChild(segCtl([['none', $t('Выкл.')], ['track', $t('Трек')], ['album', $t('Альбом')], ['auto', $t('По порядку')]], st.sourceMode, (v) => setMode({ sourceMode: v }))).parentElement,
-    row($t('Обработка'), $t('«Пики» не дают громким трекам перегружаться после усиления'), '')
+    row($t('Обработка'), '' /* «Пики» не дают громким трекам перегружаться после усиления */, '')
       .appendChild(segCtl([['gain', $t('Усиление')], ['gain_and_peak', $t('Усиление и пики')], ['peak', $t('Только пики')], ['none', $t('Ничего')]], st.processingMode, (v) => setMode({ processingMode: v }))).parentElement,
-    sliderRow($t('Предусиление с ReplayGain'), $t('Для треков с метками'), { min: -24, max: 24, step: 0.5, value: st.preampWithRg, fmt: db, commit: (v) => setPre({ withRg: v }) }),
-    sliderRow($t('Предусиление без ReplayGain'), $t('Для треков без меток; обычно ниже, чтобы они не были громче остальных'), { min: -24, max: 24, step: 0.5, value: st.preampWithoutRg, fmt: db, commit: (v) => setPre({ withoutRg: v }) }),
+    sliderRow($t('Предусиление с ReplayGain'), '' /* Для треков с метками */, { min: -24, max: 24, step: 0.5, value: st.preampWithRg, fmt: db, commit: (v) => setPre({ withRg: v }) }),
+    sliderRow($t('Предусиление без ReplayGain'), '' /* Для треков без меток; обычно ниже, чтобы они не были громче остальных */, { min: -24, max: 24, step: 0.5, value: st.preampWithoutRg, fmt: db, commit: (v) => setPre({ withoutRg: v }) }),
   );
 }
 
@@ -105,11 +105,11 @@ async function fillDsp(g) {
   if (!ok(ps)) { g.append(unavailable()); return; }
   const list = ps.presets || [];
   if (!list.length) {
-    g.append(note($t('Пресетов DSP пока нет. Их создают в родном окне: Playback → DSP Manager → Save preset.')));
+    g.append(note($t('Пресетов DSP нет') /* created in the native window: Playback → DSP Manager → Save preset */));
     return;
   }
   const cur = ok(act) && act.isActive ? act.name : null;
-  const r = row($t('Пресет DSP'), $t('Заменяет всю цепочку DSP цепочкой из пресета'), `<button class="btn sm st-pick"><span class="st-pick-t">${esc(cur || $t('Не выбран'))}</span>${icon('chev', 14)}</button>`);
+  const r = row($t('Пресет DSP'), '' /* Заменяет всю цепочку DSP цепочкой из пресета */, `<button class="btn sm st-pick"><span class="st-pick-t">${esc(cur || $t('Не выбран'))}</span>${icon('chev', 14)}</button>`);
   const btn = r.querySelector('.st-pick');
   btn.onclick = async () => {
     const b = btn.getBoundingClientRect();
@@ -134,8 +134,8 @@ async function fillBehaviour(g) {
     return el;
   };
   g.append(
-    tog($t('Воспроизведение следует за курсором'), $t('После текущего трека играет тот, что выделен в плейлисте, а не следующий'), pf.enabled, 'config.setPlaybackFollowCursor'),
-    tog($t('Курсор следует за воспроизведением'), $t('Выделение в плейлисте foobar2000 переходит на играющий трек'), cf.enabled, 'config.setCursorFollowPlayback'),
+    tog($t('Воспроизведение следует за курсором'), '' /* После текущего трека играет тот, что выделен в плейлисте, а не следующий */, pf.enabled, 'config.setPlaybackFollowCursor'),
+    tog($t('Курсор следует за воспроизведением'), '' /* Выделение в плейлисте foobar2000 переходит на играющий трек */, cf.enabled, 'config.setCursorFollowPlayback'),
   );
 }
 
@@ -151,7 +151,7 @@ async function fillLibrary(g) {
   if (ok(roots) && (roots.roots || []).length) {
     for (const r of roots.roots) g.append(h(`<div class="row sub-row"><div class="lbl"><b>${esc(r.displayName || r.absolutePath)}</b><small>${esc(r.absolutePath)}</small></div><span class="st-count">${(r.trackCount || 0).toLocaleString()}</span></div>`));
   }
-  g.append(note($t('Папки добавляются и удаляются только в родном окне — foobar2000 не даёт сделать это из темы. Новые файлы в этих папках медиатека находит сама.')));
+  // (folders are added and removed only in foobar2000's own window — the button above opens it)
 }
 
 /* ---------------------------------------------------------------- Advanced */
@@ -202,7 +202,7 @@ function advControl(e, onChange) {
 }
 
 function fillAdvanced(g) {
-  const head = row($t('Расширенные настройки'), $t('Все параметры со страницы Advanced, с поиском. Меняйте, только если знаете, зачем: часть вступает в силу после перезапуска foobar2000'),
+  const head = row($t('Расширенные настройки'), '' /* Все параметры со страницы Advanced, с поиском. Меняйте, только если знаете, зачем: часть вступает в силу после перезапуска foobar2000 */,
     `<label class="st-search adv-search">${icon('search')}<input type="search" placeholder="${$t('Например: buffer, cue, tag')}" spellcheck="false"></label>`);
   const list = h('<div class="adv-list"></div>');
   g.append(head, list);

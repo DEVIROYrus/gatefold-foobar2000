@@ -34,34 +34,26 @@ function render() {
     <div class="wl-hero">
       <div class="wl-mark">${icon('disc', 30)}</div>
       <h1>${$t('Добро пожаловать в Gatefold')}</h1>
-      <p>${$t('Здесь пока нет музыки. Покажите foobar2000, где она лежит, — это нужно сделать один раз.')}</p>
     </div>
     <div class="wl-cards">
       <section class="wl-card primary" data-k="library">
-        <div class="wl-badge">${$t('Рекомендуется')}</div>
         <div class="wl-ic">${icon('folder', 22)}</div>
         <h2>${$t('Подключить папку с музыкой')}</h2>
-        <p>${$t('foobar2000 соберёт медиатеку и будет сам следить за папкой: новые альбомы появятся без вашего участия. Заработают Медиатека, Исполнители и обложки.')}</p>
-        <ol class="wl-steps">
-          <li><span>${$t('Откроется окно настроек foobar2000 — нажмите <b>Add…</b>')}</span></li>
-          <li><span>${$t('Выберите папку с музыкой, например «Музыка»')}</span></li>
-          <li><span>${$t('Нажмите <b>OK</b> — дальше Gatefold всё сделает сам')}</span></li>
-        </ol>
+        <p>${$t('В окне foobar2000: <b>Add…</b> → папка → <b>OK</b>')}</p>
         <div class="wl-acts"><button class="btn primary" data-welcome="library">${icon('folder')}${$t('Подключить папку…')}</button></div>
-        <div class="wl-wait" hidden><span class="spinner"></span><span>${$t('Жду, пока foobar2000 найдёт музыку… Окно настроек может быть за этим окном.')}</span></div>
+        <div class="wl-wait" hidden><span class="spinner"></span><span>${$t('Жду, пока foobar2000 найдёт музыку…')}</span></div>
       </section>
       <section class="wl-card" data-k="open">
         <div class="wl-ic">${icon('play', 22)}</div>
         <h2>${$t('Просто послушать')}</h2>
-        <p>${$t('Музыка из папки или отдельные файлы сразу попадут в новый плейлист и заиграют. Медиатека для этого не нужна.')}</p>
         <div class="wl-acts">
           <button class="btn" data-welcome="folder">${icon('folder')}${$t('Открыть папку…')}</button>
           <button class="btn" data-welcome="files">${icon('music')}${$t('Выбрать файлы…')}</button>
         </div>
-        <p class="wl-drop">${icon('download', 14)}${$t('Или перетащите папку с музыкой прямо в это окно')}</p>
+        <p class="wl-drop">${icon('download', 14)}${$t('или перетащите её в окно')}</p>
       </section>
     </div>
-    <button class="wl-later link" data-welcome="later">${$t('Позже — показать пустой экран')}</button>
+    <button class="wl-later link" data-welcome="later">${$t('Позже')}</button>
   </div>`);
   return el;
 }
@@ -103,7 +95,7 @@ function libraryArrived(n) {
   if (!waiting) return;
   waiting = false; clearInterval(pollT);
   hide();
-  toast($t('Медиатека подключена: {0} {1}. Список дополняется, пока foobar2000 читает папку.', n.toLocaleString(), plural(n, 'трек', 'трека', 'треков')), { ms: 7000 });
+  toast($t('Медиатека подключена: {0} {1}', n.toLocaleString(), plural(n, 'трек', 'трека', 'треков')), { ms: 7000 });
   router.go('library');
 }
 
@@ -116,7 +108,7 @@ async function addAndPlay(paths, { guid = '', name = '' } = {}) {
     if (!ok(c)) { toast($t('Не удалось создать плейлист: {0}', esc(c.error || c.code || ''))); return; }
     guid = c.guid;
   }
-  toast($t('Добавляю музыку… Большая папка может читаться минуту-другую.'), { ms: 4000 });
+  toast($t('Добавляю музыку…'), { ms: 4000 });
   let added = -1;
   const a = await call('playlist.addPathsAsync', { paths, playlistGuid: guid });
   if (ok(a) && a.operationId) {
@@ -129,7 +121,7 @@ async function addAndPlay(paths, { guid = '', name = '' } = {}) {
     if (!ok(s)) { toast($t('foobar2000 не добавил файлы: ') + esc(s.error || s.code || '')); return; }
     added = s.addedCount ?? -1;
   }
-  if (added === 0) { toast($t('Здесь не нашлось музыки, которую умеет играть foobar2000')); return; }
+  if (added === 0) { toast($t('Музыки не найдено')); return; }
   await call('playlist.setActive', { playlistGuid: guid });
   await call('playlist.playTrack', { playlistGuid: guid, index: 0 });
   hide();

@@ -284,7 +284,7 @@ function playerError(code) {
     : code === 153 ? $t('YouTube не принял запрос плеера (нет данных о сайте).') : $t('Плеер YouTube не смог воспроизвести видео.');
   const blocked = code === 101 || code === 150 || code === 152;
   const canNext = S.auto && S.qi >= 0 && S.qi < S.queue.length - 1;
-  showError(`<b>${why}</b><span>${blocked ? $t('На самом YouTube оно играет — откройте его в окне YouTube прямо в foobar2000') : $t('Можно открыть его на YouTube')}${canNext && !blocked ? $t(' — или следующее начнётся через 4 секунды') : ''}.</span>
+  showError(`<b>${why}</b><span>${blocked ? '' : $t('Можно открыть его на YouTube')}${canNext && !blocked ? $t(' — или следующее начнётся через 4 секунды') : ''}.</span>
     <div class="yt-err-acts">${blocked ? `<button class="btn sm primary" data-e="win">${icon('window')}${$t('Смотреть в окне YouTube')}</button>` : ''}<button class="btn sm" data-e="ext">${icon('link')}${$t('В браузере')}</button>${canNext ? `<button class="btn sm" data-e="next">${icon('next')}${$t('Следующее')}</button>` : ''}</div>`);
   errBox.onclick = (e) => {
     const b = e.target.closest('[data-e]'); if (!b || !S.cur) return;
@@ -335,7 +335,7 @@ function applyQuality() {
 function setQuality(id) {
   S.quality = qOf(id).id; ls.set('quality', S.quality);
   applyQuality(); syncButtons();
-  toast(S.quality === 'auto' ? $t('Качество: авто — YouTube выбирает по размеру плеера и скорости сети') : $t('Качество: {0} — YouTube переключится через пару секунд', qOf(S.quality).label), { ms: 2600 });
+  toast(S.quality === 'auto' ? $t('Качество: авто') : $t('Качество: {0}', qOf(S.quality).label), { ms: 2000 });
 }
 async function qualityMenu(el) {
   let avail = [];
@@ -567,7 +567,7 @@ function renderGrid() {
 /* search is opt-in: a link always plays; finding videos needs the user's own YouTube Data API key
    (official) or the unofficial results-page search, both chosen in Settings → YouTube */
 function searchOffNote() {
-  const html = `<div class="yt-note"><b>${$t('Поиск YouTube выключен')}</b><span>${$t('Ссылки на видео и плейлисты играют всегда. Чтобы искать, включите поиск в настройках: свой ключ YouTube Data API (официально) или неофициальный поиск.')}</span><button class="btn sm primary" data-go-settings>${icon('gear')}${$t('Настройки YouTube')}</button></div>`;
+  const html = `<div class="yt-note"><b>${$t('Поиск YouTube выключен')}</b><button class="btn sm primary" data-go-settings>${icon('gear')}${$t('Настройки YouTube')}</button></div>`;
   if (S.cur) { S.tab = 'results'; sideList.innerHTML = html; renderTabs(); } else { grid.innerHTML = html; emptyBox.innerHTML = ''; }
   view.querySelector('[data-go-settings]')?.addEventListener('click', () => { router.go('settings'); setTimeout(() => document.querySelector('.st-link[data-sec=youtube]')?.click(), 120); });
 }
@@ -578,7 +578,7 @@ function renderEmpty() {
     <div class="yt-hero">
       <div class="yt-hero-ic">${icon('yt', 40)}</div>
       <h2>${$t('YouTube в Gatefold')}</h2>
-      <p>${YS.mode() === 'off' ? $t('Вставьте ссылку на видео или плейлист — прямо сюда, <b>Ctrl+V</b>. Поиск включается в настройках.') : $t('Ищите видео или вставьте ссылку — прямо сюда, <b>Ctrl+V</b>. Музыка в foobar2000 встанет на паузу сама и не помешает.')}</p>
+      <p>${$t('Вставьте ссылку: <b>Ctrl+V</b>')}</p>
     </div>
     ${hist.length ? `<div class="yt-head"><div class="kicker">${$t('Недавно смотрели')}</div></div>` : ''}`;
   grid.innerHTML = hist.slice(0, 18).map((it, i) => card({ ...it, thumb: YS.thumb(it.id) }, i, 'history')).join('');
@@ -594,8 +594,8 @@ function renderSide() {
   if (!sideList) return;
   renderTabs();
   const list = listOf(S.tab);
-  if (S.tab === 'next') sideList.innerHTML = list.length ? list.map((it, i) => row(it, i, 'next', i === S.qi)).join('') : `<div class="yt-note"><b>${$t('Очередь пуста')}</b><span>${$t('Нажмите на значок очереди у любого видео')}</span></div>`;
-  else if (S.tab === 'results') sideList.innerHTML = list.length ? list.map((it, i) => row(it, i, 'results', S.cur && it.id === S.cur.id)).join('') + (S.cont ? `<div class="yt-more"><button class="btn sm">${$t('Показать ещё')}</button></div>` : '') : `<div class="yt-note"><b>${$t('Нет результатов')}</b><span>${$t('Найдите что-нибудь в строке поиска сверху')}</span></div>`;
+  if (S.tab === 'next') sideList.innerHTML = list.length ? list.map((it, i) => row(it, i, 'next', i === S.qi)).join('') : `<div class="yt-note"><b>${$t('Очередь пуста')}</b></div>`;
+  else if (S.tab === 'results') sideList.innerHTML = list.length ? list.map((it, i) => row(it, i, 'results', S.cur && it.id === S.cur.id)).join('') + (S.cont ? `<div class="yt-more"><button class="btn sm">${$t('Показать ещё')}</button></div>` : '') : `<div class="yt-note"><b>${$t('Нет результатов')}</b></div>`;
   else sideList.innerHTML = list.length ? list.map((it, i) => row(it, i, 'history', S.cur && it.id === S.cur.id)).join('') + `<div class="yt-more"><button class="btn sm" data-clear>${$t('Очистить историю')}</button></div>` : `<div class="yt-note"><b>${$t('История пуста')}</b></div>`;
   sideList.querySelector('.yt-more button:not([data-clear])')?.addEventListener('click', loadMore);
   sideList.querySelector('[data-clear]')?.addEventListener('click', () => { ls.set('history', []); renderSide(); });
