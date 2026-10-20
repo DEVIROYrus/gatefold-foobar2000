@@ -22,14 +22,20 @@ BASE = 'https://essentia.upf.edu/models'
 EFFNET_ONNX = f'{BASE}/feature-extractors/discogs-effnet/discogs-effnet-bsdynamic-1.onnx'
 EFFNET_PB = f'{BASE}/feature-extractors/discogs-effnet/discogs-effnet-bs64-1.pb'
 EFFNET_JSON = f'{BASE}/feature-extractors/discogs-effnet/discogs-effnet-bs64-1.json'
-HEADS = ['mood_aggressive', 'mood_happy', 'mood_party', 'mood_relaxed', 'mood_sad', 'danceability',
-         'voice_instrumental', 'mood_acoustic', 'mood_electronic', 'approachability_regression', 'engagement_regression',
-         'tonal_atonal', 'timbre']
+# the heads Gatefold uses (ml/sound.js → MOODS); each is ~0.5 MB
+HEADS = ['mood_aggressive', 'mood_happy', 'mood_party', 'mood_relaxed', 'mood_sad', 'danceability', 'voice_instrumental', 'mood_acoustic', 'mood_electronic']
 HEAD_DIR = {'approachability_regression': 'approachability', 'engagement_regression': 'engagement'}
 ORT_VERSION = '1.22.0'
 SR, FRAME, HOP, BANDS, PATCH = 16000, 512, 256, 96, 128
 
+LOCAL = os.environ.get('ML_LOCAL')   # a folder with files from an earlier run (the ml-log branch's work/): no downloads, no conversion
+LOCAL_NAMES = {'discogs-effnet-bsdynamic-1.onnx': 'discogs-effnet.onnx', 'discogs-effnet-bs64-1.pb': 'effnet.pb', 'discogs-effnet-bs64-1.json': 'effnet.json'}
+
 def get(url):
+    if LOCAL and 'essentia.upf.edu' in url:
+        name = url.rsplit('/', 1)[-1]
+        name = LOCAL_NAMES.get(name, name.replace('-discogs-effnet-1', ''))
+        return (Path(LOCAL) / name).read_bytes()
     req = urllib.request.Request(url, headers={'User-Agent': 'gatefold-ml-assets'})
     with urllib.request.urlopen(req, timeout=120) as r:
         return r.read()
@@ -78,10 +84,13 @@ def main():
         inp = schema.get('inputs', [{}])[0].get('name', 'model/Placeholder')
         outn = next((o['name'] for o in schema.get('outputs', []) if o.get('output_purpose') == 'predictions'), schema.get('outputs', [{}])[0].get('name'))
         dst = OUT / 'models' / f'{h}.onnx'
-        r = subprocess.run([os.environ.get('TF_PYTHON', sys.executable), '-m', 'tf2onnx.convert', '--graphdef', str(work / f'{h}.pb'), '--output', str(dst),
-                            '--inputs', f'{inp}:0', '--outputs', f'{outn}:0', '--opset', '17'], capture_output=True, text=True)
-        if r.returncode or not dst.exists():
-            print('convert failed', h, r.stderr[-800:]); continue
+        if LOCAL and (Path(LOCAL) / f'{h}.onnx').exists():
+            dst.write_bytes((Path(LOCAL) / f'{h}.onnx').read_bytes())
+        else:
+            r = subprocess.run([os.environ.get('TF_PYTHON', sys.executable), '-m', 'tf2onnx.convert', '--graphdef', str(work / f'{h}.pb'), '--output', str(dst),
+                                '--inputs', f'{inp}:0', '--outputs', f'{outn}:0', '--opset', '17'], capture_output=True, text=True)
+            if r.returncode or not dst.exists():
+                print('convert failed', h, r.stderr[-800:]); continue
         hm = onnx.load(str(dst))
         manifest['heads'].append({'id': h, 'file': f'{h}.onnx', 'input': hm.graph.input[0].name, 'output': hm.graph.output[0].name,
                                   'classes': hj.get('classes', []), 'type': hj.get('type', '')})
@@ -99,7 +108,8 @@ def main():
     def melframes(x, centered):
         if centered: x = np.concatenate([np.zeros(FRAME // 2, np.float32), x])
         n = 1 + (len(x) - FRAME) // HOP
-        return np.stack([np.log10(1 + 10000 * mel(np.abs(np.fft.rfft(x[i * HOP:i * HOP + FRAME] * win)).astype(np.float32) ** 2)) for i in range(n)]).astype(np.float32)
+        # MelBands(type='power') squares its input itself: it takes the magnitude spectrum
+        return np.stack([np.log10(1 + 10000 * mel(np.abs(np.fft.rfft(x[i * HOP:i * HOP + FRAME] * win)).astype(np.float32))) for i in range(n)]).astype(np.float32)
     def patches(F, hop):
         n = 1 + (len(F) - PATCH) // hop
         return np.stack([F[i * hop:i * hop + PATCH] for i in range(n)])
