@@ -22,7 +22,7 @@ BASE = 'https://essentia.upf.edu/models'
 EFFNET_ONNX = f'{BASE}/feature-extractors/discogs-effnet/discogs-effnet-bsdynamic-1.onnx'
 EFFNET_PB = f'{BASE}/feature-extractors/discogs-effnet/discogs-effnet-bs64-1.pb'
 EFFNET_JSON = f'{BASE}/feature-extractors/discogs-effnet/discogs-effnet-bs64-1.json'
-HEADS = ['genre_discogs400', 'mood_aggressive', 'mood_happy', 'mood_party', 'mood_relaxed', 'mood_sad', 'danceability',
+HEADS = ['mood_aggressive', 'mood_happy', 'mood_party', 'mood_relaxed', 'mood_sad', 'danceability',
          'voice_instrumental', 'mood_acoustic', 'mood_electronic', 'approachability_regression', 'engagement_regression',
          'tonal_atonal', 'timbre']
 HEAD_DIR = {'approachability_regression': 'approachability', 'engagement_regression': 'engagement'}
@@ -50,6 +50,7 @@ def main():
     (OUT / 'models' / 'discogs-effnet.onnx').write_bytes(onnx_bytes)
     (work / 'effnet.pb').write_bytes(get(EFFNET_PB))
     meta = json.loads(get(EFFNET_JSON))
+    (work / 'effnet.json').write_text(json.dumps(meta))
     import onnx
     m = onnx.load_from_string(onnx_bytes)
     ins = [(i.name, [d.dim_value or d.dim_param for d in i.type.tensor_type.shape.dim]) for i in m.graph.input]
@@ -72,6 +73,7 @@ def main():
         except Exception as e:
             print('skip head', h, e); continue
         (work / f'{h}.pb').write_bytes(pb)
+        (work / f'{h}.json').write_text(json.dumps(hj))
         schema = hj.get('schema', {})
         inp = schema.get('inputs', [{}])[0].get('name', 'model/Placeholder')
         outn = next((o['name'] for o in schema.get('outputs', []) if o.get('output_purpose') == 'predictions'), schema.get('outputs', [{}])[0].get('name'))
@@ -120,6 +122,10 @@ def main():
             if best is None or e < best[0]: best = (e, centered, hop)
     manifest['framing'] = {'centered': best[1], 'patchHop': best[2], 'maxError': best[0]}
     print('framing', manifest['framing'])
+    if best[0] > 0.02:
+        try: diagnose(es, sess, signals, melframes, patches, run, work, meta, emb_out, act_out, manifest)
+        except Exception as e:
+            import traceback; traceback.print_exc()
 
     # ---------------------------------------------------------------- reference data for the JS side
     stage('reference data')
@@ -149,6 +155,55 @@ def main():
     (OUT / 'models' / 'manifest.json').write_text(json.dumps(manifest, indent=1))
     (OUT / 'models' / 'LICENSE-MODELS.md').write_text(LICENSE)
     print(json.dumps({k: v['size'] for k, v in manifest['files'].items()}, indent=1))
+
+def diagnose(es, sess, signals, melframes, patches, run, work, meta, emb_out, act_out, manifest):
+    """why our front end + ONNX differ from Essentia: model, scale, layout or framing"""
+    stage('diagnosis')
+    x = signals['chords']
+    ref_e = np.array(es.TensorflowPredictEffnetDiscogs(graphFilename=str(work / 'effnet.pb'), output='PartitionedCall:1')(x))
+    ref_a = np.array(es.TensorflowPredictEffnetDiscogs(graphFilename=str(work / 'effnet.pb'), output='PartitionedCall:0')(x))
+    F = melframes(x, False); P = patches(F, 62)
+    feed = manifest['effnet']['input']
+    oe, oa = sess.run([emb_out, act_out], {feed: P})
+    print('essentia emb', ref_e.shape, 'act', ref_a.shape, '| ours', oe.shape, oa.shape)
+    print('essentia emb[0][:6]', np.round(ref_e[0][:6], 4), '| ours', np.round(oe[0][:6], 4))
+    print('essentia act[0] top5', np.argsort(-ref_a[0])[:5], np.round(np.sort(ref_a[0])[::-1][:5], 4))
+    print('ours     act[0] top5', np.argsort(-oa[0])[:5], np.round(np.sort(oa[0])[::-1][:5], 4))
+    corr = lambda a, b: float(np.corrcoef(a.ravel(), b.ravel())[0, 1])
+    print('corr emb0 %.4f act0 %.4f | |emb| ess %.3f ours %.3f' % (corr(ref_e[0], oe[0]), corr(ref_a[0], oa[0]), np.abs(ref_e).mean(), np.abs(oe).mean()))
+    # the same patches through the TensorFlow graph directly (separates «model» from «front end»)
+    np.save('work/P.npy', P)
+    schema = meta.get('schema', {})
+    inp = (schema.get('inputs') or [{}])[0].get('name', 'serving_default_melspectrogram')
+    code = f'''
+import numpy as np, tensorflow as tf
+P = np.load("work/P.npy"); n = len(P); B = np.zeros((64,) + P.shape[1:], np.float32); B[:n] = P
+gd = tf.compat.v1.GraphDef(); gd.ParseFromString(open("work/effnet.pb", "rb").read())
+g = tf.Graph()
+with g.as_default(): tf.compat.v1.import_graph_def(gd, name="")
+with tf.compat.v1.Session(graph=g) as s:
+    for shape in [B.shape]:
+        e, a = s.run(["PartitionedCall:1", "PartitionedCall:0"], {{"{inp}:0": B}})
+np.save("work/tf_e.npy", e[:n]); np.save("work/tf_a.npy", a[:n]); print("tf graph input", "{inp}", [t.shape for t in g.get_operation_by_name("{inp}").outputs])
+'''
+    import subprocess
+    r = subprocess.run([os.environ.get('TF_PYTHON', sys.executable), '-c', code], capture_output=True, text=True)
+    print(r.stdout[-1500:], r.stderr[-1500:] if r.returncode else '')
+    if r.returncode == 0:
+        te, ta = np.load('work/tf_e.npy'), np.load('work/tf_a.npy')
+        print('TF graph on OUR patches vs ONNX: emb max|Δ| %.5f act max|Δ| %.5f' % (np.abs(te - oe).max(), np.abs(ta - oa).max()))
+        print('TF graph on OUR patches vs Essentia: emb max|Δ| %.5f (first %d patches)' % (np.abs(te[:len(ref_e)] - ref_e[:len(te)]).max(), min(len(te), len(ref_e))))
+    # which of our patches (any frame offset, both paddings, transposed or not) matches Essentia's first one
+    for centered in (False, True):
+        G = melframes(x, centered)
+        errs = []
+        for o in range(0, 140):
+            if o + PATCH > len(G): break
+            e = sess.run([emb_out], {feed: G[None, o:o + PATCH]})[0][0]
+            errs.append((float(np.abs(e - ref_e[0]).max()), o))
+        errs.sort()
+        print('centered=%s best frame offsets for Essentia patch 0:' % centered, errs[:3])
+        print('   essentia patch 1 vs our offset 62: %.5f' % float(np.abs(sess.run([emb_out], {feed: G[None, 62:62 + PATCH]})[0][0] - ref_e[1]).max()) if len(ref_e) > 1 and len(G) >= 62 + PATCH else '')
 
 def test_signals():
     """deterministic test audio, 16 kHz mono: chords, a drum-and-noise pattern, a sweep"""
