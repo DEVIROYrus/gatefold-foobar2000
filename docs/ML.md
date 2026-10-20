@@ -5,7 +5,8 @@
 | Mel front end, bit-for-bit Essentia's `TensorflowInputMusiCNN` (16 kHz, 512/256 Hann, 96 Slaney bands, `log10(1+10000x)`) | `theme/js/ml/frontend.js`, tables from `tools/ml/make_melbank.py` → `theme/js/ml/melbank.js` |
 | Network in a Web Worker (onnxruntime-web 1.22, WebAssembly, 1 thread) | `theme/js/ml/worker.js`, `theme/js/vendor/ort/` |
 | Model download (SHA-256 checked, kept in IndexedDB) | `theme/js/ml/models.js` |
-| Indexer, similarity, moods, styles | `theme/js/ml/sound.js` |
+| Indexer (two 24-s pieces per track, non-overlapping patches; decode pipeline; speed levels; worker pool), similarity, moods, styles (album- and library-weighted) | `theme/js/ml/sound.js` |
+| Resampling to 16 kHz when decoding at the file's own rate (polyphase windowed sinc; embedding cosine 0.9999 vs Essentia's best resampler) | `theme/js/ml/frontend.js` |
 | Settings section, Now playing chips, «Similar tracks», mood/style playlists | `theme/js/ml/sound-ui.js` |
 | Radio v3 | `theme/js/radio.js` |
 

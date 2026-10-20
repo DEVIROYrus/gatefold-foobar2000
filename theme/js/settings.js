@@ -68,6 +68,8 @@ export const DEFAULTS = {
   canvasIdleMin: 5,         // enter Canvas after N idle minutes while playing and focused (0 = off)
   soundAI: false,          // sound analysis with a neural network (ml/sound.js): models downloaded on request
   soundPaused: false,
+  soundSpeed: 'normal',     // 'gentle' | 'normal' | 'fast' | 'max' — how hard the analysis may work (ml/sound.js)
+  motionFps: 'max',         // 'max': animations at the monitor's refresh rate | 'eco': spectrum ≤ 60 fps, background 12 fps
   plViewDefault: 'auto',   // playlist view when the playlist has none of its own: auto | albums | covers | grid | compact
   fullscreenTopmost: false, // true: fullscreen stays above every other window (the component's default)
 };

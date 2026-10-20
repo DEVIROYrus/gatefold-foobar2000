@@ -38,6 +38,7 @@ function wire() {
     try {
       const cap = new DataView(buffer).getUint32(24, true);
       w.pcm = new Float32Array(new Float32Array(buffer, 64, Math.min(info.frames, cap)));   // copy: the shared buffer is read-only
+      w.pcm.rate = info.sampleRate || w.sr;
     } catch (err) { log('vibe buffer', err); }
     try { wv.releaseBuffer && wv.releaseBuffer(buffer); } catch {}
     if (w.ready) { waiting.delete(info.taskId); w.resolve(w.pcm || null); }
@@ -45,13 +46,14 @@ function wire() {
   on('audio:pcmReady', (d) => { const w = waiting.get(d.taskId); if (!w) return; w.ready = true; if (w.pcm) { waiting.delete(d.taskId); w.resolve(w.pcm); } });
   on('audio:pcmFailed', (d) => { const w = waiting.get(d.taskId); if (w) { waiting.delete(d.taskId); w.resolve(null); } });
 }
-/** mono PCM of path[start…end] s at `sr` Hz, decoded by foobar2000 (a copy), or null */
+/** mono PCM of path[start…end] s at `sr` Hz (0: the file's own rate, no resampling), decoded by
+ *  foobar2000 (a copy, with .rate = its sample rate), or null */
 export async function decode(path, start, end, sr = SR) {
   wire();
-  const r = await call('audio.decodePcm', { path, start, end, sampleRate: sr, mono: true });
+  const r = await call('audio.decodePcm', sr ? { path, start, end, sampleRate: sr, mono: true } : { path, start, end, mono: true });
   if (!ok(r) || !r.taskId) return null;
   return new Promise((resolve) => {
-    waiting.set(r.taskId, { resolve, pcm: null, ready: false });
+    waiting.set(r.taskId, { resolve, pcm: null, ready: false, sr });
     setTimeout(() => { if (waiting.has(r.taskId)) { waiting.delete(r.taskId); call('audio.cancelDecodePcm', { taskId: r.taskId }); resolve(null); } }, 20000);
   });
 }

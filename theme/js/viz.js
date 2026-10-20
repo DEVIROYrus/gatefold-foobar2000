@@ -379,8 +379,8 @@ function frame(now) {
     if (prog.playing) again = true;
     const needSpec = spec.subscribed || spec.beat > 0.002;
     if (needSpec) {
-      // high-refresh screens: the spectrum is drawn at most ~60 times a second
-      if (now - lastSpec >= 15) {
+      // «Smoothness: economical» draws the spectrum at most ~60 times a second; otherwise every frame of the monitor
+      if (settings.motionFps !== 'eco' || now - lastSpec >= 15) {
         lastSpec = now;
         pumpStream();
         const live = stepSpectrum();

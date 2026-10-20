@@ -4,10 +4,12 @@
  * They used to be four screen-sized CSS layers animated at 60 frames a second: the GPU blended
  * ~9 megapixels (plus the grain's overlay blend on top) every frame, all the time, for a motion
  * of a few pixels a second. Now the four soft gradients are painted into one small canvas — a
- * quarter of the window's size, scaled up (a soft gradient loses nothing) — 12 times a second.
- * Same picture, a fraction of the GPU work. Still while «Background motion» is off, stopped while
- * the window is hidden.
+ * quarter of the window's size, scaled up (a soft gradient loses nothing): every frame of the
+ * monitor with «Smoothness: as the monitor», 12 times a second with «economical». Still while
+ * «Background motion» is off, stopped while the window is hidden.
  */
+import { settings } from './settings.js';
+
 const FPS = 12, SCALE = 0.25;
 /* the CSS this replaces: size 78vmax; start offsets; drift (translate, scale) over a period, alternating */
 const BLOBS = [
@@ -67,7 +69,9 @@ function tick() {
   if (document.hidden || body.classList.contains('paused-bg') || body.classList.contains('no-ambient')) { timer = setTimeout(tick, 1000); return; }
   draw();
   // still: only colour changes (the palette crossfade) need repainting, 4 times a second is plenty
-  timer = setTimeout(tick, body.classList.contains('no-motion') ? 250 : 1000 / FPS);
+  if (body.classList.contains('no-motion')) timer = setTimeout(tick, 250);
+  else if (settings.motionFps === 'eco') timer = setTimeout(tick, 1000 / FPS);
+  else timer = requestAnimationFrame(tick);
 }
 
 export function init() {

@@ -39,7 +39,7 @@ function statusHtml() {
         : !left ? $t('Вся медиатека проанализирована: {0} {1}', s.total.toLocaleString(), plural(s.total, 'трек', 'трека', 'треков'))
           : $t('Проанализировано {0} из {1}', s.done.toLocaleString(), s.total.toLocaleString()) + (etaTxt ? ' · ' + $t('осталось {0}', etaTxt) : '');
       if (s.phase === 'paused') t += ' · ' + (s.why === 'battery' ? $t('пауза: компьютер работает от батареи') : $t('на паузе'));
-      if (s.msPerTrack) t += `<br><span class="dim">${$t('На трек: нейросеть {0} мс, чтение файла foobar2000 {1} мс', Math.round(s.msPerTrack), Math.round(s.decodeMs))}${s.rate ? ' · ' + $t('{0} треков в минуту', (s.rate * 60).toFixed(s.rate * 60 < 10 ? 1 : 0)) : ''}${s.fake ? ' · ' + $t('тестовые модели') : ''}</span>`;
+      if (s.msPerTrack) t += `<br><span class="dim">${$t('На трек: нейросеть {0} мс, чтение файла foobar2000 {1} мс', Math.round(s.msPerTrack), Math.round(s.decodeMs))}${s.rate ? ' · ' + $t('{0} треков в минуту', (s.rate * 60).toFixed(s.rate * 60 < 10 ? 1 : 0)) : ''}${s.workers > 1 ? ' · ' + $t('нейросетей: {0}', s.workers) : ''}${s.decodeMode === 'native' ? ' · ' + $t('пересчёт частоты в Gatefold') : ''}${s.fake ? ' · ' + $t('тестовые модели') : ''}</span>`;
       return t + (s.total && left ? bar(s.done / s.total) : '');
     }
   }
@@ -57,11 +57,21 @@ export function settingsSection({ section, group, actions, button, rerender }) {
   const inp = sw.querySelector('input'); inp.checked = on;
   inp.onchange = async () => { if (inp.checked) { Sound.enable(); } else Sound.disable(); setTimeout(rerender, 30); };
   const status = h(`<div class="row"><div class="lbl"><b>${$t('Состояние')}</b><small id="sndStatus" class="snd-status">${statusHtml()}</small></div></div>`);
+  const SP = [['gentle', $t('Бережно')], ['normal', $t('Обычно')], ['fast', $t('Быстро')], ['max', $t('Максимум')]];
+  const HINT = { gentle: $t('Почти незаметно: ⅛ ядра, пока вы работаете'), normal: $t('Четверть одного ядра, пока вы за компьютером, половина — когда вас нет'),
+    fast: $t('Одно ядро, пока вы за компьютером; без пауз, когда вас нет'), max: $t('Без пауз, до трёх нейросетей сразу и на батарее тоже — вентилятор может зашуметь. Для того, чтобы проанализировать всё за один вечер') };
+  const cur = settings.soundSpeed || 'normal';
+  const speedRow = h(`<div class="row"><div class="lbl"><b>${$t('Скорость анализа')}</b><small class="snd-hint">${HINT[cur]}</small></div><div class="seg"></div></div>`);
+  for (const [v, txt] of SP) {
+    const b = h(`<button${v === cur ? ' class="on"' : ''}>${txt}</button>`);
+    b.onclick = () => { speedRow.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); speedRow.querySelector('.snd-hint').textContent = HINT[v]; Sound.setSpeed(v); };
+    speedRow.querySelector('.seg').append(b);
+  }
   const pause = h(`<div class="row"><div class="lbl"><b>${$t('Пауза')}</b><small>${$t('Анализ остановится; играющий трек и радио всё равно анализируются')}</small></div><label class="toggle"><input type="checkbox"><i></i></label></div>`);
   const pin = pause.querySelector('input'); pin.checked = !!settings.soundPaused; pin.onchange = () => Sound.pause(pin.checked);
   const note = h(`<div class="row st-note"><small>${$t('Работает полностью на вашем компьютере, ничего не отправляется. Нагрузка — не больше четверти одного ядра процессора, пока вы за компьютером, и половины, когда вас нет; на батарее анализ ждёт. Модели (≈ 30 МБ) скачиваются один раз из репозитория Gatefold на GitHub.')}<br>${$t('Нейросеть Discogs-EffNet и классификаторы — Music Technology Group, Университет Помпеу Фабра (Essentia). Лицензия CC BY-NC-SA 4.0: только некоммерческое использование.')}</small></div>`);
   section('sound', 'sparkle', $t('Анализ звука (ИИ)'), $t('Радио и подборки по тому, как музыка звучит, а не по тегам'),
-    group('', sw, ...(on ? [status, pause] : []), note,
+    group('', sw, ...(on ? [status, speedRow, pause] : []), note,
       ...(on ? [actions(
         button($t('{0}Пересканировать медиатеку', icon('refresh')), () => { Sound.rescan(); toast($t('Ищу новые треки')); }),
         button($t('Удалить модели и результаты'), async () => { await Sound.removeAll(); rerender(); toast($t('Модели и результаты анализа удалены')); }, 'danger'))] : [])));
@@ -72,7 +82,8 @@ export function chips(t) {
   const r = t && Sound.get(t);
   if (!r) return '';
   const L = MOOD_LABEL();
-  const st = Sound.topStyles(r, 2, 0.15).map((s) => `<span class="chip ai" title="${$t('Стиль по звучанию (Discogs)')} · ${Math.round(s.p * 100)}%">${esc(s.name)}</span>`);
+  const raw = Sound.topStyles(r, 6, 0.05).map((s) => `${s.name} ${Math.round(s.p * 100)}%`).join(' · ');
+  const st = Sound.describeStyles(r, 2, t.genre || '').map((s) => `<span class="chip ai" title="${$t('Стиль по звучанию (Discogs), с учётом альбома и вашей медиатеки')}&#10;${esc($t('Сеть слышит: {0}', raw))}">${esc(s.name)}</span>`);
   const md = Sound.moodNames().filter((n) => Sound.hasMood(n) && n !== 'instrumental').map((n) => [n, Sound.mood(r, n)]).filter(([, v]) => v >= 0.65)
     .sort((a, b) => b[1] - a[1]).slice(0, 2).map(([n, v]) => `<span class="chip ai" title="${$t('Настроение по звучанию')} · ${Math.round(v * 100)}%">${esc(L[n])}</span>`);
   return [...st, ...md].join('');
@@ -135,7 +146,7 @@ export const MOOD_RECIPES = () => [
 ];
 function ranked(kind, style) {
   const list = Sound.all();
-  if (kind === 'style') return list.map((r) => ({ r, s: r.st ? r.st[style] / 255 : 0 })).filter((x) => x.s >= 0.2).sort((a, b) => b.s - a.s).map((x) => x.r);
+  if (kind === 'style') return list.map((r) => ({ r, d: Sound.describeStyles(r, 3).find((x) => x.i === style) })).filter((x) => x.d).sort((a, b) => b.d.p - a.d.p).map((x) => x.r);
   const f = SCORE[kind]; if (!f) return [];
   return list.map((r) => ({ r, s: f(r) })).filter((x) => x.s >= 0.35).sort((a, b) => b.s - a.s).map((x) => x.r);
 }

@@ -2,14 +2,15 @@
  * Gatefold · ml/worker.js — the neural network, off the interface thread.
  *
  * onnxruntime-web (WebAssembly, one thread, SIMD) runs Discogs-EffNet on mel patches of a track
- * and the small classification heads on its embeddings. One track at a time; the window and
- * foobar2000 never wait for it.
+ * and the small classification heads on its embeddings. One track at a time per worker (the
+ * «Maximum» speed runs several); the window and foobar2000 never wait for it.
  *
  *   → { type:'init', manifest, wasm:ArrayBuffer, models:{ file → ArrayBuffer } }   ← { type:'ready', heads:[ids] }
- *   → { id, type:'analyze', pieces:[Float32Array 16 kHz] }                          ← { id, emb, styles, heads:{ id → Float32Array }, patches, ms }
+ *   → { id, type:'analyze', pieces:[Float32Array], rates:[Hz] }   ← { id, emb, styles, heads:{ id → Float32Array }, patches, ms }
+ *     (pieces not at 16 kHz are resampled here)
  */
 import * as ort from '../vendor/ort/ort.wasm.min.mjs';
-import { melFrames, patches, PATCH, BANDS } from './frontend.js';
+import { melFrames, patches, resample, PATCH, BANDS, SR } from './frontend.js';
 
 let M = null, effnet = null;
 const heads = [];
@@ -38,10 +39,11 @@ const mean = (data, rows, cols) => {
   return o;
 };
 
-async function analyze(pieces) {
+async function analyze(pieces, rates, hop) {
   const t0 = performance.now();
+  pieces = pieces.map((x, i) => resample(x, (rates && rates[i]) || SR, SR));
   const fr = M.framing || { centered: false, patchHop: 62 };
-  const parts = pieces.map((x) => patches(melFrames(x, fr.centered), fr.patchHop)).filter((p) => p.count);
+  const parts = pieces.map((x) => patches(melFrames(x, fr.centered), hop || fr.patchHop)).filter((p) => p.count);
   const n = parts.reduce((s, p) => s + p.count, 0);
   if (!n) return { emb: null };
   const all = new Float32Array(n * PATCH * BANDS);
@@ -68,7 +70,7 @@ self.onmessage = async (e) => {
   try {
     if (m.type === 'init') postMessage({ id: m.id, ...(await init(m)) });
     else if (m.type === 'analyze') {
-      const r = await analyze(m.pieces);
+      const r = await analyze(m.pieces, m.rates, m.hop);
       const tr = [r.emb, r.styles, ...Object.values(r.heads || {})].filter(Boolean).map((a) => a.buffer);
       postMessage({ id: m.id, type: 'result', ...r }, tr);
     }

@@ -530,7 +530,7 @@ async def test_sound_ai(browser, port):
             if f.exists(): await route.fulfill(status=200, body=f.read_bytes(), headers={'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/octet-stream'})
             else: await route.fulfill(status=404, body='')
         await ctx.route('https://raw.githubusercontent.com/**', raw)
-    ctx, pg, errs = await page(browser, port, {'language': 'en', 'soundAI': True}, setup=setup, pre="localStorage.setItem('gatefold.ml.pace', '0')")
+    ctx, pg, errs = await page(browser, port, {'language': 'en', 'soundAI': True}, setup=setup, pre="localStorage.setItem('gatefold.ml.pace', '0'); Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8 })")
     await nav(pg, 'settings', 800)
     await pg.evaluate("document.querySelector('#st-sound').scrollIntoView()")
     for _ in range(60):
@@ -541,6 +541,12 @@ async def test_sound_ai(browser, port):
     check('manifest.json' in served and 'discogs-effnet.onnx' in served and 'ort-wasm-simd-threaded.wasm' in served, f'the models come from the ml-assets branch {served[:5]}')
     check('Per track: network' in st and 'test models' in st, 'the status shows the cost per track')
     if os.environ.get('SHOTS'): await pg.screenshot(path=os.environ['SHOTS'] + '/sound-settings.png')
+    # «Maximum» speed: several networks; the libraries' remaining tracks still get analysed
+    await pg.click("#st-sound .seg button:has-text('Maximum')"); await pg.wait_for_timeout(300)
+    check(await pg.evaluate("JSON.parse(localStorage.getItem('aurora.settings.v1')).soundSpeed") == 'max', 'the analysis speed is a setting')
+    w = await pg.evaluate("(async () => { const S = await import('/theme/js/ml/sound.js'); S.prioritize(S.all().slice(0, 30).map(r => ({ absolutePath: r.p + '.x', duration: 200, title: 'x' }))); await new Promise(r => setTimeout(r, 3000)); return S.state.workers; })()")
+    check(w >= 2, f'«Maximum» runs several networks at once ({w})')
+    await pg.click("#st-sound .seg button:has-text('Normal')"); await pg.wait_for_timeout(300)
     # chips on Now Playing
     await nav(pg, 'now', 1200)
     check(await pg.evaluate("document.querySelectorAll('#npBadges .chip.ai').length") >= 1, 'Now Playing shows the style and mood the network hears')
