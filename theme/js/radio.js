@@ -77,8 +77,17 @@ async function buildPool(seedName) {
       first = await deezerRelated(d.id);
       first.forEach((r, i) => add(lib.get(artistKey(r.name)), 1 - 0.5 * i / Math.max(10, first.length), 'related'));
       // one step further: the related artists of the closest related ones (same scene, often the ones you own)
-      const hop = await Promise.all(first.slice(0, 6).map((r) => deezerRelated(r.id).catch(() => [])));
-      hop.forEach((list, j) => list.forEach((r, i) => add(lib.get(artistKey(r.name)), 0.5 * (1 - 0.5 * i / Math.max(10, list.length)) * (1 - 0.06 * j), 'related2')));
+      // …but only artists that several of them point to: one path alone drifts away
+      // (Anathema → Dream Theater → a guitar virtuoso's comic song)
+      const hop = await Promise.all(first.slice(0, 10).map((r) => deezerRelated(r.id).catch(() => [])));
+      const support = new Map();
+      hop.forEach((list, j) => list.forEach((r, i) => {
+        const x = lib.get(artistKey(r.name)); if (!x) return;
+        const s = support.get(x.key) || { x, n: 0, w: 0 };
+        s.n++; s.w = Math.max(s.w, (1 - 0.5 * i / Math.max(10, list.length)) * (1 - 0.04 * j));
+        support.set(x.key, s);
+      }));
+      for (const s of support.values()) if (s.n >= 2) add(s.x, (0.2 + 0.08 * Math.min(4, s.n)) * s.w, 'related2');
     }
   } catch (e) { log('radio related', e); }
   const relatedHits = [...pool.values()].length;
@@ -119,7 +128,7 @@ const sample = (arr, n) => { const a = arr.slice(); for (let i = a.length - 1; i
 function threshold() {
   if (R.dists.length < 6) return 0.55;
   const s = [...R.dists].sort((a, b) => a - b);
-  return Math.max(0.22, s[Math.floor(s.length * 0.45)]);
+  return Math.max(0.2, s[Math.floor(s.length * 0.35)]);
 }
 const blend = (a, b, k) => (a && b ? a.map((v, i) => v * (1 - k) + b[i] * k) : a || b);
 
@@ -153,7 +162,7 @@ async function pickOne(gen) {
     if (best.d <= threshold()) break;
     p.w *= 0.5;                                               // this artist sounds different from the seed
   }
-  if (bestAll && bestAll.v) R.target = blend(R.seedVibe, bestAll.v, 0.25);   // follow the music a little, anchored to the seed
+  if (bestAll && bestAll.v) R.target = blend(R.seedVibe, bestAll.v, 0.1);    // barely follow the music: the seed's feel stays the goal
   return bestAll;
 }
 function take(x) {
@@ -254,3 +263,21 @@ async function topUp() {
   fill(15);
 }
 export const active = () => R.guid;
+
+/** «not this»: the artist leaves this radio, and its tracks not yet played leave the playlist */
+export async function ban(name) {
+  if (!R.guid || !name) return;
+  const k = artistKey(name);
+  R.penalty.set(k, 0);
+  const pi = await call('playback.getCurrentTrackIndex');
+  const from = ok(pi) && pi.found !== false && pi.playlistGuid === R.guid ? pi.index + 1 : 0;
+  const c = await call('playlist.getTrackCount', { playlistGuid: R.guid });
+  const total = ok(c) ? c.count || 0 : 0;
+  if (total > from) {
+    const r = await call('playlist.getTracks', { playlistGuid: R.guid, start: from, count: total - from, fields: ['artist', 'albumArtist'] });
+    const items = ok(r) ? (r.tracks || []).map((t, i) => (artistKey(t.albumArtist || t.artist) === k || artistKey(t.artist) === k ? from + i : -1)).filter((i) => i >= 0) : [];
+    if (items.length) await call('playlist.removeTracks', { playlistGuid: R.guid, items });
+  }
+  toast($t('{0} больше не попадёт в это радио', esc(cleanArtist(name))));
+  topUp();
+}

@@ -766,6 +766,8 @@ Lib.shared.onPlayAlbum = () => { if (router.current !== 'now') toast($t('Вос�
   Welcome.init();
   Radio.init({ getAllAlbums: Lib.getAllAlbums });
   Lib.shared.radioFor = (t) => Radio.start(t);
+  Lib.shared.radioActive = () => Radio.active();
+  Lib.shared.radioBan = (name) => Radio.ban(name);
   WinInteg.init({
     state: () => app.state, track: () => app.track, pos: () => Viz.getPosition(),
     dur: () => Viz.progressState.dur || (app.track && app.track.duration) || 0,

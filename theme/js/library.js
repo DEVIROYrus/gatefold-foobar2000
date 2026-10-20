@@ -621,7 +621,9 @@ plList.addEventListener('contextmenu', async (e) => {
   if (!PL.selSet.has(t)) selectOnly(t);
   PL.sel = t; selChanged();
   const n = PL.selSet.size;
-  const radio = shared.radioFor && trackAt(t) ? [{ id: 'radio', label: $t('Радио «Похожее на это»') }] : [];
+  const tr0 = trackAt(t);
+  const radio = shared.radioFor && tr0 ? [{ id: 'radio', label: $t('Радио «Похожее на это»') }] : [];
+  if (shared.radioActive && shared.radioActive() === PL.guid && tr0 && (tr0.artist || tr0.albumArtist)) radio.push({ id: 'radioban', label: $t('Не то — больше не ставить {0}', tr0.albumArtist || tr0.artist) });
   const id = await popupMenu([
     { id: 'play', label: $t('Воспроизвести') },
     { id: 'queue', label: n > 1 ? $t('Добавить в очередь ({0})', n) : $t('Добавить в очередь') },
@@ -637,6 +639,7 @@ plList.addEventListener('contextmenu', async (e) => {
   else if (id === 'queue') queueSelection();
   else if (id === 'del') removeSelected();
   else if (id === 'radio') shared.radioFor(trackAt(t));
+  else if (id === 'radioban') shared.radioBan(tr0.albumArtist || tr0.artist);
   else if (id === 'new' || id.startsWith('pl:')) pickTarget(id);
   else if (id === 'native') {
     // foobar2000's own menu (Convert, ReplayGain, Properties, tagging…) for exactly these rows

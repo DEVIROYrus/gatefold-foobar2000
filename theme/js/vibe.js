@@ -10,13 +10,14 @@
  *   attack     — onsets per second (spectral-flux peaks): how busy the drums and riffs are
  *   flux       — average spectral change: smooth pads vs constant chaos
  *   calm       — share of frames quieter than the track's own average
+ *   minor      — major or minor: the 12-note chroma correlated with Krumhansl's key profiles
  *   tempo      — the strongest period of the onset envelope, 60–200 BPM
  * The numbers are kept per file in IndexedDB, so every track is listened to once.
  */
 import { call, ok, on, log } from './bridge.js';
 import * as IDB from './idb.js';
 
-const STORE = 'vibe.v1';
+const STORE = 'vibe.v2';
 const SR = 11025, N = 1024, HOP = 512, PIECE = 12;
 const cache = new Map();
 let loaded = null, saveT = 0;
@@ -78,6 +79,9 @@ function fftMag(re) {        // in-place radix-2, returns |X| for bins 0..N/2
 /** pieces of mono PCM at SR → raw measurements */
 export function measure(pieces) {
   const rmsDb = [], flux = [], cent = [];
+  const chroma = new Float64Array(12);
+  const pcOf = new Int8Array(N / 2 + 1).fill(-1);
+  for (let k = 1; k <= N / 2; k++) { const f = k * SR / N; if (f >= 190 && f <= 2400) pcOf[k] = ((Math.round(12 * Math.log2(f / 440)) + 69) % 12 + 12) % 12; }
   for (const x of pieces) {
     let prev = null;
     for (let s = 0; s + N <= x.length; s += HOP) {
@@ -89,6 +93,7 @@ export function measure(pieces) {
       let num = 0, den = 0;
       for (let k = 1; k < mag.length; k++) { num += k * mag[k]; den += mag[k]; }
       cent.push(den > 1e-6 ? (num / den) * (SR / N) : 0);
+      if (rms > 0.003) for (let k = 1; k < mag.length; k++) if (pcOf[k] >= 0) chroma[pcOf[k]] += mag[k] * mag[k];
       if (prev) { let f = 0, tot = 0; for (let k = 1; k < mag.length; k++) { const d = mag[k] - prev[k]; if (d > 0) f += d; tot += mag[k]; } flux.push(tot > 1e-6 ? f / tot : 0); }
       else flux.push(0);
       prev = mag;
@@ -121,21 +126,26 @@ export function measure(pieces) {
     if (s > best) { best = s; bestLag = lag; }
   }
   const tempo = bestLag ? (60 * fps) / bestLag : 0;
-  return { loud, dyn, bright: weighted, attack, flux: mean(flux), calm, tempo };
+  // key mode: the best minor key against the best major key (Krumhansl–Kessler profiles)
+  const MAJ = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88], MIN = [6.33, 2.68, 3.52, 5.38, 2.6, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17];
+  const corr = (p, r) => { const x = [...chroma].map((v) => Math.sqrt(v)); const mx = mean(x), mp = mean(p); let s = 0, a = 0, b = 0; for (let i = 0; i < 12; i++) { const u = x[(i + r) % 12] - mx, v = p[i] - mp; s += u * v; a += u * u; b += v * v; } return a && b ? s / Math.sqrt(a * b) : 0; };
+  let bestMaj = -1, bestMin = -1;
+  for (let r = 0; r < 12; r++) { bestMaj = Math.max(bestMaj, corr(MAJ, r)); bestMin = Math.max(bestMin, corr(MIN, r)); }
+  return { loud, dyn, bright: weighted, attack, flux: mean(flux), calm, minor: bestMin - bestMaj, tempo };
 }
 /** raw measurements → a 0…1 vector the distance works on */
 export function vector(m) {
   const c = (v, lo, hi) => Math.max(0, Math.min(1, (v - lo) / (hi - lo)));
-  return [c(m.loud, -32, -8), c(m.dyn, 3, 22), c(m.bright, 500, 2600), c(m.attack, 0.8, 7), c(m.flux, 0.04, 0.32), c(m.calm, 0.3, 0.7), m.tempo];
+  return [c(m.loud, -32, -8), c(m.dyn, 3, 22), c(m.bright, 500, 2600), c(m.attack, 0.8, 7), c(m.flux, 0.04, 0.32), c(m.calm, 0.3, 0.7), c(m.minor, -0.2, 0.2), m.tempo];
 }
-const W = [0.6, 0.9, 1.3, 1.6, 1.4, 0.7];
+const W = [0.6, 0.9, 1.3, 1.6, 1.4, 0.7, 1.4];
 /** 0 = same feel; ~1 = clearly different; tempo compared octave-free */
 export function distance(a, b) {
   if (!a || !b) return 1;
   let s = 0, w = 0;
   for (let i = 0; i < W.length; i++) { s += W[i] * (a[i] - b[i]) ** 2; w += W[i]; }
   let t = 0;
-  if (a[6] && b[6]) { const r = Math.abs(Math.log2(a[6] / b[6])); t = Math.min(r, Math.abs(r - 1)); }   // 70 vs 140 BPM is close
+  if (a[7] && b[7]) { const r = Math.abs(Math.log2(a[7] / b[7])); t = Math.min(r, Math.abs(r - 1)); }   // 70 vs 140 BPM is close
   s += 0.5 * (t * 2) ** 2; w += 0.5;
   return Math.sqrt(s / w) * 2.2;
 }
