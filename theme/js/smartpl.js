@@ -7,10 +7,14 @@
  * each with one simple parameter, shows how many tracks match right now, and creates the
  * autoplaylist. «Your own query» is there for those who do know the syntax.
  * Play statistics (%added%, %play_count%, %last_played%, %rating%) come from foo_playcount.
+ * «By sound» recipes use the neural sound analysis (ml/sound.js): moods and Discogs styles are not
+ * tags foobar2000 can query, so those playlists are made once, from the analysis, not kept live.
  */
 import { call, ok, esc, debounce, plural } from './bridge.js';
 import { router, h, icon, toast } from './ui.js';
 import { $t } from './i18n.js';
+import * as Sound from './ml/sound.js';
+import * as SoundUI from './ml/sound-ui.js';
 
 const ALBUM_ORDER = '%album artist% | %date% | %album% | %discnumber% | %tracknumber%';
 const q = (s) => '"' + String(s).replace(/"/g, '') + '"';
@@ -44,6 +48,13 @@ const RECIPES = [
   { id: 'custom', ic: 'search', title: $t('Свой запрос'), desc: $t('Язык запросов foobar2000 — для тех, кто его знает'),
     param: { kind: 'text' }, name: () => $t('Умный плейлист'), make: (s) => (s && s.trim() ? { query: s.trim() } : null) },
 ];
+const SIZE = { kind: 'seg', def: 50, opts: [[25, '25'], [50, '50'], [100, '100']] };
+const AI = [
+  ...SoundUI.MOOD_RECIPES().map(([k, title, desc]) => ({ id: 'ai-' + k, ai: true, ic: 'sparkle', title, desc, param: SIZE, name: () => title, make: (n) => ({ ai: k, n }) })),
+  { id: 'ai-style', ai: true, ic: 'sparkle', title: $t('Стиль по звучанию'), desc: $t('Один из 400 стилей Discogs — как его слышит нейросеть'),
+    param: { kind: 'style' }, name: (v) => (v >= 0 ? Sound.styleNames()[v] : $t('Стиль')), make: (v) => (v >= 0 ? { ai: 'style', style: v, n: 100 } : null) },
+];
+RECIPES.push(...AI);
 
 let veil = null, cur = null, val = null, genres = null;
 
@@ -52,6 +63,11 @@ const countFor = debounce(async (r) => {
   if (!out) return;
   const spec = r.make(val);
   if (!spec) { out.textContent = ''; return; }
+  if (spec.ai) {
+    const n = SoundUI.countFor(spec.ai, spec.style);
+    out.innerHTML = n ? `<span>${$t('Сейчас подходит: <b>{0}</b> {1}', n.toLocaleString(), plural(n, 'трек', 'трека', 'треков'))}</span>` : `<span class="sp-bad">${$t('Пока ничего не подходит')}</span>`;
+    return;
+  }
   out.innerHTML = `<span class="spinner"></span>`;
   const res = await call('library.query', { query: spec.query, limit: 0, fields: ['title'] });
   if (cur !== r) return;
@@ -83,6 +99,12 @@ function paramUI(r) {
         : `<option value="">${$t('В тегах нет жанров')}</option>`;
     });
     sel.onchange = () => { val = sel.value; syncName(); countFor(r); };
+  } else if (p.kind === 'style') {
+    val = -1;
+    const st = Sound.libraryStyles();
+    const sel = h(`<select class="st-input sp-style">${st.length ? `<option value="-1">${$t('Выберите стиль')}</option>` + st.slice(0, 120).map((x) => `<option value="${x.i}">${esc(x.name)} · ${esc(x.genre)} · ${x.n}</option>`).join('') : `<option value="-1">${$t('Пока нет проанализированных треков')}</option>`}</select>`);
+    sel.onchange = () => { val = +sel.value; syncName(); countFor(r); };
+    box.append(sel);
   } else if (p.kind === 'text') {
     val = '';
     const ta = h(`<textarea class="st-input sp-query" rows="3" spellcheck="false" placeholder="genre HAS jazz AND %date% LESS 1970"></textarea>`);
@@ -103,6 +125,12 @@ function pick(r) {
   veil.querySelectorAll('.sp-card').forEach((c) => c.classList.toggle('on', c.dataset.id === r.id));
   const form = veil.querySelector('.sp-form');
   form.innerHTML = '';
+  if (r.ai && !Sound.ready()) {
+    form.append(h(`<div class="sp-form-h"><b>${r.title}</b><small>${r.desc}</small></div>`),
+      h(`<div class="sp-ai-off">${$t('Эти плейлисты собирает нейросеть, которая слушает вашу медиатеку. Она выключена — включите «Анализ звука (ИИ)» в настройках.')} <button class="btn sm primary">${$t('Открыть настройки')}</button></div>`));
+    form.querySelector('.sp-ai-off button').onclick = () => { close(); SoundUI.openSettings(); };
+    return;
+  }
   form.append(
     h(`<div class="sp-form-h"><b>${r.title}</b><small>${r.desc}</small></div>`),
     paramUI(r),
@@ -122,6 +150,7 @@ async function create() {
   const spec = r.make(val);
   if (!spec) { toast(r.param && r.param.kind === 'genre' ? $t('Выберите жанр') : $t('Введите запрос')); return; }
   const name = (veil.querySelector('.sp-name').value || r.name(val)).trim();
+  if (spec.ai) { close(); await SoundUI.moodPlaylist(spec.ai, name, spec.n, spec.style); return; }
   // a descending order goes into the query as a SORT clause; if this foobar2000 refuses it there,
   // the playlist is made with the plain query (ascending order) rather than not at all
   let res = await call('playlist.createAutoplaylist', spec.sortDesc
@@ -141,7 +170,7 @@ export function open(preset) {
       <button class="icon-btn upd-x" title="${$t('Закрыть')}">${icon('x', 16)}</button>
       <div class="sp-head"><div class="upd-badge">${icon('sparkle', 22)}</div><div><div class="kicker">${$t('Умный плейлист')}</div><h3>${$t('Выберите рецепт')}</h3>
         <div class="sub">${$t('Плейлист сам пополняется: новые подходящие треки появятся в нём без вашего участия')}</div></div></div>
-      <div class="sp-grid">${RECIPES.map((r) => `<button class="sp-card" data-id="${r.id}">${icon(r.ic, 18)}<b>${r.title}</b><small>${r.desc}</small></button>`).join('')}</div>
+      <div class="sp-grid">${RECIPES.map((r, i) => `${r.ai && !(RECIPES[i - 1] || {}).ai ? `<div class="sp-sep">${icon('sparkle', 14)}${$t('По звучанию · нейросеть')}</div>` : ''}<button class="sp-card${r.ai ? ' ai' : ''}" data-id="${r.id}">${icon(r.ic, 18)}<b>${r.title}</b><small>${r.desc}</small></button>`).join('')}</div>
       <div class="sp-form"></div></div></div>`);
     document.body.append(veil);
     veil.addEventListener('click', (e) => {

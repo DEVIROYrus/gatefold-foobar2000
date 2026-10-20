@@ -1,0 +1,56 @@
+name: ML assets
+# Builds the files of «Sound analysis (AI)»: the Discogs-EffNet model and its classification heads
+# (MTG-UPF, CC BY-NC-SA 4.0) converted for onnxruntime-web, checked against Essentia, and published
+#   · on the `ml-assets` branch (models/…) — the theme downloads from raw.githubusercontent.com
+#   · as the pre-release `ml-models-1` — a mirror; it is never marked «latest», so the theme updater ignores it.
+# The models are not part of the theme or the installer: they are downloaded only when a user turns the feature on.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['tools/ml/**', '.github/workflows/ml-assets.yml']
+permissions:
+  contents: write
+concurrency: { group: ml-assets, cancel-in-progress: true }
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - name: Tools (TensorFlow for the conversion in its own environment; Essentia for the reference)
+        run: |
+          python -m venv /tmp/tf && /tmp/tf/bin/pip install -q "tensorflow-cpu==2.15.*" "tf2onnx==1.16.1" "onnx==1.16.*" "numpy<2" "protobuf<4"
+          pip install -q "essentia-tensorflow==2.1b6.dev1389" "onnxruntime==1.22.*" "onnx==1.16.*" "numpy<2"
+      - name: Build
+        shell: bash
+        env: { TF_PYTHON: /tmp/tf/bin/python }
+        run: python tools/ml/build_assets.py out | tee build.log
+      - name: Show the manifest
+        run: |
+          python - <<'EOF'
+          import json; m = json.load(open('out/models/manifest.json'))
+          print('framing', m['framing']); print('effnet', {k: v for k, v in m['effnet'].items() if k != 'classes'})
+          print('heads', [h['id'] for h in m['heads']])
+          assert m['framing']['maxError'] < 0.02, 'the browser front end does not match Essentia'
+          EOF
+      - name: Publish to the ml-assets branch
+        run: |
+          cd out
+          cp ../build.log reference/build.log
+          git init -q -b ml-assets
+          git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A && git commit -qm "ML assets from ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ml-assets
+      - name: Publish the pre-release mirror
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          gh release view ml-models-1 >/dev/null 2>&1 || gh release create ml-models-1 --prerelease --latest=false \
+            --title "AI models (sound analysis)" \
+            --notes "Files for Gatefold's optional sound analysis. Downloaded by the theme only when the feature is turned on. Models: Discogs-EffNet and classification heads by the Music Technology Group, UPF — CC BY-NC-SA 4.0, non-commercial use only. See LICENSE-MODELS.md."
+          gh release upload ml-models-1 out/models/* --clobber
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: ml-build-log, path: build.log }

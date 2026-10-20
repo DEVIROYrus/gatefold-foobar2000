@@ -16,7 +16,7 @@ from playwright.async_api import async_playwright
 
 ROOT = Path(__file__).resolve().parent.parent
 FIX = ROOT / 'tests' / 'fixtures'
-MOCK = ''.join((FIX / f).read_text(encoding='utf-8') for f in ('mock-bridge.js', 'mock-extras.js', 'mock-updates.js', 'mock-prefs.js', 'mock-welcome.js', 'mock-edit.js', 'mock-win.js', 'mock-more.js'))
+MOCK = ''.join((FIX / f).read_text(encoding='utf-8') for f in ('mock-bridge.js', 'mock-extras.js', 'mock-updates.js', 'mock-prefs.js', 'mock-welcome.js', 'mock-edit.js', 'mock-win.js', 'mock-more.js', 'mock-ml.js'))
 VIEWS = ['now', 'playlist', 'artists', 'library', 'queue', 'youtube', 'covers', 'settings']
 # Russian strings that come from the mock music library itself (data, not interface text)
 DATA = ['Слепое пятно', 'Тихий Час', 'Неизвестный Бэнд', 'Другой альбом', 'Кто-то ещё', 'Без обложки', 'Локальная строка',
@@ -461,7 +461,10 @@ async def test_smart_color_radio(browser, port):
     # smart playlist from a recipe
     await pg.click('#btnNewPl'); await pg.wait_for_timeout(300)
     await pg.click("#layer .menu .mi:has-text('Smart playlist')"); await pg.wait_for_timeout(500)
-    check(await pg.evaluate("document.querySelector('.sp-veil').classList.contains('on') && document.querySelectorAll('.sp-card').length") == 11, 'the smart playlist sheet offers eleven recipes')
+    check(await pg.evaluate("document.querySelector('.sp-veil').classList.contains('on') && document.querySelectorAll('.sp-card:not(.ai)').length") == 11, 'the smart playlist sheet offers eleven recipes')
+    check(await pg.evaluate("document.querySelectorAll('.sp-card.ai').length") == 8, 'and eight made by sound (neural analysis)')
+    await pg.click(".sp-card[data-id=ai-calm]"); await pg.wait_for_timeout(300)
+    check('Sound analysis' in await pg.inner_text('.sp-form'), 'with the analysis off, a sound recipe points to the setting')
     await pg.click(".sp-card[data-id=genre]"); await pg.wait_for_timeout(500)
     await choose(pg, '.sp-genre', 'Ambient'); await pg.wait_for_timeout(700)
     check('137' in await pg.inner_text('.sp-count'), 'it shows how many tracks match right now')
@@ -495,7 +498,9 @@ async def test_smart_color_radio(browser, port):
     await nav(pg, 'now', 900)
     await pg.click("#npActions .btn:has-text('Radio')"); await pg.wait_for_timeout(3000)
     toast = await pg.evaluate("[...document.querySelectorAll('.toast')].map(t => t.innerText).join(' | ')")
-    await pg.wait_for_timeout(6000)
+    for _ in range(20):
+        await pg.wait_for_timeout(1000)
+        if len((await pg.evaluate("window.__more.radio") or {}).get('handles', [])) >= 15: break
     r = await pg.evaluate("window.__more.radio")
     check(r and r['name'] == 'Radio: Lumen Arcade' and len(r['handles']) >= 15, f'radio builds a playlist from the library ({r and len(r["handles"])} tracks)')
     arts = await pg.evaluate("(() => { const all = window.__edit.rows || []; return window.__more.radio.handles.map(h => (all.find(t => t.absolutePath === h) || {}).albumArtist); })()")
@@ -506,6 +511,83 @@ async def test_smart_color_radio(browser, port):
     check(all(arts[i] != arts[i + 1] for i in range(1, len(arts) - 1)), 'never the same artist twice in a row')
     check('Unknown Elsewhere' not in arts, 'only artists you have')
     check('by how they sound' in toast, f'it says that tracks are matched by sound {toast[-160:]}')
+    check(not errs, f'no page errors {errs[:2]}')
+    await ctx.close()
+
+ML_FAKE = ROOT / 'tests' / '.ml-fake'
+async def test_sound_ai(browser, port):
+    print('· sound analysis (neural network, stand-in models)')
+    if not (ML_FAKE / 'models' / 'manifest.json').exists():
+        import subprocess; subprocess.run([sys.executable, str(ROOT / 'tools' / 'ml' / 'fake_assets.py'), str(ML_FAKE)], check=True)
+    served = []
+    async def setup(ctx):
+        async def raw(route):
+            name = route.request.url.split('/models/')[-1]; served.append(name)
+            f = ML_FAKE / 'models' / name
+            if f.exists(): await route.fulfill(status=200, body=f.read_bytes(), headers={'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/octet-stream'})
+            else: await route.fulfill(status=404, body='')
+        await ctx.route('https://raw.githubusercontent.com/**', raw)
+    ctx, pg, errs = await page(browser, port, {'language': 'en', 'soundAI': True}, setup=setup, pre="localStorage.setItem('gatefold.ml.pace', '0')")
+    await nav(pg, 'settings', 800)
+    await pg.evaluate("document.querySelector('#st-sound').scrollIntoView()")
+    for _ in range(60):
+        st = await pg.evaluate("document.getElementById('sndStatus')?.innerText || ''")
+        if 'whole library' in st: break
+        await pg.wait_for_timeout(1000)
+    check('whole library is analysed' in st, f'every track of the library gets analysed ({st[:120]})')
+    check('manifest.json' in served and 'discogs-effnet.onnx' in served and 'ort-wasm-simd-threaded.wasm' in served, f'the models come from the ml-assets branch {served[:5]}')
+    check('ms of neural network time' in st and 'test models' in st, 'the status shows the cost per track')
+    if os.environ.get('SHOTS'): await pg.screenshot(path=os.environ['SHOTS'] + '/sound-settings.png')
+    # chips on Now Playing
+    await nav(pg, 'now', 1200)
+    check(await pg.evaluate("document.querySelectorAll('#npBadges .chip.ai').length") >= 1, 'Now Playing shows the style and mood the network hears')
+    # similar tracks
+    await pg.click("#npActions .btn:has-text('Similar')"); await pg.wait_for_timeout(1500)
+    made = await pg.evaluate("window.__ml.created")
+    sim = made[-1] if made else None
+    check(sim and sim['name'].startswith('Like «') and len(sim['handles']) >= 10, f'«Similar» makes a playlist of close-sounding tracks ({sim and sim["name"]}, {sim and len(sim["handles"])})')
+    arts = await pg.evaluate("(h) => { const all = window.__edit.rows || []; return h.map(x => (all.find(t => t.absolutePath === x) || {}).albumArtist); }", sim['handles'] if sim else [])
+    check(arts and not any(a in ('Blue Hours', 'Fern Assembly') for a in arts), f'tracks that sound different are left out {arts}')
+    per = {a: arts[1:].count(a) for a in set(arts[1:])}
+    check(per and max(per.values()) <= 3, f'at most three tracks per artist {per}')
+    # radio by sound
+    await nav(pg, 'now', 900)
+    await pg.click("#npActions .btn:has-text('Radio')"); await pg.wait_for_timeout(2500)
+    toast = await pg.evaluate("[...document.querySelectorAll('.toast')].map(t => t.innerText).join(' | ')")
+    await pg.wait_for_timeout(5000)
+    r = await pg.evaluate("window.__more.radio")
+    arts = await pg.evaluate("(() => { const all = window.__edit.rows || []; return window.__more.radio.handles.map(h => (all.find(t => t.absolutePath === h) || {}).albumArtist); })()")
+    harsh = sum(1 for a in arts if a in ('Blue Hours', 'Fern Assembly'))
+    check(r and len(r['handles']) >= 15, f'the radio fills up ({r and len(r["handles"])})')
+    check(harsh <= len(arts) * 0.1, f'tracks that sound different stay out ({harsh} of {len(arts)})')
+    check(all(arts[i] != arts[i + 1] for i in range(1, len(arts) - 1)), 'never the same artist twice in a row')
+    check('neural network' in toast, f'the radio says the network picks the tracks {toast[-140:]}')
+    # mood playlist from the smart playlist sheet
+    await pg.click('#btnNewPl'); await pg.wait_for_timeout(300)
+    await pg.click("#layer .menu .mi:has-text('Smart playlist')"); await pg.wait_for_timeout(400)
+    await pg.click(".sp-card[data-id=ai-calm]"); await pg.wait_for_timeout(400)
+    cnt = await pg.inner_text('.sp-count')
+    check(re.search(r'\d', cnt) is not None, f'a mood recipe counts the matching tracks ({cnt})')
+    await pg.click('.sp-go'); await pg.wait_for_timeout(1200)
+    made = await pg.evaluate("window.__ml.created")
+    check(made and made[-1]['name'] == 'Calm' and len(made[-1]['handles']) > 0, f'and makes the playlist ({made[-1:] and made[-1]["name"]})')
+    await pg.click('#btnNewPl'); await pg.wait_for_timeout(300)
+    await pg.click("#layer .menu .mi:has-text('Smart playlist')"); await pg.wait_for_timeout(400)
+    await pg.click(".sp-card[data-id=ai-style]"); await pg.wait_for_timeout(400)
+    n_st = await pg.evaluate("document.querySelector('.sp-style').options.length")
+    check(n_st > 1, f'styles heard in the library are offered ({n_st - 1})')
+    await pg.keyboard.press('Escape')
+    # the context menu of a playlist row
+    await nav(pg, 'playlist', 1200)
+    await pg.click('#plList .vrow >> nth=2', button='right'); await pg.wait_for_timeout(400)
+    check(await pg.locator("#layer .menu .mi:has-text('Similar-sounding tracks')").count() == 1, 'a track menu offers similar-sounding tracks')
+    await pg.keyboard.press('Escape')
+    # turning it off and removing everything
+    await nav(pg, 'settings', 800)
+    await pg.evaluate("document.querySelector('#st-sound').scrollIntoView()")
+    await pg.click("#st-sound .btn:has-text('Remove the models')"); await pg.wait_for_timeout(1200)
+    left = await pg.evaluate("(async () => { const m = await import('/theme/js/idb.js'); return [(await m.getAll('sound')).length, await m.kvGet('ml.manifest', null)]; })()")
+    check(left[0] == 0 and left[1] is None, f'«Remove» deletes the results and the models {left[0]}')
     check(not errs, f'no page errors {errs[:2]}')
     await ctx.close()
 
@@ -526,6 +608,7 @@ async def main():
         await test_playlist_editing(browser, port)
         await test_windows(browser, port)
         await test_smart_color_radio(browser, port)
+        await test_sound_ai(browser, port)
         await browser.close()
     httpd.shutdown()
     print(f'\n{len(failures)} failure(s)')

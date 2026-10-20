@@ -4,12 +4,13 @@
  *
  *   thumbs  { k, p, s, b:Blob, fp, a, n }   cover thumbnails (thumbcache.js)
  *   kv      key → any                        lyrics cache, quality scan, change journal
+ *   sound   { k, … }                         sound analysis of each track (ml/sound.js)
  *
  * The database lives in the WebView2 user-data folder on disk, so it survives
  * restarts. Every helper resolves (never rejects): a broken IDB degrades to
  * "no cache", not to a broken UI.
  */
-const NAME = 'aurora', VERSION = 1;
+const NAME = 'aurora', VERSION = 2;
 let dbp = null;
 
 export function db() {
@@ -20,10 +21,11 @@ export function db() {
         const d = rq.result;
         if (!d.objectStoreNames.contains('thumbs')) { const s = d.createObjectStore('thumbs', { keyPath: 'k' }); s.createIndex('a', 'a'); s.createIndex('p', 'p'); }
         if (!d.objectStoreNames.contains('kv')) d.createObjectStore('kv');
+        if (!d.objectStoreNames.contains('sound')) d.createObjectStore('sound', { keyPath: 'k' });
       };
       rq.onsuccess = () => { const d = rq.result; d.onversionchange = () => d.close(); res(d); };
       rq.onerror = () => res(null);
-      rq.onblocked = () => res(null);
+      rq.onblocked = () => setTimeout(() => res(null), 4000);   // an older window still has it open: it closes on versionchange
     } catch { res(null); }
   });
   return dbp;
@@ -85,6 +87,14 @@ export async function walk(store, index, fn) {
       rq.onsuccess = () => { const c = rq.result; if (!c) return; if (fn(c.value, c) === false) return; c.continue(); };
       tx.oncomplete = () => res(); tx.onerror = () => res(); tx.onabort = () => res();
     } catch { res(); }
+  });
+}
+/** Every row of a store. */
+export async function getAll(store) {
+  const d = await db(); if (!d) return [];
+  return new Promise((res) => {
+    try { const r = d.transaction(store).objectStore(store).getAll(); r.onsuccess = () => res(r.result || []); r.onerror = () => res([]); }
+    catch { res([]); }
   });
 }
 export async function clearStore(store) {

@@ -964,6 +964,10 @@ body.side-dragging, body.side-dragging * { cursor: grabbing !important; user-sel
 .sp-card small { grid-column: 1 / -1; color: var(--text-3); font-size: var(--fs-xs); line-height: 1.35; }
 .sp-card:hover { border-color: color-mix(in oklab, var(--accent) 40%, transparent); }
 .sp-card.on { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 14%, transparent); }
+.sp-sep { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; margin-top: 8px; color: var(--text-3); font-size: var(--fs-xs); font-weight: 650; letter-spacing: .02em; text-transform: uppercase; }
+.sp-sep svg { color: var(--accent); }
+.sp-ai-off { color: var(--text-2); font-size: var(--fs-sm); line-height: 1.5; }
+.sp-ai-off .btn { margin-top: 10px; display: flex; }
 .sp-form { margin-top: 16px; padding: 16px; border-radius: 14px; background: var(--hover); display: flex; flex-direction: column; gap: 12px; }
 .sp-form-h b { display: block; font-size: var(--fs-md); }
 .sp-form-h small { color: var(--text-3); font-size: var(--fs-sm); }
@@ -999,3 +1003,11 @@ select.sel-native { display: none !important; }
 .sel-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .sel-btn[disabled] { opacity: .5; cursor: default; }
 .menu { max-height: calc(100vh - 12px); overflow-y: auto; overscroll-behavior: contain; }
+
+/* ================= sound analysis (ml/sound-ui.js) ================= */
+.np-sound { display: contents; }
+.chip.ai { color: var(--text-2); border-style: dashed; }
+.snd-status { line-height: 1.5; }
+.snd-status .dim { color: var(--text-3); }
+.snd-bar { display: block; height: 4px; margin-top: 8px; border-radius: 4px; background: var(--line); overflow: hidden; max-width: 360px; }
+.snd-bar i { display: block; height: 100%; border-radius: 4px; background: var(--accent); transition: width 400ms; }

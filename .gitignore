@@ -6,3 +6,4 @@ stage/
 __pycache__/
 .DS_Store
 Thumbs.db
+tests/.ml-fake/

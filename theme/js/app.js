@@ -9,6 +9,8 @@ import * as Welcome from './welcome.js';
 import * as WinInteg from './wininteg.js';
 import * as Mini from './mini.js';
 import * as Radio from './radio.js';
+import * as Sound from './ml/sound.js';
+import * as SoundUI from './ml/sound-ui.js';
 import { waitForBridge, call, on, ok, normTrack, esc, fmtTime, debounce, log, albumKeyOf, hasBridge, artUrl, plural } from './bridge.js';
 import { settings, setSetting, onSettings } from './settings.js';
 import { router, onRoute, $, h, icon, toast, popupMenu, closeMenus } from './ui.js';
@@ -285,8 +287,14 @@ async function renderBadges(t) {
   if (dr && /^\d+$/.test(dr.trim())) b.push(`<span class="chip" title="${$t('Динамический диапазон (foo_dr_meter)')}">DR${dr.trim()}</span>`);
   if (rg === '1') b.push('<span class="chip" title="ReplayGain">RG</span>');
   if (plays && +plays > 0) b.push(`<span class="chip" title="${$t('Прослушиваний (foo_playcount)')}">▶ ${plays}</span>`);
+  b.push(`<span class="np-sound">${SoundUI.chips(t)}</span>`);
   $('npBadges').innerHTML = b.join('');
 }
+/* the sound-analysis chips appear as soon as the playing track has been analysed */
+Sound.events.addEventListener('change', () => {
+  const box = document.querySelector('#npBadges .np-sound');
+  if (box && app.track && !box.childElementCount) { const html = SoundUI.chips(app.track); if (html) box.innerHTML = html; }
+});
 
 // ---------------------------------------------------------------- next album, prepared ahead
 /* While a track plays, the next album's cover is fetched at the exact URL the
@@ -387,6 +395,7 @@ function renderNpActions() {
   function openNpAlbum() { openTrackAlbum(t); }
   if (!app.art.available && t.album) btn($t('{0}Найти обложку', icon('image')), () => router.go('covers', { manual: CF.jobFromTrack(t) }), 'primary');
   if (t.artist) btn($t('{0}Радио', icon('sparkle')), () => Radio.start(t)).title = $t('Похожая музыка из вашей медиатеки — бесконечно');
+  if (settings.soundAI) btn($t('{0}Похожие', icon('queue')), () => SoundUI.similar(t)).title = $t('Плейлист из треков, которые звучат похоже');
   btn(`${icon('more')}`, () => call('menu.showNativePopup', { mode: 'nowPlaying' }));
 }
 
@@ -768,6 +777,8 @@ Lib.shared.onPlayAlbum = () => { if (router.current !== 'now') toast($t('Вос�
   Lib.shared.radioFor = (t) => Radio.start(t);
   Lib.shared.radioActive = () => Radio.active();
   Lib.shared.radioBan = (name) => Radio.ban(name);
+  Lib.shared.similarFor = (t) => SoundUI.similar(t);
+  Sound.init();
   WinInteg.init({
     state: () => app.state, track: () => app.track, pos: () => Viz.getPosition(),
     dur: () => Viz.progressState.dur || (app.track && app.track.duration) || 0,
