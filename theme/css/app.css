@@ -492,7 +492,7 @@ body.no-viz #viz { display: none; }
 .swatches i { width: 26px; height: 26px; border-radius: 7px; box-shadow: inset 0 0 0 1px var(--line); }
 
 /* ---------- menus, toasts, spinner ---------- */
-#layer { position: fixed; inset: 0; pointer-events: none; z-index: 50; }
+#layer { position: fixed; inset: 0; pointer-events: none; z-index: 9500; }   /* menus open above dialogs (smart playlist sheet, update sheet) */
 .menu {
   position: fixed; min-width: 220px; max-width: 360px; padding: 5px; border-radius: 11px; pointer-events: auto;
   background: var(--surface-2); border: 1px solid var(--line-2); box-shadow: var(--shadow-pop);
@@ -988,3 +988,14 @@ select.st-input { height: 34px; }
 .cr-b.on { transform: scale(1.18); box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--text); }
 .color-ribbon.picked .cr-b:not(.on) { opacity: .45; }
 .cr-info { display: flex; align-items: center; gap: 8px; color: var(--text-3); font-size: var(--fs-sm); }
+
+/* ================= own drop-down lists (select.js) ================= */
+select.sel-native { display: none !important; }
+.sel-btn { display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; font: inherit; font-size: var(--fs-sm); text-align: left; min-width: 0; }
+.sel-btn .sel-txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.sel-btn .sel-chev { flex: none; opacity: .65; transition: transform 140ms var(--ease); }
+.sel-btn.open .sel-chev { transform: rotate(180deg); }
+.sel-btn:hover { border-color: color-mix(in oklab, var(--accent) 40%, var(--line-2)); }
+.sel-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.sel-btn[disabled] { opacity: .5; cursor: default; }
+.menu { max-height: calc(100vh - 12px); overflow-y: auto; overscroll-behavior: contain; }

@@ -22,7 +22,7 @@ Gatefold is a theme for the [foo_ui_webview2](https://github.com/NereaFantasia/f
 - **Playlists in four views:** by album, with covers, tiles and compact. Each playlist remembers its own view.
 - **Real playlist editing:** select with Shift/Ctrl, drag to reorder or onto a playlist in the sidebar, Delete, Ctrl+Z (foobar2000's own undo), Alt+↑/↓; drag playlists to reorder them.
 - **Smart playlists without the query language:** recently added, most played, forgotten favourites, never played, a genre, a decade, lossless, hi-res… with a live count of matching tracks. They stay up to date by themselves.
-- **«More like this» radio:** similar artists you actually have (Deezer's related artists, plus genre and era), never the same artist twice in a row; the playlist keeps topping itself up.
+- **«More like this» radio:** similar artists you actually have (Deezer's related artists and theirs; specific genres as a fallback), and every candidate track is *listened to* — loudness, dynamics, brightness, attack, tempo — so a sad slow seed doesn't turn into a frantic one. Skipped artists come up less; the playlist keeps topping itself up.
 - **Liked** — a heart in the player and on every row. Likes are stored in an ordinary foobar2000 playlist.
 - **Library and Artists:** cover grids, sorting by recently added or played, and album pages. Albums split by guest artists are merged back into one.
 - **The colour wall:** sort the library by cover colour — a rainbow of your albums — and pick a colour to see only those covers.

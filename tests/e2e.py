@@ -57,6 +57,12 @@ async def page(browser, port, settings, setup=None, pre=''):
     await pg.wait_for_timeout(1500)
     return ctx, pg, errs
 
+async def choose(pg, sel, value):
+    # selects are drawn by select.js: open the button's menu and pick the item, like a person would
+    await pg.click(f'{sel} + .sel-btn'); await pg.wait_for_timeout(250)
+    label = await pg.evaluate(f"[...document.querySelector('{sel}').options].find(o => o.value === {json.dumps(value)}).textContent")
+    await pg.click(f"#layer .menu .mi:has-text({json.dumps(label, ensure_ascii=False)})"); await pg.wait_for_timeout(300)
+
 async def nav(pg, v, wait=1100):
     await pg.evaluate(f"document.querySelector('.nav-item[data-view={v}]').click()")
     await pg.wait_for_timeout(wait)
@@ -457,7 +463,7 @@ async def test_smart_color_radio(browser, port):
     await pg.click("#layer .menu .mi:has-text('Smart playlist')"); await pg.wait_for_timeout(500)
     check(await pg.evaluate("document.querySelector('.sp-veil').classList.contains('on') && document.querySelectorAll('.sp-card').length") == 11, 'the smart playlist sheet offers eleven recipes')
     await pg.click(".sp-card[data-id=genre]"); await pg.wait_for_timeout(500)
-    await pg.select_option('.sp-genre', 'Ambient'); await pg.wait_for_timeout(700)
+    await choose(pg, '.sp-genre', 'Ambient'); await pg.wait_for_timeout(700)
     check('137' in await pg.inner_text('.sp-count'), 'it shows how many tracks match right now')
     check(await pg.input_value('.sp-name') == 'Ambient', 'and names the playlist after the choice')
     await pg.click('.sp-go'); await pg.wait_for_timeout(700)
@@ -469,9 +475,14 @@ async def test_smart_color_radio(browser, port):
     check('Playback Statistics' in await pg.inner_text('.sp-count'), 'recipes that need play statistics say so when nothing matches')
     await pg.click('.sp-go'); await pg.wait_for_timeout(600)
     check(await pg.evaluate("window.__more.auto.at(-1).query") == '%added% DURING LAST 7 DAYS SORT DESCENDING BY %added%', 'newest first through a SORT clause')
-    # colour wall
+    # two «Eternity» by unrelated artists in one flat folder stay two albums
     await nav(pg, 'library', 1500)
-    await pg.select_option('#libSort', 'color'); await pg.wait_for_timeout(4500)
+    await pg.fill('#libFilter', 'Eternity'); await pg.wait_for_timeout(800)
+    eters = await pg.evaluate("[...document.querySelectorAll('#libGrid .tile')].map(t => t.innerText.replace(/\\s+/g, ' '))")
+    check(len(eters) == 2 and any('Anathema' in e for e in eters) and any('Kamelot' in e for e in eters), f'same-titled albums of different artists are not merged {eters}')
+    await pg.fill('#libFilter', ''); await pg.wait_for_timeout(500)
+    # colour wall
+    await choose(pg, '#libSort', 'color'); await pg.wait_for_timeout(4500)
     check(await pg.evaluate("!document.querySelector('#libRibbon').hidden"), 'sorting by cover colour shows the colour ribbon')
     n_all = await pg.evaluate("document.querySelectorAll('#libGrid .tile').length")
     await pg.click("#libRibbon .cr-b[data-h='345']"); await pg.wait_for_timeout(800)
@@ -480,17 +491,21 @@ async def test_smart_color_radio(browser, port):
     names = await pg.evaluate("[...document.querySelectorAll('#libGrid .tile')].map(t => t.innerText.split('\\n')[0])")
     check(all('Nightdrive' in x or 'Tidal' in x or 'Sand' in x or 'Under' in x or 'Белый' in x or 'Без' in x for x in names) and any('Nightdrive' in x for x in names), f'the pink-red Nightdrive cover is among them {names[:4]}')
     if os.environ.get('SHOTS'): await pg.click("#libRibbon .cr-b[data-h='345']"); await pg.wait_for_timeout(600); await pg.screenshot(path=os.environ['SHOTS'] + '/colorwall.png')
-    # radio
+    # radio: similar artists, then the ones that also sound alike
     await nav(pg, 'now', 900)
-    await pg.click("#npActions .btn:has-text('Radio')"); await pg.wait_for_timeout(2500)
-    r = await pg.evaluate("window.__more.radio")
-    check(r and r['name'] == 'Radio: Lumen Arcade' and len(r['handles']) >= 20, f'radio builds a playlist from the library ({r and len(r["handles"])} tracks)')
-    arts = await pg.evaluate("(() => { const all = window.__edit.rows || []; return window.__more.radio.handles.map(h => (all.find(t => t.absolutePath === h) || {}).albumArtist); })()")
-    check(arts and arts[0] == 'Lumen Arcade' and len(set(arts)) >= 3, f'starting from the seed, with similar artists {sorted(set(arts))}')
-    check(all(arts[i] != arts[i + 1] or arts[i] is None for i in range(1, len(arts) - 1)) , 'never the same artist twice in a row')
-    check('Unknown Elsewhere' not in arts, 'only artists you have')
+    await pg.click("#npActions .btn:has-text('Radio')"); await pg.wait_for_timeout(3000)
     toast = await pg.evaluate("[...document.querySelectorAll('.toast')].map(t => t.innerText).join(' | ')")
-    check('similar artists from your library' in toast, f'it says where the music comes from {toast[-120:]}')
+    await pg.wait_for_timeout(6000)
+    r = await pg.evaluate("window.__more.radio")
+    check(r and r['name'] == 'Radio: Lumen Arcade' and len(r['handles']) >= 15, f'radio builds a playlist from the library ({r and len(r["handles"])} tracks)')
+    arts = await pg.evaluate("(() => { const all = window.__edit.rows || []; return window.__more.radio.handles.map(h => (all.find(t => t.absolutePath === h) || {}).albumArtist); })()")
+    harsh = sum(1 for a in arts if a in ('Blue Hours', 'Fern Assembly'))
+    check(arts and arts[0] == 'Lumen Arcade', 'it starts with the seed track')
+    check(harsh <= len(arts) * 0.25, f'artists whose music sounds different stay rare ({harsh} of {len(arts)}: {sorted(set(arts))})')
+    check('Mirage Theory' in arts, 'a similar artist that also sounds alike is played')
+    check(all(arts[i] != arts[i + 1] for i in range(1, len(arts) - 1)), 'never the same artist twice in a row')
+    check('Unknown Elsewhere' not in arts, 'only artists you have')
+    check('by how they sound' in toast, f'it says that tracks are matched by sound {toast[-160:]}')
     check(not errs, f'no page errors {errs[:2]}')
     await ctx.close()
 

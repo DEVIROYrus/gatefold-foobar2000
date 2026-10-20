@@ -3,6 +3,7 @@
  */
 import './i18n-boot.js';
 import './tooltip.js';
+import './select.js';
 import * as UpdUI from './update-ui.js';
 import * as Welcome from './welcome.js';
 import * as WinInteg from './wininteg.js';

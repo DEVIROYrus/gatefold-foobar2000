@@ -796,7 +796,7 @@ const GAP = 8, PAD = 20;
    needs it in a session it is shown from that snapshot at once, and the real list
    is read from foobar a moment later in the background — the grid is redrawn only
    if something actually changed. */
-const SNAP = 'library.snapshot.v3';   // v3: albums merged (see mergeAlbums)
+const SNAP = 'library.snapshot.v4';   // v4: albums merged only within one-release folders or by a shared artist (see mergeAlbums)
 export const libEvents = new EventTarget();
 const fnv = (str) => { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36) + ':' + str.length; };
 async function fromSnapshot() {
@@ -844,6 +844,10 @@ function releaseDir(p) {
 const SPLIT = /\s*(?:,|;|\/|&|\+|\bfeat\.?|\bft\.?|\bfeaturing\b|\bwith\b|\bvs\.?|\bx\b|\bи\b)\s*/i;
 const artistTokens = (a) => new Set([a.albumArtist, a.artist].flatMap((x) => String(x || '').toLowerCase().split(SPLIT)).map((x) => x.trim()).filter(Boolean));
 export function mergeAlbums(rows) {
+  // a folder is trusted as «one release» only when every album row in it has the same title;
+  // a flat folder holding many albums (or two different «Eternity») must not glue them together
+  const titlesIn = new Map();
+  for (const a of rows) { const d = releaseDir(a.firstTrackAbsolutePath); if (!d) continue; let s = titlesIn.get(d); if (!s) titlesIn.set(d, s = new Set()); s.add(normTitle(a.name)); }
   const groups = new Map();
   for (const a of rows) {
     const t = normTitle(a.name), d = releaseDir(a.firstTrackAbsolutePath);
@@ -853,13 +857,22 @@ export function mergeAlbums(rows) {
   }
   const out = [], index = new Map();
   for (const g0 of groups.values()) {
-    // without a folder, only rows sharing an artist name belong together
-    const clusters = [];
-    if (releaseDir(g0[0].firstTrackAbsolutePath)) clusters.push(g0);
-    else for (const a of g0) {
+    // rows that share an artist name belong together (YUJU + «YUJU, JUNNY»)
+    let clusters = [];
+    for (const a of g0) {
       const tk = artistTokens(a);
-      const c = clusters.find((cl) => cl.tokens && [...tk].some((x) => cl.tokens.has(x)));
+      const c = clusters.find((cl) => [...tk].some((x) => cl.tokens.has(x)));
       if (c) { c.push(a); tk.forEach((x) => c.tokens.add(x)); } else { const n = [a]; n.tokens = tk; clusters.push(n); }
+    }
+    // in a folder that holds only this title, the leftovers without a shared name are guest tracks or a
+    // soundtrack's per-track artists: fragments of at most two tracks join the main part. Two whole
+    // albums by unrelated artists never join, wherever they lie.
+    const dir = releaseDir(g0[0].firstTrackAbsolutePath);
+    if (clusters.length > 1 && dir && titlesIn.get(dir) && titlesIn.get(dir).size === 1) {
+      const size = (c) => c.reduce((n, x) => n + (x.trackCount || 0), 0);
+      const whole = clusters.filter((c) => size(c) >= 3);
+      if (whole.length <= 1) clusters = [clusters.flat()];
+      else { const main = whole.sort((a, b) => size(b) - size(a))[0]; for (const c of clusters) if (size(c) < 3) main.push(...c); clusters = whole; }
     }
     for (const g of clusters) {
       if (g.length === 1) { out.push(g[0]); index.set(albumKeyOf(g[0].albumArtist, g[0].name), g[0]); continue; }
