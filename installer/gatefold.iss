@@ -147,6 +147,8 @@ en.LastStep1=In foobar2000 open File → Preferences → Display, choose “Webv
 ru.LastStep1=В foobar2000 откройте File → Preferences → Display, выберите «Webview2 UI» в списке Default User Interface и нажмите OK. foobar2000 не даёт другим программам менять этот параметр, поэтому нужен один щелчок — только один раз.
 en.LastStep2=Then on the Display → WebView2 UI page choose the “%1” template and press Apply.
 ru.LastStep2=Затем на странице Display → WebView2 UI выберите шаблон «%1» и нажмите Apply.
+en.ReadyFirstStart=Everything is in place: foobar2000 opens straight in Gatefold.
+ru.ReadyFirstStart=Всё готово: foobar2000 сразу откроется в Gatefold.
 en.LastStepUpd=Everything is in place — your interface is updated. Restart foobar2000 if it was open.
 ru.LastStepUpd=Всё на месте — интерфейс обновлён. Перезапустите foobar2000, если он был открыт.
 en.Launch=Open foobar2000
@@ -166,6 +168,9 @@ Source: "deps\{#FB2K_FILE}"; Flags: dontcopy
 Source: "deps\MicrosoftEdgeWebview2Setup.exe"; Flags: dontcopy
 ; uninstaller icon
 Source: "assets\gatefold.ico"; DestDir: "{app}"; Flags: ignoreversion
+; a profile without any configuration yet: foobar2000's first start opens in Gatefold instead of asking
+; which interface to use (see tools/make_fresh_config.py). Never over an existing configuration.
+Source: "assets\fresh-config.sqlite"; DestDir: "{code:ProfileDir}"; DestName: "config.sqlite"; Flags: onlyifdoesntexist uninsneveruninstall; Check: IsPresetUI
 
 [Registry]
 Root: HKCU; Subkey: "Software\Gatefold"; ValueType: string; ValueName: "ThemeDir"; ValueData: "{code:ThemeDir}"; Flags: uninsdeletekey
@@ -197,6 +202,7 @@ var
   PickBtn: TNewButton;
   FinishNote, FinishHead: TNewStaticText;
   FbMissing: Boolean;
+  PresetUI: Boolean;   { the profile had no configuration: Gatefold is set as the interface }
 
 { ---------------------------------------------------------------- helpers }
 function VerPart(var S: String): Integer;
@@ -541,9 +547,15 @@ begin
   end;
 end;
 
+function IsPresetUI: Boolean; begin Result := PresetUI; end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
-  if CurStep = ssInstall then InstallDependencies;
+  if CurStep = ssInstall then begin
+    InstallDependencies;
+    PresetUI := not FileExists(AddBackslash(ProfDir) + 'config.sqlite');
+    if PresetUI then Log('Profile has no configuration yet: foobar2000 will start in Webview2 UI');
+  end;
 end;
 
 { ---------------------------------------------------------------- finish page: the one manual step }
@@ -552,6 +564,7 @@ var T: String;
 begin
   if CurPageID <> wpFinished then Exit;
   if InPlace then T := CustomMessage('LastStepUpd')
+  else if PresetUI then T := CustomMessage('ReadyFirstStart')
   else begin
     T := CustomMessage('LastStep1');
     if TplName <> 'default' then T := T + #13#10#13#10 + FmtMessage(CustomMessage('LastStep2'), [TplName]);
@@ -570,10 +583,10 @@ begin
     FinishNote.Left := WizardForm.FinishedLabel.Left;
     FinishNote.Width := WizardForm.FinishedLabel.Width;
   end;
-  FinishHead.Visible := not InPlace;
+  FinishHead.Visible := not InPlace and not PresetUI;
   FinishHead.Caption := CustomMessage('LastStepTitle');
   FinishHead.Top := WizardForm.FinishedLabel.Top + WizardForm.FinishedLabel.Height + ScaleY(14);
-  if InPlace then FinishNote.Top := FinishHead.Top else FinishNote.Top := FinishHead.Top + FinishHead.Height + ScaleY(6);
+  if InPlace or PresetUI then FinishNote.Top := FinishHead.Top else FinishNote.Top := FinishHead.Top + FinishHead.Height + ScaleY(6);
   FinishNote.Height := WizardForm.FinishedPage.Height - FinishNote.Top - ScaleY(60);
   FinishNote.Caption := T;
   if WizardForm.RunList.Items.Count > 0 then
