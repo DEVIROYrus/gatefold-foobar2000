@@ -27,11 +27,13 @@ if ($p) {
   $cond = New-Object System.Windows.Automation.PropertyCondition ($A::ProcessIdProperty), $p.Id
   $wins = @($A::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children, $cond))
 }
-foreach ($w in $wins) { 'window: {0} | "{1}"' -f $w.Current.ClassName, $w.Current.Name }
+# read everything now: once foobar2000 has closed, its windows can no longer be asked
+$info = @($wins | ForEach-Object { [pscustomobject]@{ Class = $_.Current.ClassName; Name = $_.Current.Name } })
+foreach ($w in $info) { 'window: {0} | "{1}"' -f $w.Class, $w.Name }
 & $fb /exit 2>$null
 for ($i = 0; $i -lt 20 -and (Get-Process foobar2000 -ErrorAction SilentlyContinue); $i++) { Start-Sleep 1 }
 Stop-Process -Name foobar2000 -Force -ErrorAction SilentlyContinue
 if (-not $p) { throw 'foobar2000 did not start' }
-if ($wins | Where-Object { $_.Current.Name -match 'user interface' }) { throw 'foobar2000 asked which user interface to use' }
-if (-not ($wins | Where-Object { $_.Current.ClassName -eq 'foo_ui_webview2_MainWindow' })) { throw 'foobar2000 did not open in Webview2 UI' }
+if ($info | Where-Object { $_.Name -match 'user interface' }) { throw 'foobar2000 asked which user interface to use' }
+if (-not ($info | Where-Object { $_.Class -eq 'foo_ui_webview2_MainWindow' })) { throw 'foobar2000 did not open in Webview2 UI' }
 'ok: the first start opens in Gatefold'
