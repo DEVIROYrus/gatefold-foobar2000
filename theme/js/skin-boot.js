@@ -4,7 +4,7 @@
 (function () {
   try {
     var s = JSON.parse(localStorage.getItem('aurora.settings.v1') || '{}');
-    if (!s.funMode) return;
+    if (!s.funMode || document.documentElement.hasAttribute('data-panel')) return;
     var k = JSON.parse(localStorage.getItem('aurora.fun.skin') || 'null');
     if (!k || !/^(toon|pixel|metal)$/.test(k.id)) return;
     var r = document.documentElement, o = k.opt || {};

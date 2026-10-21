@@ -1,7 +1,7 @@
 // mock-showcase.js — the outermost mock layer for the README screenshots and the demo: a real music
 // library (Creative-Commons albums, tools/showcase/albums.json) instead of the test fixtures.
 // window.__SHOW = { catalog, http, mode }  — catalog.json from build.py; http = recorded responses
-// (MusicBrainz by URL, LRCLIB by artist|title); mode 'record' (CI: real network through /proxy, real
+// (MusicBrainz, by URL); mode 'record' (CI: real network through /proxy, real
 // audio through /pcm) or 'replay' (local: recorded answers only).
 (() => {
   const S = window.__SHOW; if (!S) return;
@@ -36,9 +36,6 @@
   const rec = S.http || {};
   const replay = (url) => {
     if (rec[url]) return rec[url];
-    const u = new URL(url), q = u.searchParams;
-    if (/lrclib\.net\/api\/get/.test(url)) { const x = rec['lrclib|' + (q.get('artist_name') || '').toLowerCase() + '|' + (q.get('track_name') || '').toLowerCase()]; return x ? { status: 200, body: JSON.stringify(x) } : { status: 404, body: '{"code":404}' }; }
-    if (/lrclib\.net\/api\/search/.test(url)) { const t = (q.get('track_name') || '').toLowerCase(); const hit = Object.entries(rec).find(([k]) => k.startsWith('lrclib|') && k.endsWith('|' + t)); return { status: 200, body: JSON.stringify(hit ? [hit[1]] : []) }; }
     return null;
   };
   const pcm = async (p) => {   // CI only: real audio, decoded by ffmpeg on the build server
@@ -84,7 +81,7 @@
     'audio.decodePcm': (p) => (S.mode === 'record' ? pcm(p) : ok({ success: false })),
     'http.get': async (p) => {
       const u = String(p.url);
-      if (!/musicbrainz\.org|lrclib\.net/.test(u)) return ok({ status: 404, body: '' });
+      if (!/musicbrainz\.org/.test(u)) return ok({ status: 404, body: '' });
       if (S.mode === 'record') { const r = await (await fetch('/proxy?url=' + encodeURIComponent(u))).json(); return ok(r); }
       const r = replay(u); return ok(r || { status: 404, body: '' });
     },

@@ -6,8 +6,7 @@ Runs in CI (the Internet Archive is reachable there):  python tools/showcase/bui
 2. reads their tags and cover art → out/catalog.json, out/covers/*.jpg, out/waves.json;
 3. runs Gatefold's own sound analysis on them (the real models; audio decoded by ffmpeg) in headless
    Chromium, with MusicBrainz reached for real → out/sound.json, out/kv.json, out/http.json;
-4. looks up synced lyrics on LRCLIB → out/http.json;
-5. out/covers.png: a contact sheet to check the covers.
+4. out/covers.png: a contact sheet to check the covers.
 tools/showcase/shoot.py then takes the screenshots from out/ locally.
 """
 import asyncio, base64, hashlib, http.server, io, json, os, re, socketserver, subprocess, sys, threading, time, urllib.parse, urllib.request
@@ -117,6 +116,7 @@ for A in CFG['albums']:
         title = tag(m, 'TIT2', 'title', 'TITLE') or f.get('title') or Path(f['name']).stem
         title = re.sub(r'^\d+\s*[-_.]?\s*_?', '', title) if re.match(r'^\d+\s*[-_. ]', title) and not A.get('keepnum') else title
         title = re.sub(r'^_?' + re.escape(A['artist']) + r'_-_', '', title, flags=re.I).replace('_', ' ').strip()
+        title = re.sub(r'^' + re.escape(A['artist']) + r'\s*[-–]\s*', '', title, flags=re.I).strip()
         tn = tag(m, 'TRCK', 'tracknumber', 'TRACKNUMBER') or str(len(tracks) + 1)
         tn = int(re.match(r'\d+', tn).group()) if re.match(r'\d+', tn) else len(tracks) + 1
         codec = 'FLAC' if isinstance(m, FLAC) else 'MP3' if isinstance(m, MP3) else 'Vorbis'
@@ -128,6 +128,11 @@ for A in CFG['albums']:
         path = f'D:\\Music\\{safe(A["artist"])}\\{safe(A["album"])}\\{tn:02d} {safe(title)}{ext}'
         bits = getattr(info, 'bits_per_sample', 0) or 0
         br = getattr(info, 'bitrate', 0) or 0
+        if (not bits and isinstance(m, FLAC)) or not br:
+            pr = json.loads(subprocess.run(['ffprobe', '-v', 'error', '-select_streams', 'a:0', '-show_entries', 'stream=bits_per_raw_sample,sample_rate:format=bit_rate,duration', '-of', 'json', str(loc)], capture_output=True, text=True).stdout or '{}')
+            stv = (pr.get('streams') or [{}])[0]; fm = pr.get('format') or {}
+            if not bits and isinstance(m, FLAC): bits = int(stv.get('bits_per_raw_sample') or 0)
+            if not br: br = int(fm.get('bit_rate') or 0) or (int(loc.stat().st_size * 8 / max(1, float(fm.get('duration') or dur or 1))))
         t = {'title': title, 'artist': tag(m, 'TPE1', 'artist', 'ARTIST') or A['artist'], 'album': A['album'], 'albumArtist': A['artist'],
              'trackNumber': tn, 'duration': round(dur, 2), 'codec': codec, 'profile': prof, 'bitrate': round(br / 1000) if br else 0,
              'sampleRate': getattr(info, 'sample_rate', 44100), 'bitsPerSample': bits, 'channels': getattr(info, 'channels', 2),
@@ -147,13 +152,19 @@ for A in CFG['albums']:
     tracks.sort(key=lambda t: t['trackNumber'])
     # cover: the biggest embedded picture, else the biggest image of the item
     cover = max(pics, key=size_of) if pics else None
-    if not FAKE and (not cover or size_of(cover) < 300 * 300):
+    for c in ([] if FAKE else A.get('cover', [])):
+        item, name = (c.split('/', 1) if '/' in c else (ident, c))
+        st, b = fetch(f'https://archive.org/download/{urllib.parse.quote(item)}/{urllib.parse.quote(name)}')
+        if st == 200 and size_of(b) >= 250 * 250: cover = b; print('   cover:', c, Image.open(io.BytesIO(b)).size, flush=True); break
+    if not FAKE and not A.get('cover') and (not cover or size_of(cover) < 300 * 300):
         for f in fl:
             if f['name'].lower().endswith(('.jpg', '.jpeg', '.png')) and not re.search(r'spectrogram|_thumb|_vbr\.png$|^\d+[_-].*\.png$', f['name']):
                 st, b = fetch(f'https://archive.org/download/{urllib.parse.quote(ident)}/{urllib.parse.quote(f["name"])}')
                 if st == 200 and size_of(b) > size_of(cover or b''): cover = b
     if not cover: st, cover = fetch(f'https://archive.org/services/img/{urllib.parse.quote(ident)}')
     im = Image.open(io.BytesIO(cover)).convert('RGB'); src = im.size
+    if A.get('crop') in ('left', 'right'):   # a fold-out scan: the front is one half
+        w, h = im.size; im = im.crop((w // 2, 0, w, h) if A['crop'] == 'right' else (0, 0, w // 2, h))
     im.thumbnail((1200, 1200), Image.LANCZOS)
     cname = f'covers/{slug(A["artist"] + "-" + A["album"])}.jpg'; im.save(OUT / cname, 'JPEG', quality=90)
     md = meta.get('metadata', {})
@@ -172,15 +183,7 @@ for i, a in enumerate(catalog['albums'][:14]):
     im = Image.open(OUT / a['cover']); im.thumbnail((W, W)); sheet.paste(im, ((i % 7) * W, (i // 7) * W))
 sheet.save(OUT / 'covers.png')
 
-# ------------------------------------------------------------------ 4. lyrics (LRCLIB)
 http_rec = {}
-for t in ([] if FAKE else catalog['tracks']):
-    q = urllib.parse.urlencode({'artist_name': t['artist'], 'track_name': t['title'], 'album_name': t['album'], 'duration': round(t['duration'])})
-    st, b = fetch('https://lrclib.net/api/get?' + q, tries=2, timeout=30)
-    if st == 200:
-        j = json.loads(b)
-        if j.get('syncedLyrics') or j.get('plainLyrics'): http_rec['lrclib|' + t['artist'].lower() + '|' + t['title'].lower()] = j; print('  lyrics:', t['artist'], '-', t['title'], 'synced' if j.get('syncedLyrics') else 'plain')
-    time.sleep(0.3)
 
 # ------------------------------------------------------------------ 3. sound analysis in Gatefold itself
 class H(http.server.SimpleHTTPRequestHandler):

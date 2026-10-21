@@ -1,0 +1,36 @@
+/* Gatefold · seekbar panel (seekbar.html) */
+html, body.sb-page { height: 100%; margin: 0; overflow: hidden; }
+body.sb-page { display: block; font-family: 'Inter Var', 'Segoe UI Variable Text', 'Segoe UI', sans-serif; color: var(--text);
+  background: var(--bg); transition: background-color 420ms var(--ease); }
+body.sb-page.sb-transparent { background: transparent; }
+.sb { position: fixed; inset: 0; display: flex; align-items: center; gap: clamp(6px, 18cqh, 12px); padding: 0 clamp(6px, 20cqh, 12px); box-sizing: border-box;
+  container-type: size; cursor: default; }
+/* «Colour» background: the album's own, with a soft glow of its accent on the left */
+body.sb-page:not(.sb-transparent) .sb { background: radial-gradient(90% 260% at 0% 50%, color-mix(in oklab, var(--accent) 16%, transparent), transparent 70%); }
+
+.sb-art { position: relative; flex: none; height: calc(100% - 8px); max-height: 96px; aspect-ratio: 1; border-radius: 5px; overflow: hidden; background: var(--surface); display: none;
+  box-shadow: 0 4px 14px -8px rgb(0 0 0 / .6); }
+.sb.with-cover .sb-art { display: block; }
+.sb-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 260ms var(--ease); }
+.sb-art img.on { opacity: 1; }
+.sb-ph { position: absolute; inset: 0; display: grid; place-items: center; font-weight: 800; font-size: 11px; color: rgb(255 255 255 / .85); }
+
+.sb-time { flex: none; min-width: 3.2em; font-size: clamp(10px, 30cqh, 13px); font-weight: 500; color: var(--text-2); font-variant-numeric: tabular-nums; letter-spacing: -.01em; white-space: nowrap; }
+.sb-time.r { text-align: right; color: var(--text-3); }
+.sb.no-time .sb-time, .sb.idle .sb-time { display: none; }
+
+.sb-track { position: relative; flex: 1; min-width: 0; height: calc(100% - 6px); max-height: 140px; cursor: pointer; outline: none; touch-action: none; }
+.sb.idle .sb-track { cursor: default; opacity: .55; }
+.sb-track canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.sb-track:focus-visible { box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 60%, transparent); border-radius: 4px; }
+
+/* the time under the pointer: a small pill riding on the bar */
+.sb-tip { position: absolute; left: 0; top: 50%; padding: 1px 7px; border-radius: 999px; pointer-events: none; white-space: nowrap;
+  font-size: clamp(10px, 26cqh, 12px); font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.5;
+  color: var(--text); background: color-mix(in oklab, var(--bg) 82%, transparent); box-shadow: 0 0 0 1px color-mix(in oklab, var(--text) 14%, transparent);
+  backdrop-filter: blur(6px); opacity: 0; transition: opacity 120ms; }
+.sb-tip.on { opacity: 1; }
+
+/* very small panels: the bar alone */
+@container (max-height: 18px) { .sb-time, .sb-art { display: none !important; } }
+@container (max-width: 220px) { .sb-time { display: none; } }

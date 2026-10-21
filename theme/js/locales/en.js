@@ -969,5 +969,21 @@ export default {
  "По прослушиваниям": "By listening",
  "По тегам": "By tags",
  "{0} подходит сейчас": "{0} match right now",
- "Например": "For example"
+ "Например": "For example",
+ "Gatefold · Полоса перемотки": "Gatefold · Seekbar",
+ "Позиция": "Position",
+ "Столбики": "Bars",
+ "Сплошная": "Solid",
+ "Линия": "Line",
+ "Тёмные": "Dark",
+ "Светлые": "Light",
+ "Серые": "Grey",
+ "Цветной": "Colour",
+ "Прозрачный": "Transparent",
+ "Прошло / всего": "Elapsed / total",
+ "Осталось": "Remaining",
+ "Цвета": "Colours",
+ "Показывать обложку": "Show the cover",
+ "Колесо мыши перематывает": "Mouse wheel seeks",
+ "Сбросить настройки панели": "Reset this panel"
 };

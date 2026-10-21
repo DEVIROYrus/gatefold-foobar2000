@@ -33,6 +33,7 @@ jobs:
         shell: pwsh
         run: |
           $v = (Get-Content package.json | ConvertFrom-Json).version
+          python tools/make_panels.py installer/build/panels
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /Qp "/DAppVersion=$v" installer/gatefold.iss
           $exe = Get-ChildItem dist/Gatefold-Setup-*.exe | Select-Object -First 1
           $p = Start-Process $exe.FullName -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/LOG=setup.log' -Wait -PassThru

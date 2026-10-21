@@ -54,7 +54,7 @@ for (const [f, [src, ast]] of asts) {
     if (n.callee.name === 'plural' && n.arguments.length === 4 && n.arguments.slice(1).every((a) => a.type === 'Literal')) keys.add(n.arguments.slice(1).map((a) => a.value).join('|'));
   });
 }
-for (const h of ['index.html', 'canvas.html', 'mini.html']) {
+for (const h of ['index.html', 'canvas.html', 'mini.html', 'seekbar.html']) {
   const s = fs.readFileSync(path.join(THEME, h), 'utf8').replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>|<!--[\s\S]*?-->/g, '');
   for (const m of s.matchAll(/>([^<]+)</g)) { const k = m[1].trim().replace(/\s+/g, ' '); if (/[А-Яа-яЁё]/.test(k)) keys.add(k); }
   for (const m of s.matchAll(/\b(?:title|placeholder|aria-label|alt)="([^"]*)"/g)) if (/[А-Яа-яЁё]/.test(m[1])) keys.add(m[1]);
