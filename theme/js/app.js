@@ -20,6 +20,7 @@ import { router, onRoute, $, h, icon, toast, popupMenu, closeMenus } from './ui.
 import * as Theme from './theme.js';
 import * as WFS from './winfs.js';
 import * as Viz from './viz.js';
+import * as VU from './vu.js';
 import * as CF from './coverfetch.js';
 import * as Lib from './library.js';
 import * as LY from './lyrics.js';
@@ -260,9 +261,10 @@ export function refreshSpectrum() { updateSpectrum(); }
 export const player = () => app;
 function updateSpectrum() {
   const want = app.state === 'playing' && Viz.vizState.windowVisible &&
-    ((router.current === 'now' && (settings.visualizer || settings.beatReact)) || Viz.vizState.extra.size > 0);
+    ((router.current === 'now' && (settings.visualizer || settings.beatReact || settings.vuMeters)) || Viz.vizState.extra.size > 0);
   Viz.vizState.nowVisible = router.current === 'now';
   Viz.updateSpectrumSubscription(want);
+  VU.kick();
 }
 
 async function setTrack(t, { fromEvent = false } = {}) {
@@ -811,6 +813,7 @@ Lib.shared.onPlayAlbum = () => { if (router.current !== 'now') toast($t('Вос�
   Lib.shared.similarFor = (t) => SoundUI.similar(t);
   Sound.init();
   Genres.init({ getAllAlbums: Lib.getAllAlbums });
+  VU.init({ onNeedSpectrum: updateSpectrum });
   WinInteg.init({
     state: () => app.state, track: () => app.track, pos: () => Viz.getPosition(),
     dur: () => Viz.progressState.dur || (app.track && app.track.duration) || 0,

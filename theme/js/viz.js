@@ -56,7 +56,7 @@ on('audio:spectrum', (d) => {
  * in js/spectrum-worker.js, as often as the display refreshes. If the stream is
  * unavailable (experimental API) or silent, the old subscription is used.
  */
-const BANDS = 56, FFT_N = 4096, SID = 'aurora-viz';
+const BANDS = 56, FFT_N = 4096, SID = 'aurora-viz', RMS_N = 2048;
 const stream = { on: false, buf: null, f32: null, u32: null, ch: 2, sr: 44100, epoch: -1, lastWrite: -1, lastNew: 0, pending: false, worker: null, mode: 'none', broken: false, armed: 0 };
 let wantSpec = false;
 
@@ -94,13 +94,17 @@ function readStream() {
     if (written === stream.lastWrite || !cap) return null;
     const out = new Float32Array(FFT_N);
     const inv = 1 / ch;
+    // the VU meters (vu.js): mean square of the newest RMS_N frames, left and right
+    const sq0 = FFT_N - RMS_N; let qL = 0, qR = 0;
     for (let i = 0; i < FFT_N; i++) {
       let s = (slot - FFT_N + i) % cap; if (s < 0) s += cap;
       const base = 16 + s * ch;            // 64-byte header = 16 floats
       let v = 0; for (let c = 0; c < ch; c++) v += f[base + c];
       out[i] = v * inv;
+      if (i >= sq0) { const l = f[base], r = ch > 1 ? f[base + 1] : l; qL += l * l; qR += r * r; }
     }
     if (u[7] !== s1) continue;             // overwritten while copying → once more
+    stream.rms = [Math.sqrt(qL / RMS_N), Math.sqrt(qR / RMS_N)]; stream.rmsAt = performance.now();
     stream.lastWrite = written;
     return out;
   }
@@ -156,6 +160,12 @@ export async function updateSpectrumSubscription(want) {
   }
 }
 export const spectrumMode = () => stream.mode;
+/** RMS of the left and right channel of what is playing (0…1, linear), for the VU meters; null when there is
+   no live PCM (the host-FFT fallback): the meters then follow the spectrum level, the same on both sides */
+export function channelRms() {
+  if (stream.mode === 'stream' && stream.rms && performance.now() - stream.rmsAt < 250) return stream.rms;
+  return null;
+}
 export const spectrumBars = () => spec.bars;
 /** Smoothed signals for optional effects: bars (0..1), beat envelope, band energies. */
 export function signals() {
@@ -220,6 +230,7 @@ function drawSpectrum() {
   const g = c.createLinearGradient(0, vh, 0, 0);
   g.addColorStop(0, colors.b); g.addColorStop(1, colors.a);
   c.fillStyle = g;
+  if (bw <= 0) return;                     // hidden or not laid out yet (e.g. just shown again after the VU meters)
   const r = Math.min(bw / 2, 4 * dpr());
   for (let i = 0; i < n; i++) {
     const h = Math.max(2 * dpr(), spec.bars[i] * vh * 0.94);
@@ -384,7 +395,7 @@ function frame(now) {
         lastSpec = now;
         pumpStream();
         const live = stepSpectrum();
-        if (vizState.nowVisible && settings.visualizer) drawSpectrum();
+        if (vizState.nowVisible && settings.visualizer && !settings.vuMeters) drawSpectrum();
         if (vizState.nowVisible) applyBeat();
         if (live) needFrames = true;
       } else needFrames = true;

@@ -465,6 +465,39 @@ async def test_windows(browser, port):
     check(not errs, f'mini: no page errors {errs[:2]}')
     await ctx.close()
 
+async def test_vu(browser, port):
+    print('· VU meters (off by default)')
+    ctx, pg, errs = await page(browser, port, {'language': 'en'})
+    await nav(pg, 'now', 1200)
+    check(not await pg.evaluate("!!document.querySelector('.vu-box')") and await pg.evaluate("getComputedStyle(document.getElementById('viz')).display") != 'none', 'off by default: the spectrum, no meters')
+    await nav(pg, 'settings', 900)
+    await pg.evaluate("[...document.querySelectorAll('#st-look .row')].find(r => r.innerText.includes('VU meters instead of the spectrum')).querySelector('.toggle input').click()"); await pg.wait_for_timeout(500)
+    check(await pg.evaluate("JSON.parse(localStorage.getItem('aurora.settings.v1')).vuMeters") is True, 'Settings → Appearance turns them on')
+    check(await pg.evaluate("[...document.querySelectorAll('#st-look .row')].some(r => r.innerText.includes('0 VU equals'))"), 'with their own options once on')
+    await nav(pg, 'now', 1500)
+    check(await pg.evaluate("document.querySelectorAll('.vu-box canvas').length") == 2 and await pg.evaluate("getComputedStyle(document.getElementById('viz')).display") == 'none', 'two meters in place of the spectrum')
+    snap = "(() => { const c = document.querySelector('.vu-box canvas'); const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let h = 0; for (let i = 0; i < d.length; i += 97) h = (h * 31 + d[i]) >>> 0; return [c.width, h]; })()"
+    a = await pg.evaluate(snap); await pg.wait_for_timeout(180); b = await pg.evaluate(snap)
+    check(a[0] > 100 and a[1] != b[1], f'the needles move with the music {a} {b}')
+    check(await pg.evaluate("import('/theme/js/viz.js').then(V => { const r = V.channelRms(); return !!r && r[0] > 0; })"), 'from the live PCM of each channel')
+    await pg.evaluate("window.__emit('playback:paused', { paused: true })"); await pg.wait_for_timeout(1800)
+    a = await pg.evaluate(snap); await pg.wait_for_timeout(300); b = await pg.evaluate(snap)
+    check(a[1] == b[1], 'on pause the needles fall and the drawing stops')
+    await pg.evaluate("window.__emit('playback:paused', { paused: false })"); await pg.wait_for_timeout(300)
+    await pg.evaluate("document.querySelector('#btnFull').click()"); await pg.wait_for_timeout(1200)
+    check(await pg.evaluate("document.querySelectorAll('.cv .vu-box canvas').length") == 2, 'and in the Canvas')
+    if os.environ.get('SHOTS'): await pg.screenshot(path=os.environ['SHOTS'] + '/vu-canvas.png')
+    await pg.keyboard.press('Escape'); await pg.wait_for_timeout(600)
+    check(not await pg.evaluate("!!document.querySelector('.cv .vu-box')"), 'gone with the Canvas')
+    await pg.evaluate("import('/theme/js/settings.js').then(S => S.setSetting('vuStyle', 'album'))"); await pg.wait_for_timeout(500)
+    c = await pg.evaluate("(() => { const c = document.querySelector('.vu-box canvas'); const d = c.getContext('2d').getImageData(Math.round(c.width * 0.3), Math.round(c.height * 0.35), 1, 1).data; return [...d]; })()")
+    check(c[0] < 200 or c[1] < 180, f'«Album colours» repaints the dial {c}')
+    if os.environ.get('SHOTS'): await pg.screenshot(path=os.environ['SHOTS'] + '/vu-now.png')
+    await pg.evaluate("import('/theme/js/settings.js').then(S => S.setSetting('vuMeters', false))"); await pg.wait_for_timeout(400)
+    check(not await pg.evaluate("!!document.querySelector('.vu-box')") and await pg.evaluate("getComputedStyle(document.getElementById('viz')).display") != 'none', 'off again: the spectrum is back')
+    check(not errs, f'no page errors {errs[:2]}')
+    await ctx.close()
+
 async def test_smart_color_radio(browser, port):
     print('· smart playlists, colour wall, radio')
     ctx, pg, errs = await page(browser, port, {'language': 'en'})
@@ -792,7 +825,7 @@ async def main():
             if run('language'): await timed(f'language {lang}', test_language(browser, port, lang))
         for name, fn in [('playlists', test_playlists), ('youtube', test_youtube), ('settings', test_settings), ('updates', test_updates),
                          ('tooltips', test_tooltips), ('canvas_volume', test_canvas_volume), ('fb2k_prefs', test_fb2k_prefs), ('welcome', test_welcome),
-                         ('playlist_editing', test_playlist_editing), ('windows', test_windows), ('smart_color_radio', test_smart_color_radio),
+                         ('playlist_editing', test_playlist_editing), ('windows', test_windows), ('vu', test_vu), ('smart_color_radio', test_smart_color_radio),
                          ('sound_ai', test_sound_ai), ('layout', test_layout), ('stability', test_stability)]:
             if run(name): await timed(name, fn(browser, port))
         await browser.close()

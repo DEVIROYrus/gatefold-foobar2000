@@ -20,7 +20,7 @@ jobs:
       matrix:
         include:
           - { part: 'screens, settings, updates', id: screens, only: 'language,playlists,youtube,settings,updates,tooltips,canvas_volume,fb2k_prefs,welcome' }
-          - { part: 'editing, windows, smart playlists, radio', id: editing, only: 'playlist_editing,windows,smart_color_radio' }
+          - { part: 'editing, windows, smart playlists, radio', id: editing, only: 'playlist_editing,windows,vu,smart_color_radio' }
           - { part: 'sound analysis', id: sound, only: 'sound_ai' }
           - { part: 'layout', id: layout, only: 'layout' }
           - { part: 'stability', id: stability, only: 'stability' }

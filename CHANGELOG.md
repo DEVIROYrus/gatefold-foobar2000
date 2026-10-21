@@ -2,6 +2,10 @@
 
 All notable changes are listed here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+**VU meters** — two needle meters (left and right channel) instead of the spectrum on Now playing, and in the Canvas. Off by default: Settings → Appearance → VU meters. They measure the RMS of each channel of what foobar2000 plays and move like real VU meters (IEC 60268-17: 300 ms, a little overshoot); classic ivory dials or the album's colours; 0 VU at −18, −14 or −10 dBFS.
+
 ## [1.0.0] — first public release
 
 Gatefold turns foobar2000 (2.x, 64-bit) into a full-window player on foo_ui_webview2 whose colours come from the cover of the playing album.
