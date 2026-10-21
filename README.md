@@ -96,6 +96,8 @@ Settings can turn on lyrics from **Musixmatch, NetEase, QQ Music and Kugou**, an
 
 Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).
 
+*Status: applied for. Until the application is approved, release installers are unsigned, and Windows SmartScreen may warn on first run (More info → Run anyway). Every release lists the SHA-256 of its files in `SHA256SUMS.txt`.*
+
 - Committers and reviewers: the members of this repository. Approvers: the repository owner.
 - Every signed release is built by GitHub Actions from this repository (`.github/workflows/release.yml`) and approved by hand before signing.
 - Privacy: this program does not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it — see [Privacy](#privacy) for every request a feature makes.
