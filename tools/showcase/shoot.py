@@ -13,7 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent.parent
 HERE = Path(__file__).resolve().parent
 DATA = Path(sys.argv[1]).resolve()
-WHAT = set(sys.argv[2:]) or {'screens', 'demo', 'preview'}
+WHAT = set(sys.argv[2:]) or {'screens', 'demo', 'preview', 'panels'}
 SHOTS = ROOT / 'docs' / 'screenshots'
 sys.path.insert(0, str(ROOT / 'tests')); os.environ.setdefault('E2E_IMPORT_ONLY', '1')
 import e2e
@@ -88,6 +88,51 @@ async def screens(b, port):
         print(shot['name'], errs[:2], flush=True)
         await ctx.close()
 
+async def panels(b, port):
+    """the add-on panels (panels/): the seekbar in a few looks, stacked; the covers panel"""
+    subprocess.run([sys.executable, str(ROOT / 'panels' / 'build.py'), str(ROOT / '.panels-build')], check=True, capture_output=True)
+    out = ROOT / 'panels' / 'screenshots'; out.mkdir(exist_ok=True)
+    strips = []
+    for i, sb in enumerate(PLAN['seekbars']):
+        w, hh = sb.get('size', [1100, 44])
+        ctx = await b.new_context(viewport={'width': w, 'height': hh}, device_scale_factor=2)
+        pg = await ctx.new_page(); errs = []
+        pg.on('pageerror', lambda e: errs.append(str(e)))
+        await pg.add_init_script("localStorage.setItem('aurora.settings.v1', JSON.stringify({language: 'en'})); localStorage.setItem('gatefold.seekbar.v1', %s);" % json.dumps(json.dumps(sb.get('prefs', {})))
+                                 + e2e.MOCK + show() + (HERE / 'mock-showcase.js').read_text(encoding='utf-8'))
+        await pg.goto(f'http://127.0.0.1:{port}/.panels-build/gatefold-seekbar/index.html'); await pg.wait_for_timeout(1200)
+        await pg.evaluate(f"window.__setAlbum({sb['album']!r})"); await pg.wait_for_timeout(1500)
+        await pg.evaluate(f"window.fb2k.invoke('playback.getCurrentTrack').then(r => window.__emit('playback:seeked', {{ position: r.track.duration * {sb.get('at', 0.4)} }}))"); await pg.wait_for_timeout(1200)
+        if sb.get('hover'): await pg.mouse.move(w * sb['hover'], hh / 2); await pg.wait_for_timeout(500)
+        png = str(out / f'_sb{i}.png'); await pg.screenshot(path=png); strips.append(png)
+        print('seekbar', i, errs[:2], flush=True)
+        await ctx.close()
+    ims = [Image.open(p).convert('RGB') for p in strips]
+    W, gap = max(im.width for im in ims), 28
+    sheet = Image.new('RGB', (W + 2 * gap, sum(im.height for im in ims) + gap * (len(ims) + 1)), (0x2b, 0x2d, 0x31))
+    y = gap
+    for im in ims: sheet.paste(im, (gap, y)); y += im.height + gap
+    sheet.save(out / 'seekbar.webp', 'WEBP', quality=90, method=6)
+    for p in strips: Path(p).unlink()
+    ctx = await b.new_context(viewport={'width': 900, 'height': 760})
+    pg = await ctx.new_page(); errs = []
+    pg.on('pageerror', lambda e: errs.append(str(e)))
+    await pg.add_init_script("localStorage.setItem('aurora.settings.v1', JSON.stringify({language: 'en', coverSweep: false})); localStorage.setItem('gatefold.covers.v1', JSON.stringify({look: 'dark'}));"
+                             + e2e.MOCK + show() + (HERE / 'mock-showcase.js').read_text(encoding='utf-8'))
+    await pg.goto(f'http://127.0.0.1:{port}/.panels-build/gatefold-covers/index.html'); await pg.wait_for_timeout(1500)
+    await pg.evaluate("[...document.querySelectorAll('#cpBody .btn')].find(b => /Check library/.test(b.innerText)).click()"); await pg.wait_for_timeout(4000)
+    await pg.evaluate("[...document.querySelectorAll('#cpBody .btn')].find(b => /Check quality/.test(b.innerText)).click()")
+    for _ in range(30):
+        if await pg.evaluate("import('./gf/coverquality.js').then(Q => !Q.qstate.scanning && Q.qstate.scannedAt > 0)"): break
+        await pg.wait_for_timeout(1000)
+    await pg.wait_for_timeout(1500)
+    await pg.evaluate("(() => { const c = [...document.querySelectorAll('#cpBody .card')].find(c => /Cover quality/.test(c.innerText)); document.getElementById('cpScroll').scrollTop = c.offsetTop - 14; })()"); await pg.wait_for_timeout(600)
+    await pg.evaluate("document.querySelectorAll('.toast').forEach(t => t.remove())")
+    png = str(out / '_cp.png'); await pg.screenshot(path=png)
+    Image.open(png).convert('RGB').save(out / 'covers.webp', 'WEBP', quality=88, method=6); Path(png).unlink()
+    print('covers panel', errs[:2], flush=True)
+    await ctx.close()
+
 CAPTION = """(() => { const c = document.createElement('div'); c.id = 'demoCap';
   c.style.cssText = 'position:fixed;left:50%;top:4px;transform:translateX(-50%);z-index:99999;padding:9px 18px;border-radius:999px;font:600 16px Inter,system-ui,sans-serif;letter-spacing:-.01em;color:#fff;background:rgb(10 10 14/.86);backdrop-filter:blur(10px);opacity:0;transition:opacity .35s;pointer-events:none;white-space:nowrap';
   document.body.append(c); window.__cap = (t) => { c.style.opacity = 0; setTimeout(() => { c.textContent = t; c.style.opacity = t ? 1 : 0; }, t ? 380 : 0); }; })()"""
@@ -117,6 +162,7 @@ async def main():
         b = await p.chromium.launch()
         if 'screens' in WHAT: await screens(b, port)
         if 'demo' in WHAT: await demo(b, port)
+        if 'panels' in WHAT: await panels(b, port)
         await b.close()
     httpd.shutdown()
     if 'preview' in WHAT: subprocess.run([sys.executable, str(ROOT / 'tools' / 'social_preview.py')], check=True)
