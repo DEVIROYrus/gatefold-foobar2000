@@ -32,7 +32,7 @@ export async function isEmpty() {
 function render() {
   el = h(`<div class="welcome" role="region" aria-label="${$t('Добро пожаловать')}">
     <div class="wl-hero">
-      <div class="wl-mark">${icon('disc', 30)}</div>
+      <div class="wl-mark"><svg class="brand-mark wl-g" viewBox="0 0 100 100" aria-hidden="true"><defs><clipPath id="wlClip"><path d="M19 0H81A19 19 0 0 1 100 19V28A8.75 8.75 0 0 1 82.5 28V22.5A5 5 0 0 0 77.5 17.5H22.5A5 5 0 0 0 17.5 22.5V75.5A5 5 0 0 0 22.5 80.5H68L82.5 66.2H62A5 5 0 0 1 57 61.2V55A5 5 0 0 1 62 50H95A5 5 0 0 1 100 55V81A19 19 0 0 1 81 100H19A19 19 0 0 1 0 81V19A19 19 0 0 1 19 0Z"/></clipPath></defs><path class="bm-g" d="M19 0H81A19 19 0 0 1 100 19V28A8.75 8.75 0 0 1 82.5 28V22.5A5 5 0 0 0 77.5 17.5H22.5A5 5 0 0 0 17.5 22.5V75.5A5 5 0 0 0 22.5 80.5H68L82.5 66.2H62A5 5 0 0 1 57 61.2V55A5 5 0 0 1 62 50H95A5 5 0 0 1 100 55V81A19 19 0 0 1 81 100H19A19 19 0 0 1 0 81V19A19 19 0 0 1 19 0Z"/><path class="bm-fold" clip-path="url(#wlClip)" d="M101 50L69 82Q60 97 46 101H101Z"/></svg></div>
       <h1>${$t('Добро пожаловать в Gatefold')}</h1>
     </div>
     <div class="wl-cards">
