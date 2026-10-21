@@ -81,4 +81,32 @@ for (const lf of fs.readdirSync(locDir).filter((x) => x.endsWith('.js'))) {
   if (badPl.length) fail(`${lf}: plural entries must be "one|other" — ${badPl.slice(0, 3).map(([k]) => k).join(', ')}`);
   if (!missing.length && !stale.length && !badPh.length && !badPl.length) console.log(`✓ ${lf}: ${keys.size} strings translated`);
 }
+// 4. the loudness meter against BS.1770 reference values (loudness-core.js)
+{
+  const LC = await import('file://' + path.join(THEME, 'js', 'loudness-core.js'));
+  const run = (fs, ch, secs, gen) => {
+    const m = new LC.Meter(fs, ch), n = Math.round(fs * secs), step = 4096;
+    for (let o = 0; o < n; o += step) {
+      const k = Math.min(step, n - o), planes = [];
+      for (let c = 0; c < ch; c++) { const a = new Float32Array(k); for (let i = 0; i < k; i++) a[i] = gen((o + i) / fs, c); planes.push(a); }
+      m.push(planes, k);
+    }
+    return m.result();
+  };
+  const sine = (A) => (t) => A * Math.sin(2 * Math.PI * 997 * t);
+  const cases = [
+    ['997 Hz, −20 dBFS stereo, 48 kHz = −20 LUFS', run(48000, 2, 6, sine(0.1)).lufs, -20, 0.02],
+    ['997 Hz, −20 dBFS stereo, 44.1 kHz = −20 LUFS', run(44100, 2, 6, sine(0.1)).lufs, -20, 0.02],
+    ['mono is measured as dual mono', run(48000, 1, 6, sine(0.1)).lufs, -20, 0.02],
+    ['0 dBFS on one channel = −3.01 LUFS', run(48000, 2, 6, (t, c) => (c ? 0 : Math.sin(2 * Math.PI * 997 * t))).lufs, -3.01, 0.02],
+    ['relative gate: a part 20 LU quieter does not count', run(48000, 2, 12, (t) => (t < 6 ? 0.1 : 0.01) * Math.sin(2 * Math.PI * 997 * t)).lufs, -20, 0.15],
+    ['true peak between samples (fs/4 at 45°)', run(48000, 2, 1, (t) => Math.sin(2 * Math.PI * 12000 * t + Math.PI / 4)).truePeak, 1, 0.01],
+  ];
+  const al = LC.album([run(48000, 2, 30, sine(0.316)), run(48000, 2, 6, sine(0.01))]);
+  cases.push(['album: one gating over every track (a quiet interlude keeps its place)', al.lufs, -10, 0.05]);
+  const bad = cases.filter(([, v, want, tol]) => !(Math.abs(v - want) <= tol));
+  for (const [name, v, want] of bad) fail(`loudness: ${name} — got ${v}, want ${want}`);
+  if (!bad.length) console.log(`✓ loudness meter: ${cases.length} reference checks`);
+}
+
 process.exit(failed ? 1 : 0);

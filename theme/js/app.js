@@ -20,6 +20,7 @@ import { router, onRoute, $, h, icon, toast, popupMenu, closeMenus } from './ui.
 import * as Theme from './theme.js';
 import * as WFS from './winfs.js';
 import * as Viz from './viz.js';
+import * as Loud from './loudness.js';
 import { follower } from './position.js';
 import * as VU from './vu.js';
 import * as CF from './coverfetch.js';
@@ -819,6 +820,7 @@ Lib.shared.onPlayAlbum = () => { if (router.current !== 'now') toast($t('Вос�
   Lib.shared.radioBan = (name) => Radio.ban(name);
   Lib.shared.similarFor = (t) => SoundUI.similar(t);
   Sound.init();
+  Loud.init();
   Genres.init({ getAllAlbums: Lib.getAllAlbums });
   Lib.getAllAlbums().then((a) => SoundUI.maybeOffer({ albums: (a || []).length }));
   VU.init({ onNeedSpectrum: updateSpectrum });

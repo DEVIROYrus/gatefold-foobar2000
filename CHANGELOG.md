@@ -2,6 +2,18 @@
 
 All notable changes are listed here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+**Volume levelling** — Settings → Volume levelling: one switch, and every album plays as loud as the next while keeping its own quiet and loud moments. A quiet interlude stays quiet: by default the gain is the album's, measured over the whole album at once, never the track's own.
+
+- **How it levels:** by album (default), «smart» (by album when an album plays in order, by track in shuffle) or each track.
+- **Target loudness:** −18 LUFS (ReplayGain 2.0 standard), −16 (like Apple Music), −14 (like Spotify and YouTube) or −23 (like radio and TV). Above −18 the preamp adds gain, and clipping prevention keeps very dynamic albums below the target rather than distorting them.
+- **The levelling is foobar2000's own ReplayGain:** sample-exact, gapless, with clipping prevention by the stored peaks. Gatefold sets it up, and puts foobar2000's previous ReplayGain settings back when levelling is turned off.
+- **Tracks without ReplayGain values are measured in the background**, the way the ReplayGain 2.0 scanner measures them: EBU R128 / ITU-R BS.1770-4 loudness with both gates, true peak by 4× oversampling, mono as dual mono, LFE left out. It runs in a worker, gives way to what you are doing and pauses on battery. The standard REPLAYGAIN_* tags are written and read back to check them; the audio is never touched.
+- **Albums are found the careful way:** album tag + album folder (CD1 / Disc 2 sub-folders belong to one album), one title by two album artists in one folder stays two albums, and a compilation stays one.
+- **An album missing an album gain on any of its tracks is measured again as a whole.** Otherwise foobar2000 would fall back to that track's own gain, and the interlude would jump up.
+- **The album that is playing gets its values only when playback leaves it**, and nothing is written in the last seconds before a track change, so loudness never shifts mid-listen.
+
 ## [1.1.1] — hotfix
 
 **Synced lyrics no longer run ahead of the song.** The position came from foo_ui_webview2's once-a-second time event, which is meant for a clock display: whole seconds, no timestamp, and it can run ahead of what you hear. Lyrics, the seek bar, the Canvas, the mini player and the seekbar panel now follow the ~10 Hz latency-compensated position (`playback:timeHighRes`, with its timestamp), ignore the stale sample that can follow a seek, and catch up at once when the window is shown again.
