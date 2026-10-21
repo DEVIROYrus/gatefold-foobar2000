@@ -3,11 +3,18 @@
   first start must open straight in Gatefold (Webview2 UI), without asking which interface to use.
 #>
 $ErrorActionPreference = 'Continue'
-Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, System.Windows.Forms, System.Drawing
 $A = [System.Windows.Automation.AutomationElement]
 $fb = "$env:ProgramFiles\foobar2000\foobar2000.exe"
+$prof = Join-Path $env:APPDATA 'foobar2000-v2'
+'profile before the first start:'
+Get-ChildItem -Recurse -File $prof -ErrorAction SilentlyContinue | Where-Object { $_.FullName -notmatch 'webview-ui|user-components' } | ForEach-Object { '  {0,10}  {1}' -f $_.Length, $_.FullName.Substring($prof.Length) }
 Start-Process $fb
 Start-Sleep 20
+try {
+  $b = [System.Windows.Forms.SystemInformation]::VirtualScreen; $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+  $g = [System.Drawing.Graphics]::FromImage($bmp); $g.CopyFromScreen($b.Left, $b.Top, 0, 0, $bmp.Size); $bmp.Save((Join-Path (Get-Location) 'first-start.png')); $g.Dispose(); $bmp.Dispose()
+} catch { "screenshot failed: $_" }
 $p = Get-Process foobar2000 -ErrorAction SilentlyContinue | Select-Object -First 1
 $wins = @()
 if ($p) {
