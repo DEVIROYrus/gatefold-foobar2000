@@ -13,7 +13,7 @@ Get-ChildItem -Recurse -File $prof -ErrorAction SilentlyContinue | Where-Object 
 $copy = Join-Path $env:TEMP 'config-copy.sqlite'
 Copy-Item (Join-Path $prof 'config.sqlite') $copy -Force -ErrorAction SilentlyContinue
 'preset-ui on a copy:'
-& powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot '..\installer\preset-ui.ps1') -Db $copy 2>&1 | ForEach-Object { "  $_" }
+& powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot '..\installer\preset-ui.ps1') -Config $copy 2>&1 | ForEach-Object { "  $_" }
 "  exit code: $LASTEXITCODE"
 Start-Process $fb
 Start-Sleep 20
