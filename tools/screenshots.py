@@ -18,18 +18,20 @@ async def main():
         kw = {'executable_path': os.environ['CHROMIUM']} if os.environ.get('CHROMIUM') else {}
         b = await p.chromium.launch(**kw)
         shots = [
-            ('now', {'language': 'en'}, None),
-            ('playlist', {'language': 'en'}, "document.querySelector('#plModes [data-m=covers]').click()"),
-            ('library', {'language': 'en'}, None),
-            ('settings', {'language': 'en', 'colorSource': 'album'}, None),
-            ('now', {'language': 'en', 'colorSource': 'light'}, None),
-            ('now', {'language': 'ru'}, None),
+            ('now', {'language': 'en'}, None, 'now-en'),
+            ('playlist', {'language': 'en'}, "document.querySelector('#plModes [data-m=covers]').click()", 'playlist-en'),
+            ('library', {'language': 'en'}, None, 'library-en'),
+            ('library', {'language': 'en'}, "(async () => { const s = document.querySelector('#libSort'); s.value = 'color'; s.dispatchEvent(new Event('change')); await new Promise(r => setTimeout(r, 4500)); })()", 'colors-en'),
+            ('playlist', {'language': 'en'}, "import('/theme/js/smartpl.js').then(m => m.open('lossless'))", 'smart-en'),
+            ('settings', {'language': 'en', 'colorSource': 'album'}, None, 'settings-en'),
+            ('now', {'language': 'en', 'colorSource': 'light'}, None, 'now-light-en'),
+            ('now', {'language': 'ru'}, None, 'now-ru'),
         ]
-        for i, (view, st, js) in enumerate(shots):
+        for i, (view, st, js, name) in enumerate(shots):
             ctx, pg, errs = await e2e.page(b, port, st)
             await e2e.nav(pg, view, 1600)
-            if js: await pg.evaluate(js); await pg.wait_for_timeout(1400)
-            name = f"{view}{'-' + st.get('colorSource') if st.get('colorSource') not in (None, 'album') else ''}-{st['language']}.png"
+            if js: await pg.evaluate(js); await pg.wait_for_timeout(1600)
+            name += '.png'
             await pg.screenshot(path=str(OUT / name))
             from PIL import Image
             im = Image.open(OUT / name).convert('RGB'); im = im.resize((1280, round(im.height * 1280 / im.width)), Image.LANCZOS)

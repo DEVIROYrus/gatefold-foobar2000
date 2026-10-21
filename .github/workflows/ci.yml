@@ -40,9 +40,9 @@ jobs:
         run: |
           set -o pipefail
           python tests/e2e.py 2>&1 | tee e2e.log
-      # the output, readable with plain git (job logs need a signed-in browser): branch ci-log-<part>
+      # when a part fails, its output goes to the branch ci-log-<part> (readable with plain git)
       - name: Publish the output
-        if: always() && github.event_name == 'push'
+        if: failure() && github.event_name == 'push'
         run: |
           mkdir -p /tmp/log && cp e2e.log /tmp/log/ 2>/dev/null || echo "no output" > /tmp/log/e2e.log
           echo "${{ job.status }} ${GITHUB_SHA} $(date -u +%FT%TZ)" > /tmp/log/STATUS
@@ -96,7 +96,7 @@ jobs:
           .\tools\first-start-check.ps1 *>&1 | Tee-Object -FilePath first-start.log
           if (Select-String -Path first-start.log -Pattern '^ok: ' -Quiet) { exit 0 } else { exit 1 }
       - name: Publish the output
-        if: always() && github.event_name == 'push'
+        if: failure() && github.event_name == 'push'
         shell: bash
         run: |
           mkdir -p /tmp/log && cp first-start.log first-start.png setup.log /tmp/log/ 2>/dev/null || true
