@@ -19,7 +19,7 @@ DL = ROOT / '.showcase-dl'; DL.mkdir(exist_ok=True)
 UA = {'User-Agent': 'Gatefold-showcase/1.0 (github.com/DEVIROYrus/gatefold-foobar2000)'}
 CFG = json.loads((HERE / 'albums.json').read_text(encoding='utf-8'))
 
-def fetch(url, tries=4, timeout=120):
+def fetch(url, tries=3, timeout=45):
     for i in range(tries):
         try:
             with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=timeout) as r: return r.status, r.read()
@@ -91,8 +91,12 @@ for A in CFG['albums']:
     ident = A['id']; print('==', ident, flush=True)
     if FAKE: meta, fl = fake_album(A)
     else:
-        st, raw = fetch('https://archive.org/metadata/' + urllib.parse.quote(ident))
-        meta = json.loads(raw) if st == 200 else {}
+        mf = DL / ident / 'meta.json'
+        if mf.exists(): meta = json.loads(mf.read_text(encoding='utf-8'))
+        else:
+            st, raw = fetch('https://archive.org/metadata/' + urllib.parse.quote(ident))
+            meta = json.loads(raw) if st == 200 else {}
+            if meta.get('files'): mf.parent.mkdir(exist_ok=True); mf.write_text(json.dumps(meta), encoding='utf-8')
         fl = meta.get('files', [])
     groups = {}
     for f in fl:
@@ -154,7 +158,11 @@ for A in CFG['albums']:
     cover = max(pics, key=size_of) if pics else None
     for c in ([] if FAKE else A.get('cover', [])):
         item, name = (c.split('/', 1) if '/' in c else (ident, c))
-        st, b = fetch(f'https://archive.org/download/{urllib.parse.quote(item)}/{urllib.parse.quote(name)}')
+        cf = DL / ident / ('cover-' + re.sub(r'[^\w.-]+', '_', c))
+        if cf.exists(): st, b = 200, cf.read_bytes()
+        else:
+            st, b = fetch(f'https://archive.org/download/{urllib.parse.quote(item)}/{urllib.parse.quote(name)}')
+            if st == 200: cf.parent.mkdir(exist_ok=True); cf.write_bytes(b)
         if st == 200 and size_of(b) >= 250 * 250: cover = b; print('   cover:', c, Image.open(io.BytesIO(b)).size, flush=True); break
     if not FAKE and not A.get('cover') and (not cover or size_of(cover) < 300 * 300):
         for f in fl:

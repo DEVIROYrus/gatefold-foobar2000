@@ -15,6 +15,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: '3.12' }
+      - name: Downloaded albums (kept between runs: the Archive is sometimes slow or down)
+        if: inputs.step == 'build'
+        uses: actions/cache@v4
+        with:
+          path: .showcase-dl
+          key: showcase-dl-${{ hashFiles('tools/showcase/albums.json') }}
+          restore-keys: showcase-dl-
       - name: Scout
         if: inputs.step == 'scout'
         run: mkdir -p out && python -u tools/showcase/scout.py out 2>&1 | tee out/scout.log
