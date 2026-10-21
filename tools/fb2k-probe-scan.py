@@ -40,8 +40,8 @@ for root, dirs, files in os.walk(prof):
                         if any(n in blob for n in NEEDLES.values()):
                             print('    MATCH:', [hexdump(v) if isinstance(v, bytes) else v for v in row])
                     # a sample, to see how keys look
-                    for row in con.execute(f'select * from "{name}" limit 8'):
-                        print('    sample:', [hexdump(v[:48]) if isinstance(v, bytes) else (str(v)[:80]) for v in row])
+                    for row in con.execute(f'select * from "{name}" limit {200 if f == "config.sqlite" else 8}'):
+                        print('    row:', [hexdump(v[:96]) if isinstance(v, bytes) else (str(v)[:120]) for v in row])
                 con.close()
             except Exception as e:
                 print('sqlite error', p, e)
