@@ -57,6 +57,7 @@ for (const [f, [src, ast]] of asts) {
 for (const h of ['index.html', 'canvas.html', 'mini.html']) {
   const s = fs.readFileSync(path.join(THEME, h), 'utf8').replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>|<!--[\s\S]*?-->/g, '');
   for (const m of s.matchAll(/>([^<]+)</g)) { const k = m[1].trim().replace(/\s+/g, ' '); if (/[А-Яа-яЁё]/.test(k)) keys.add(k); }
+  for (const m of s.matchAll(/\sdata-ctx="([^"]*)"[^>]*>([^<]+)</g)) keys.add(m[2].trim().replace(/\s+/g, ' ') + '\u0004' + m[1]);
   for (const m of s.matchAll(/\b(?:title|placeholder|aria-label|alt)="([^"]*)"/g)) if (/[А-Яа-яЁё]/.test(m[1])) keys.add(m[1]);
 }
 const locDir = path.join(THEME, 'js', 'locales');
@@ -67,7 +68,7 @@ for (const lf of fs.readdirSync(locDir).filter((x) => x.endsWith('.js'))) {
   const stale = Object.keys(dict).filter((k) => !keys.has(k));
   const badPh = Object.entries(dict).filter(([k, v]) => JSON.stringify((k.match(/\{\d+\}/g) || []).sort()) !== JSON.stringify((v.match(/\{\d+\}/g) || []).sort()));
   const badPl = Object.entries(dict).filter(([k, v]) => k.split('|').length === 3 && v.split('|').length !== 2);
-  if (missing.length) fail(`${lf}: ${missing.length} untranslated — ${missing.slice(0, 5).map((x) => JSON.stringify(x)).join(', ')}`);
+  if (missing.length) fail(`${lf}: ${missing.length} untranslated — ${missing.slice(0, process.env.ALL ? 9999 : 5).map((x) => JSON.stringify(x)).join(', ')}`);
   if (stale.length && process.argv.includes('--prune')) {
     // node tools/check.mjs --prune: drop entries no source string uses any more
     const file = path.join(locDir, lf), drop = new Set(stale.map((k) => JSON.stringify(k)));

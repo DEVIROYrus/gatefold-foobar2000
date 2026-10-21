@@ -4,7 +4,13 @@ All notable changes are listed here. Versions follow [Semantic Versioning](https
 
 ## [Unreleased]
 
-**VU meters** — two needle meters (left and right channel) instead of the spectrum on Now playing, and in the Canvas. Off by default: Settings → Appearance → VU meters. They measure the RMS of each channel of what foobar2000 plays and move like real VU meters (IEC 60268-17: 300 ms, a little overshoot); classic ivory dials or the album's colours; 0 VU at −18, −14 or −10 dBFS.
+**VU meters** — two needle meters (left and right channel) instead of the spectrum on Now playing, and in the Canvas. Off by default: Settings → Appearance → VU meters. They measure the RMS of each channel of what foobar2000 plays and move like real VU meters (IEC 60268-17: 300 ms, a little overshoot); classic ivory dials or the album's colours; 0 VU at −18, −14 or −10 dBFS. Two meters side by side, or one dial with both needles.
+
+**Similar albums** — with sound analysis on, an album page ends with albums by other artists in your library that sound alike.
+
+**Sound analysis offer** — once the library has ten albums or more, Gatefold offers once, quietly, to turn sound analysis on; «Not now» means it doesn't ask again.
+
+**German, Spanish and Chinese (Simplified)** — the interface (picked from Windows or in Settings) and, for German and Spanish, the installer.
 
 ## [1.0.0] — first public release
 

@@ -32,6 +32,7 @@ export default {
  "Второй акцент": "Second accent",
  "Свечение": "Glow",
  "Текст": "Text",
+ "Текст\u0004lyrics": "Lyrics",
  "Вторичный текст": "Secondary text",
  "Тёмная": "Dark",
  "Светлая": "Light",
@@ -975,5 +976,18 @@ export default {
  "Классика": "Classic",
  "Цвета альбома": "Album colours",
  "Показывать в «Холсте»": "Show in the Canvas",
- "0 VU соответствует": "0 VU equals"
+ "0 VU соответствует": "0 VU equals",
+ "Похоже по звучанию": "Sounds like",
+ "Включите анализ звука — и здесь появятся альбомы из вашей медиатеки, которые звучат похоже.": "Turn on the sound analysis to see albums from your library that sound alike.",
+ "Анализ звука…": "Sound analysis…",
+ "Альбомы других исполнителей из вашей медиатеки": "Albums by other artists in your library",
+ "Пусть Gatefold послушает вашу музыку": "Let Gatefold listen to your music",
+ "Нейросеть один раз прослушает медиатеку прямо на компьютере. После этого радио, «Похожие треки» и плейлисты по настроению подбирают музыку по звучанию. Модели ~30 МБ скачиваются один раз, ничего не отправляется.": "A neural network listens to your library once, right on this computer. Then the radio, Similar tracks and mood playlists pick music by how it sounds. The models (~30 MB) are downloaded once; nothing is uploaded.",
+ "Включить": "Turn on",
+ "Не сейчас": "Not now",
+ "Подробнее": "Learn more",
+ "Анализ звука включён: модели скачиваются, потом медиатека анализируется в фоне": "Sound analysis is on: the models are downloading, then the library is analysed in the background",
+ "Приборы": "Meters",
+ "Два": "Two",
+ "Один, две стрелки": "One, two needles"
 };

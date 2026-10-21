@@ -150,7 +150,7 @@
         <canvas id="viz"></canvas>
         <div class="np-tabs">
           <button class="np-tab active" data-tab="next">Далее</button>
-          <button class="np-tab" data-tab="lyrics">Текст</button>
+          <button class="np-tab" data-tab="lyrics" data-ctx="lyrics">Текст</button>
           <button class="np-tab" data-tab="palette">Палитра</button>
         </div>
         <div class="np-panel" id="npPanel"></div>
@@ -227,7 +227,7 @@
   <section class="view" id="view-album">
     <div class="album-hero" id="albumHero"></div>
     <div class="list-head"><div>#</div><div>Название</div><div>Исполнитель</div><div class="h-album">Формат</div><div>Время</div></div>
-    <div class="scroller list-surface" id="albumScroller"><div class="vlist" id="albumList"></div></div>
+    <div class="scroller list-surface" id="albumScroller"><div class="vlist" id="albumList"></div><div class="album-similar" id="albumSimilar"></div></div>
   </section>
 
   <!-- SEARCH -->

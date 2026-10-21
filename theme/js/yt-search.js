@@ -11,12 +11,12 @@
  */
 import { httpGet, httpPost, ok, log } from './bridge.js';
 import { settings } from './settings.js';
-import { lang } from './i18n.js';
+import { lang, locale } from './i18n.js';
 
 import { $t } from './i18n.js';
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
-const HL = lang === 'en' ? 'en' : 'ru';
-const H = { 'User-Agent': UA, 'Accept-Language': HL === 'en' ? 'en-US,en;q=0.9' : 'ru-RU,ru;q=0.9,en;q=0.8', Cookie: 'CONSENT=YES+cb.20240101-00-p0.ru+FX+000; SOCS=CAI' };
+const HL = lang === 'zh' ? 'zh-CN' : lang;
+const H = { 'User-Agent': UA, 'Accept-Language': lang === 'en' ? 'en-US,en;q=0.9' : `${locale},${lang};q=0.9,en;q=0.8`, Cookie: 'CONSENT=YES+cb.20240101-00-p0.ru+FX+000; SOCS=CAI' };
 /** 'off' | 'api' | 'web' — how (and whether) search works; links always play */
 export const mode = () => (settings.ytSearch === 'api' && settings.ytApiKey ? 'api' : settings.ytSearch === 'web' ? 'web' : 'off');
 const enc = encodeURIComponent;
@@ -85,7 +85,8 @@ async function webMore(cont) {
    adds durations and view counts, costs 1. Next pages use pageToken. */
 const isoDur = (s) => { const m = String(s || '').match(/P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/); return m ? (+m[1] || 0) * 86400 + (+m[2] || 0) * 3600 + (+m[3] || 0) * 60 + (+m[4] || 0) : 0; };
 const fmtDur = (sec) => { const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s).padStart(2, '0'); };
-const loc = () => (HL === 'en' ? 'en-US' : 'ru-RU');
+const loc = () => locale;
+const VIEWS = { ru: '# просмотров', en: '# views', de: '# Aufrufe', es: '# visualizaciones', zh: '# 次观看' };
 function ago(iso) {
   const d = (Date.now() - Date.parse(iso)) / 1000; if (!(d > 0)) return '';
   const rtf = new Intl.RelativeTimeFormat(loc(), { numeric: 'auto' });
@@ -117,7 +118,7 @@ async function apiSearch(q, pageToken) {
     const views = m && m.statistics && m.statistics.viewCount != null ? nf.format(+m.statistics.viewCount) : '';
     const tx = document.createElement('textarea');            // titles come HTML-escaped
     const un = (h) => { tx.innerHTML = h || ''; return tx.value; };
-    return { id, title: un(sn.title), channel: un(sn.channelTitle), dur: !live && sec ? fmtDur(sec) : '', sec, live, views: views ? (HL === 'en' ? views + ' views' : views + ' просмотров') : '', age: sn.publishedAt ? ago(sn.publishedAt) : '', thumb: thumb(id), desc: un(sn.description) };
+    return { id, title: un(sn.title), channel: un(sn.channelTitle), dur: !live && sec ? fmtDur(sec) : '', sec, live, views: views ? VIEWS[lang].replace('#', views) : '', age: sn.publishedAt ? ago(sn.publishedAt) : '', thumb: thumb(id), desc: un(sn.description) };
   });
   return { items, cont: s.nextPageToken ? 'api:' + s.nextPageToken : '' };
 }

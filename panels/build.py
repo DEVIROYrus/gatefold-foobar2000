@@ -17,7 +17,7 @@ OUT = Path(sys.argv[1]).resolve()
 VERSION = sys.argv[2] if len(sys.argv) > 2 else (HERE / 'VERSION').read_text().strip()
 PANELS = {'seekbar': {'extra': ['js/palette-core.js', 'fonts/inter-latin-opsz-normal.woff2', 'fonts/inter-cyrillic-opsz-normal.woff2']},
           'covers': {'extra': ['css/app.css', 'fonts/inter-latin-opsz-normal.woff2', 'fonts/inter-cyrillic-opsz-normal.woff2', 'fonts/inter-latin-ext-opsz-normal.woff2', 'fonts/inter-cyrillic-ext-opsz-normal.woff2']}}
-IMPORT = re.compile(r"""(?:import|export)\s[^'"]*?from\s*['"](\.{1,2}/[^'"]+)['"]|import\s*['"](\.{1,2}/[^'"]+)['"]|new URL\(\s*['"](\.{1,2}/[^'"]+)['"]\s*,\s*import\.meta\.url""")
+IMPORT = re.compile(r"""(?:import|export)\s[^'"]*?from\s*['"](\.{1,2}/[^'"]+)['"]|import\s*['"](\.{1,2}/[^'"]+)['"]|new URL\(\s*['"](\.{1,2}/[^'"]+)['"]\s*,\s*import\.meta\.url|import\(\s*['"](\.{1,2}/locales/[^'"]+)['"]\s*\)""")
 
 def deps(js: Path, seen: set):
     """Gatefold modules a file needs (relative imports and module workers), recursively"""

@@ -25,6 +25,7 @@ export const DEFAULTS = {
   visualizer: true,         // spectrum on the Now Playing screen
   vuMeters: false,          // two VU meters instead of the spectrum (vu.js) — off unless turned on
   vuStyle: 'classic',       // 'classic' (ivory dial) | 'album' (the album's colours)
+  vuLayout: 'pair',         // 'pair' (a meter per channel) | 'stereo' (one dial, two needles)
   vuCanvas: true,           // the meters in the Canvas too
   vuRef: -14,               // dBFS of a sine that reads 0 VU: -18 (studio) | -14 | -10 (loud masters)
   waveformSeek: true,       // waveform seek bar coloured by the palette

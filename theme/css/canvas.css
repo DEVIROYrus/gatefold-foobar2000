@@ -151,4 +151,5 @@ body.canvas-open #toasts { z-index: 950; }
 
 /* VU meters in the Canvas (vu.js), under the title; not in the lyrics and minimal layouts */
 .cv .vu-box { max-width: min(680px, 100%); margin-top: 4vh; }
+.cv .vu-box.stereo { max-width: min(420px, 100%); }
 .cv[data-layout='lyrics'] .vu-box, .cv[data-layout='minimal'] .vu-box { display: none; }

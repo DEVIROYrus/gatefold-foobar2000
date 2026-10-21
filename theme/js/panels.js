@@ -81,7 +81,7 @@ function langRow() {
   const el = h(`<div class="row"><div class="lbl"><b>${$t('Язык')} · Language</b></div><div class="seg"></div></div>`);
   const box = el.querySelector('.seg');
   const cur = settings.language || 'auto';
-  for (const [v, txt] of [['auto', $t('Авто')], ['ru', LANGS.ru], ['en', LANGS.en]]) {
+  for (const [v, txt] of [['auto', $t('Авто')], ...Object.entries(LANGS)]) {
     const b = h(`<button>${txt}</button>`); if (cur === v) b.classList.add('on');
     b.onclick = () => { if (cur === v) return; setSetting('language', v); const target = v === 'auto' ? '' : v; if (target !== lang || v === 'auto') setTimeout(() => location.reload(), 150); else renderSettings(); };
     box.append(b);
@@ -157,6 +157,7 @@ export function renderSettings() {
       toggle('vuMeters', $t('VU-метры вместо спектра'), '' /* Два стрелочных индикатора громкости, левый и правый канал */, () => setTimeout(renderSettings, 30)),
       ...(settings.vuMeters ? [
         seg('vuStyle', $t('Вид'), '', [['classic', $t('Классика')], ['album', $t('Цвета альбома')]]),
+        seg('vuLayout', $t('Приборы'), '', [['pair', $t('Два')], ['stereo', $t('Один, две стрелки')]]),
         toggle('vuCanvas', $t('Показывать в «Холсте»'), ''),
         seg('vuRef', $t('0 VU соответствует'), '' /* Уровень синусоиды, при котором стрелка стоит на 0. Громкая современная музыка — −14 или −10 */, [[-18, '−18 dBFS'], [-14, '−14 dBFS'], [-10, '−10 dBFS']]),
       ] : [])),

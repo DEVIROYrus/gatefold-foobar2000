@@ -12,8 +12,8 @@ import { lang } from './i18n.js';
 
 /* the playlist keeps the name it was created with; switching the interface language must not
    start a second one, so every known name is recognised and a new one is named in the current language */
-export const NAMES = ['Понравившиеся', 'Liked'];
-export const NAME = lang === 'en' ? 'Liked' : 'Понравившиеся';
+export const NAMES = ['Понравившиеся', 'Liked', 'Favoriten', 'Me gusta', '喜欢'];
+export const NAME = { en: 'Liked', de: 'Favoriten', es: 'Me gusta', zh: '喜欢' }[lang] || 'Понравившиеся';
 export const isLikedName = (n) => NAMES.includes(n);
 export const events = new EventTarget();
 const st = { guid: '', list: [], keys: new Set(), ready: null };
