@@ -1,0 +1,35 @@
+# Real Creative-Commons music for the README screenshots, the social preview and the demo
+# (tools/showcase/). The Internet Archive is reachable from here; the results go to the showcase-data branch.
+name: showcase
+on:
+  workflow_dispatch:
+    inputs:
+      step: { description: 'scout | build', required: true, default: 'scout' }
+permissions:
+  contents: write
+jobs:
+  run:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Scout
+        if: inputs.step == 'scout'
+        run: python tools/showcase/scout.py out
+      - name: Build
+        if: inputs.step == 'build'
+        run: |
+          sudo apt-get -qq update && sudo apt-get -qq install -y ffmpeg >/dev/null
+          pip -q install playwright==1.56.0 pillow mutagen
+          python -m playwright install --with-deps chromium >/dev/null
+          python tools/showcase/build.py out
+      - name: Publish
+        if: always()
+        run: |
+          mkdir -p out && echo "${{ job.status }} ${{ inputs.step }} ${GITHUB_SHA} $(date -u +%FT%TZ)" > out/STATUS
+          cd out && git init -q -b showcase-data
+          git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A && git commit -qm "showcase ${{ inputs.step }} ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" showcase-data:showcase-${{ inputs.step }}
