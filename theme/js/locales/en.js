@@ -969,5 +969,11 @@ export default {
  "По прослушиваниям": "By listening",
  "По тегам": "By tags",
  "{0} подходит сейчас": "{0} match right now",
- "Например": "For example"
+ "Например": "For example",
+ "VU-метры": "VU meters",
+ "VU-метры вместо спектра": "VU meters instead of the spectrum",
+ "Классика": "Classic",
+ "Цвета альбома": "Album colours",
+ "Показывать в «Холсте»": "Show in the Canvas",
+ "0 VU соответствует": "0 VU equals"
 };
