@@ -11,8 +11,6 @@ Automatic cover art for your foobar2000 library: finds missing covers, upgrades 
 - **Saves as foobar2000 expects:** `cover.jpg` next to the tracks. In folders shared by several albums it embeds the cover into that album's tracks instead.
 - **Asks when unsure:** matches it isn't sure about wait for your click.
 
-It works inside foobar2000, from your library, rather than as a separate program.
-
 ## Install
 
 1. You need foobar2000 2.x (64-bit) and **foo_ui_webview2** 2.0 or later ([its releases](https://github.com/NereaFantasia/foo_ui_webview2/releases)).

@@ -13,7 +13,7 @@ A waveform seekbar for foobar2000 in the colours of the album that is playing. I
 - **Controls:** click or drag to seek. The mouse wheel steps 5 s (30 s with Shift). Middle-click plays or pauses. ← / → seek when the bar has focus.
 - **Speed:** the waveform comes from foo_ui_webview2 and is cached by it. An idle panel draws nothing. It follows foobar2000's precise playback position, about ten times a second.
 
-Right-click the bar for its options. Unlike Waveform Minibar it is a WebView2 panel, not a native component, so it uses somewhat more memory.
+Right-click the bar for its options.
 
 ## Install
 
