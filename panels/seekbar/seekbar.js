@@ -13,6 +13,7 @@
  */
 import './gf/input-guard.js';
 import { waitForBridge, call, on, ok, normTrack, artUrl, fmtTime, log } from './gf/bridge.js';
+import { follower } from './gf/position.js';
 
 /* ---------------------------------------------------------------- language (English / Russian) */
 const RU = {
@@ -106,7 +107,9 @@ const S = { track: null, state: 'stopped', pos: 0, dur: 0, t0: performance.now()
 const getPos = () => Math.min(S.dur || Infinity, S.state === 'playing' ? S.pos + (performance.now() - S.t0) / 1000 : S.pos);
 const setPos = (p, d) => { S.pos = Math.max(0, +p || 0); S.t0 = performance.now(); if (d != null && +d > 0) S.dur = +d; kick(); };
 const stateOf = (v) => { const x = String(v || '').toLowerCase(); return /play/.test(x) && !/pause/.test(x) ? 'playing' : /pause/.test(x) ? 'paused' : 'stopped'; };
-const seekTo = (sec) => { if (!S.dur) return; sec = clamp(sec, 0, Math.max(0, S.dur - 0.25)); setPos(sec); call('playback.setPosition', { position: sec }); };
+// the ~10 Hz playback:timeHighRes drives the position (see gf/position.js); nothing moves the knob while it is dragged
+const Pos = follower({ set: (p, d) => { if (S.drag < 0) setPos(p, d); else if (d != null && +d > 0) S.dur = +d; }, get: () => getPos(), playing: () => S.state === 'playing' });
+const seekTo = (sec) => { if (!S.dur) return; sec = clamp(sec, 0, Math.max(0, S.dur - 0.25)); setPos(sec); Pos.seeked(sec); call('playback.setPosition', { position: sec }); };
 
 /* ---------------------------------------------------------------- colours (eased between albums) */
 const hexRgb = (h) => { const n = parseInt(String(h).replace('#', '').slice(0, 6), 16) || 0; return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
@@ -315,7 +318,7 @@ function setTrack(t) {
 async function sync() {
   const [cur, st, pos] = await Promise.all([call('playback.getCurrentTrack'), call('playback.getState'), call('playback.getPosition')]);
   if (ok(st)) S.state = stateOf(st.state);
-  if (ok(pos)) setPos(pos.position, pos.duration);
+  if (ok(pos)) Pos.sample(pos);
   setTrack(ok(cur) && cur.found !== false ? normTrack(cur.track || cur.playing || cur) : null);
 }
 
@@ -406,11 +409,12 @@ function inlineOptions() {
 function bind() {
   on('playback:trackChanged', (d) => { setPos(0); setTrack(normTrack(d)); });
   on('playback:starting', (d) => { if (!d.paused) { S.state = 'playing'; kick(); } });
-  on('playback:stateChanged', (d) => { if (d.state) S.state = stateOf(d.state); if (d.position != null) setPos(d.position, d.duration); kick(); });
+  on('playback:stateChanged', (d) => { if (d.state) S.state = stateOf(d.state); if (d.position != null) Pos.sample(d); kick(); });
   on('playback:paused', (d) => { setPos(getPos()); S.state = d.paused ? 'paused' : 'playing'; kick(); });
   on('playback:stopped', (d) => { if (!/another|starting/i.test(String(d.reason || ''))) { S.state = 'stopped'; setPos(0); setTrack(null); } });
-  on('playback:time', (d) => { if (S.drag < 0) setPos(d.position); });
-  on('playback:seeked', (d) => setPos(d.position));
+  on('playback:time', Pos.coarse);
+  on('playback:timeHighRes', Pos.fine);
+  on('playback:seeked', (d) => Pos.seeked(d.position));
   on('playback:dynamicInfoTrack', (d) => { if (S.track && d.title) { S.track = { ...S.track, title: d.title, artist: d.artist || S.track.artist }; track.title = [S.track.artist, S.track.title].join(' — '); } });
 
   const fracAt = (e) => { const r = track.getBoundingClientRect(); return clamp((e.clientX - r.left) / Math.max(1, r.width), 0, 1); };
@@ -454,7 +458,7 @@ function bind() {
   addEventListener('contextmenu', (e) => { e.preventDefault(); openMenu(e); });
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { sync(); dirty = true; kick(); } });
   // the position drifts if a time event is missed while the panel is hidden
-  setInterval(() => { if (document.visibilityState === 'visible' && S.track) call('playback.getPosition').then((r) => { if (ok(r) && S.drag < 0 && Math.abs(+r.position - getPos()) > 0.6) setPos(r.position, r.duration); }); }, 5000);
+  setInterval(() => { if (document.visibilityState === 'visible' && S.track) call('playback.getPosition').then((r) => { if (ok(r) && S.drag < 0 && Math.abs(+r.position - getPos()) > 0.6) Pos.sample(r); }); }, 5000);
 }
 
 (async function boot() {

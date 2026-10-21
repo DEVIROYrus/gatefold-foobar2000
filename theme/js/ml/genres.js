@@ -37,7 +37,10 @@ const rKey = (artist, album) => aKey(artist) + '|' + norm(cleanAlbum(album || ''
 /* generic words that say nothing about a genre */
 const GENERIC = new Set(['metal', 'rock', 'pop', 'other', 'unknown', 'misc', 'music', 'various', 'alternative', 'electronic', 'soundtrack', 'genre', 'none']);
 const nk = (s) => String(s || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
-const title = (s) => String(s).replace(/(^|[\s-])(\p{L})/gu, (m, a, b) => a + b.toUpperCase()).replace(/\bAnd\b/g, 'and').replace(/\bN\b/g, 'n');
+/* MusicBrainz names genres in lower case; abbreviations stay upper case (AOR, not «Aor») */
+const ABBR = new Set(['aor', 'edm', 'idm', 'ebm', 'uk', 'us', 'nwobhm', 'nwoahm', 'mpb', 'dsbm', 'ost', 'dj', 'r&b', 'dnb', 'lgbt', 'ccm', 'opm', 'acg', 'jrpg', 'vgm']);
+const title = (s) => String(s).split(/(\s+|-)/).map((w) => ABBR.has(w.toLowerCase()) ? w.toUpperCase() : w.replace(/^\p{L}/u, (c) => c.toUpperCase())).join('')
+  .replace(/\bAnd\b/g, 'and').replace(/\bN\b/g, 'n');
 
 /* MusicBrainz genre → Discogs style index (for the network's per-track estimate) */
 let discogsIdx = null;

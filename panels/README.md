@@ -2,7 +2,7 @@
 
 Two small add-ons for people who like their foobar2000 layout as it is. Each is a panel for **Default UI** or **Columns UI**: you don't need the Gatefold interface for them, only the [foo_ui_webview2](https://github.com/NereaFantasia/foo_ui_webview2) component.
 
-**[Download the panels](https://github.com/DEVIROYrus/gatefold-foobar2000/releases/tag/panels-v1.0.0)**
+**[Download the panels](https://github.com/DEVIROYrus/gatefold-foobar2000/releases/tag/panels-v1.0.1)**
 
 ## Gatefold Seekbar
 

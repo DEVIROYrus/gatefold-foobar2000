@@ -2,6 +2,14 @@
 
 All notable changes are listed here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.1.1] — hotfix
+
+**Synced lyrics no longer run ahead of the song.** The position came from foo_ui_webview2's once-a-second time event, which is meant for a clock display: whole seconds, no timestamp, and it can run ahead of what you hear. Lyrics, the seek bar, the Canvas, the mini player and the seekbar panel now follow the ~10 Hz latency-compensated position (`playback:timeHighRes`, with its timestamp), ignore the stale sample that can follow a seek, and catch up at once when the window is shown again.
+
+**Genre names keep their abbreviations** — AOR, EDM, IDM, R&B, UK Garage, NWOBHM instead of «Aor», «Edm», «R&b».
+
+**YouTube search in Chinese** asks for results in Simplified Chinese (the API wants `zh-Hans`).
+
 ## [1.1.0] — VU meters, similar albums, three more languages
 
 **VU meters** — two needle meters (left and right channel) instead of the spectrum on Now playing, and in the Canvas. Off by default: Settings → Appearance → VU meters. They measure the RMS of each channel of what foobar2000 plays and move like real VU meters (IEC 60268-17: 300 ms, a little overshoot); classic ivory dials or the album's colours; 0 VU at −18, −14 or −10 dBFS. Two meters side by side, or one dial with both needles.

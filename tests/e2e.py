@@ -848,6 +848,35 @@ async def timed(name, coro, limit=int(os.environ.get('TEST_TIMEOUT', 480))):
     except asyncio.TimeoutError: check(False, f'{name}: still running after {limit} s — stopped')
     print(f'  ({time.time() - t0:.0f} s)', flush=True)
 
+async def test_lyrics_sync(browser, port):
+    print('· lyrics follow the fine position (timeHighRes), not the whole-second playback:time')
+    ctx, pg, errs = await page(browser, port, {'language': 'en'})
+    await nav(pg, 'now', 1200)
+    await pg.evaluate("document.querySelector('[data-tab=lyrics]').click()"); await pg.wait_for_timeout(1500)
+    cur = "[...document.querySelectorAll('#lyrBox .ln')].findIndex(n => n.classList.contains('cur'))"
+    pos = "import('/theme/js/viz.js').then(V => V.getPosition())"
+    async def emit(ev, d, wait=250):
+        await pg.evaluate(f"window.__emit({json.dumps(ev)}, Object.assign({json.dumps(d)}, {{ hostTime: Date.now() - ({d.get('lagMs', 0)}) }}))"); await pg.wait_for_timeout(wait)
+    await emit('playback:timeHighRes', {'position': 52.0})
+    check(await pg.evaluate(cur) == 10, f'a fine sample at 52 s puts the 50 s line on (line {await pg.evaluate(cur)})')
+    await emit('playback:time', {'position': 58})
+    check(await pg.evaluate(cur) == 10, 'a whole-second playback:time does not move the lyrics while the fine stream is alive')
+    await emit('playback:seeked', {'position': 120}, 50)
+    await emit('playback:timeHighRes', {'position': 52.4})
+    check(await pg.evaluate(cur) == 24, f'a sample still carrying the old position right after a seek is ignored (line {await pg.evaluate(cur)})')
+    await pg.wait_for_timeout(700)
+    await emit('playback:timeHighRes', {'position': 100.0, 'lagMs': 400}, 0)
+    p = await pg.evaluate(pos)
+    check(100.35 <= p < 100.8, f'hostTime: the delivery delay is added ({p:.2f})')
+    await ctx.close()
+    ctx, pg, errs2 = await page(browser, port, {'language': 'en'})
+    await nav(pg, 'now', 1200)
+    await pg.evaluate("document.querySelector('[data-tab=lyrics]').click()"); await pg.wait_for_timeout(1500)
+    await pg.evaluate("window.__emit('playback:time', { position: 70 })"); await pg.wait_for_timeout(250)
+    check(await pg.evaluate(cur) == 14, 'without timeHighRes (an older component) playback:time still drives the lyrics')
+    check(not errs and not errs2, f'no page errors {(errs + errs2)[:2]}')
+    await ctx.close()
+
 async def main():
     httpd = serve(); port = httpd.server_address[1]
     async with async_playwright() as p:
@@ -862,7 +891,7 @@ async def main():
         for name, fn in [('playlists', test_playlists), ('youtube', test_youtube), ('settings', test_settings), ('updates', test_updates),
                          ('tooltips', test_tooltips), ('canvas_volume', test_canvas_volume), ('fb2k_prefs', test_fb2k_prefs), ('welcome', test_welcome),
                          ('playlist_editing', test_playlist_editing), ('windows', test_windows), ('vu', test_vu), ('smart_color_radio', test_smart_color_radio),
-                         ('sound_offer', test_sound_offer), ('similar_albums', test_similar_albums), ('sound_ai', test_sound_ai), ('layout', test_layout), ('stability', test_stability)]:
+                         ('lyrics_sync', test_lyrics_sync), ('sound_offer', test_sound_offer), ('similar_albums', test_similar_albums), ('sound_ai', test_sound_ai), ('layout', test_layout), ('stability', test_stability)]:
             if run(name): await timed(name, fn(browser, port))
         await browser.close()
     httpd.shutdown()

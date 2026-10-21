@@ -12,11 +12,13 @@ import * as Theme from './theme.js';
 import * as Likes from './likes.js';
 import { placeholder } from './ui.js';
 import { $t } from './i18n.js';
+import { follower } from './position.js';
 
 const $ = (id) => document.getElementById(id);
 const S = { track: null, state: 'stopped', pos: 0, dur: 0, t0: performance.now(), vol: 100, muted: false };
 const getPos = () => Math.min(S.dur || Infinity, S.state === 'playing' ? S.pos + (performance.now() - S.t0) / 1000 : S.pos);
 const setPos = (p, d) => { S.pos = +p || 0; S.t0 = performance.now(); if (d != null && +d > 0) S.dur = +d; };
+const Pos = follower({ set: setPos, get: getPos, playing: () => S.state === 'playing' });
 const stateOf = (v) => { const x = String(v || '').toLowerCase(); return /play/.test(x) && !/pause/.test(x) ? 'playing' : /pause/.test(x) ? 'paused' : 'stopped'; };
 const BOUNDS = 'gatefold.mini.bounds';
 
@@ -75,7 +77,7 @@ async function setTrack(t) {
 async function sync() {
   const [cur, st, pos, vo] = await Promise.all([call('playback.getCurrentTrack'), call('playback.getState'), call('playback.getPosition'), call('playback.getVolume')]);
   if (ok(st)) S.state = stateOf(st.state);
-  if (ok(pos)) setPos(pos.position, pos.duration);
+  if (ok(pos)) Pos.sample(pos);
   if (ok(vo)) { S.vol = Math.round(vo.volume); S.muted = !!(vo.isMuted ?? vo.muted); }
   await setTrack(ok(cur) && cur.found !== false ? normTrack(cur.track || cur.playing || cur) : null);
   paintState(); paintVol();
@@ -85,11 +87,12 @@ async function sync() {
 function bind() {
   on('playback:trackChanged', (d) => { setPos(0); setTrack(normTrack(d)); });
   on('playback:starting', (d) => { if (!d.paused) { S.state = 'playing'; paintState(); } });
-  on('playback:stateChanged', (d) => { if (d.state) S.state = stateOf(d.state); if (d.position != null) setPos(d.position, d.duration); paintState(); });
+  on('playback:stateChanged', (d) => { if (d.state) S.state = stateOf(d.state); if (d.position != null) Pos.sample(d); paintState(); });
   on('playback:paused', (d) => { setPos(getPos()); S.state = d.paused ? 'paused' : 'playing'; paintState(); });
   on('playback:stopped', (d) => { if (!/another|starting/i.test(String(d.reason || ''))) { S.state = 'stopped'; setPos(0); paintState(); } });
-  on('playback:time', (d) => setPos(d.position));
-  on('playback:seeked', (d) => setPos(d.position));
+  on('playback:time', Pos.coarse);
+  on('playback:timeHighRes', Pos.fine);
+  on('playback:seeked', (d) => Pos.seeked(d.position));
   on('playback:volumeChanged', (d) => { S.vol = Math.round(d.volume); S.muted = !!(d.isMuted ?? d.muted); paintVol(); });
   on('playback:dynamicInfoTrack', (d) => { if (S.track && d.title) setTrack({ ...S.track, title: d.title, artist: d.artist || S.track.artist }); });
   Likes.events.addEventListener('change', paintLike);
@@ -108,7 +111,7 @@ function bind() {
   seek.addEventListener('pointerdown', (e) => {
     if (!S.dur) return;
     const r = seek.getBoundingClientRect(), p = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * S.dur;
-    setPos(p); call('playback.setPosition', { position: p });
+    Pos.seeked(p); call('playback.setPosition', { position: p });
     e.stopPropagation();
   });
   $('miOpen').onclick = () => call('window.focus', { windowId: 'main' });
@@ -129,7 +132,7 @@ function bind() {
     else if (/^[lLдД]$/.test(k)) $('miLike').click();
   });
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') sync(); });
-  setInterval(() => { if (document.visibilityState === 'visible') call('playback.getPosition').then((r) => { if (ok(r) && Math.abs(+r.position - getPos()) > 0.6) setPos(r.position, r.duration); }); }, 5000);
+  setInterval(() => { if (document.visibilityState === 'visible') call('playback.getPosition').then((r) => { if (ok(r) && Math.abs(+r.position - getPos()) > 0.6) Pos.sample(r); }); }, 5000);
 }
 let tipT = 0;
 function volTip(v) {

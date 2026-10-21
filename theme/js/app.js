@@ -20,6 +20,7 @@ import { router, onRoute, $, h, icon, toast, popupMenu, closeMenus } from './ui.
 import * as Theme from './theme.js';
 import * as WFS from './winfs.js';
 import * as Viz from './viz.js';
+import { follower } from './position.js';
 import * as VU from './vu.js';
 import * as CF from './coverfetch.js';
 import * as Lib from './library.js';
@@ -502,7 +503,7 @@ async function renderLyricsTab(force) {
     box.innerHTML = '<div class="lyr-bar" id="lyrBar"></div><div id="lyrBox"></div>';
     lyrView = new LY.LyricView($('lyrBox'), {
       getPos: Viz.getPosition,
-      seek: (p) => { call('playback.setPosition', { position: p }); Viz.setProgress(p); lyrView && lyrView.kick(); },
+      seek: (p) => { call('playback.setPosition', { position: p }); Pos.seeked(p); lyrView && lyrView.kick(); },
       playing: () => app.state === 'playing',
       variant: 'panel',
     });
@@ -664,9 +665,12 @@ seek.addEventListener('pointerup', async (e) => {
   if (!dragging) return;
   dragging = false; seek.classList.remove('drag');
   const pos = fracAt(e) * (app.track?.duration || 0);
-  Viz.setDrag(-1); Viz.setProgress(pos);
+  Viz.setDrag(-1); Pos.seeked(pos);
   await call('playback.setPosition', { position: pos });
 });
+
+/* the position follows foo_ui_webview2's ~10 Hz playback:timeHighRes (see position.js) */
+const Pos = follower({ set: (p, d) => Viz.setProgress(p, d), get: Viz.getPosition, playing: () => app.state === 'playing' });
 
 // elapsed time text: updated only when the visible second changes
 let lastSec = -1;
@@ -679,11 +683,12 @@ setInterval(() => {
 function bindEvents() {
   on('playback:trackChanged', (d) => { setTrack(normTrack(d), { fromEvent: true }); });
   on('playback:starting', (d) => { if (!d.paused) setState('playing'); });
-  on('playback:stateChanged', (d) => { if (d.state) setState(stateOf(d.state)); if (d.position != null) Viz.setProgress(+d.position, d.duration != null ? +d.duration : null); });
+  on('playback:stateChanged', (d) => { if (d.state) setState(stateOf(d.state)); if (d.position != null) Pos.sample(d); });
   on('playback:paused', (d) => setState(d.paused ? 'paused' : 'playing'));
   on('playback:stopped', (d) => { if (!/another|starting/i.test(String(d.reason || ''))) { setState('stopped'); Viz.setProgress(0, null, false); } });
-  on('playback:time', (d) => Viz.setProgress(+d.position || 0));
-  on('playback:seeked', (d) => { Viz.setProgress(+d.position || 0); lyrKick(); Canvas.notify('seek'); });
+  on('playback:time', Pos.coarse);
+  on('playback:timeHighRes', Pos.fine);
+  on('playback:seeked', (d) => { Pos.seeked(+d.position || 0); lyrKick(); Canvas.notify('seek'); });
   on('playback:volumeChanged', (d) => setVolumeUI(d.volume, d.isMuted ?? d.muted));
   on('playback:orderChanged', (d) => setOrder(d.orderIndex ?? d.order));
   on('playback:stopAfterCurrentChanged', (d) => $('btnSac').classList.toggle('on', !!d.enabled));
@@ -695,6 +700,8 @@ function bindEvents() {
     Viz.vizState.windowVisible = document.visibilityState === 'visible';
     body.classList.toggle('paused-bg', !Viz.vizState.windowVisible);
     updateSpectrum(); Viz.kick(); lyrKick();
+    // no position events reach a hidden page: catch up at once instead of waiting for the next one
+    if (Viz.vizState.windowVisible && app.track) call('playback.getPosition').then((r) => { if (ok(r)) { Pos.sample(r); lyrKick(); } });
   });
 }
 
@@ -708,7 +715,7 @@ async function syncAll() {
   if (ok(ord)) setOrder(ord.orderIndex ?? ord.order);
   if (ok(sac)) $('btnSac').classList.toggle('on', !!sac.enabled);
   const t = ok(cur) && cur.found !== false ? normTrack(cur.track || cur.playing || cur) : null;
-  if (t && ok(pos)) Viz.setProgress(+pos.position || 0, +pos.duration || t.duration, app.state === 'playing');
+  if (t && ok(pos)) { Viz.setProgress(Viz.getPosition(), +pos.duration || t.duration, app.state === 'playing'); Pos.sample(pos); }
   await setTrack(t);
 }
 
@@ -768,7 +775,7 @@ Canvas.setHost({
   art: () => app.art,
   get canFullscreen() { return app.standalone; },
   isFullscreen: () => app.fullscreen,
-  onSeek: (p) => Viz.setProgress(p),
+  onSeek: (p) => Pos.seeked(p),
   onFullscreen: (fs) => { app.fullscreen = fs; body.classList.toggle('fullscreen', fs); },
 });
 Canvas.canvasEvents.addEventListener('error', (e) => toast($t('Не удалось открыть окно: ') + esc(e.detail)));
