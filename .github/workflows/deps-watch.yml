@@ -19,6 +19,11 @@ jobs:
           $fb = [regex]::Matches($page, 'foobar2000-x64_v(\d+\.\d+(?:\.\d+)?)\.exe') | ForEach-Object { $_.Groups[1].Value } | Sort-Object { [version]$_ } -Descending | Select-Object -First 1
           $rel = Invoke-RestMethod -Headers @{ Authorization = "Bearer $env:GITHUB_TOKEN" } 'https://api.github.com/repos/NereaFantasia/foo_ui_webview2/releases/latest'
           $lock = Get-Content installer/deps.lock.json | ConvertFrom-Json
+          if ($lock.foobar2000 -ne $fb) {
+            # pin the new installer's SHA-256 (the build checks it, wherever the file comes from)
+            Invoke-WebRequest -UseBasicParsing "https://www.foobar2000.org/downloads/foobar2000-x64_v$fb.exe" -OutFile fb.exe
+            $lock.foobar2000_sha256 = (Get-FileHash -Algorithm SHA256 fb.exe).Hash.ToLower(); Remove-Item fb.exe
+          }
           $lock.foobar2000 = $fb; $lock.foo_ui_webview2 = $rel.tag_name
           $lock | ConvertTo-Json | Set-Content installer/deps.lock.json
           "foobar2000 $fb · foo_ui_webview2 $($rel.tag_name)"
