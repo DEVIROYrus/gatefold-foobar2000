@@ -186,45 +186,47 @@ async function decodePiece(path, start, end) {
   });
 }
 
-/* ---------------------------------------------------------------- the worker */
-let worker = null, wseq = 0;
+/* ---------------------------------------------------------------- the workers */
+/* foobar2000 decodes one piece at a time on its own thread; the measuring runs in workers, one per
+   lane, so several tracks are measured side by side while foobar2000's decoder never waits for us */
+const LANES = Math.max(1, Math.min(3, Math.floor(((navigator.hardwareConcurrency || 4) - 2) / 2) + 1));
+const workers = [];
+let wseq = 0;
 const wreq = new Map();
-function getWorker() {
-  if (worker) return worker;
-  worker = new Worker(new URL('./loudness-worker.js', import.meta.url), { type: 'module' });
-  worker.onmessage = (e) => { const r = wreq.get(e.data.id); if (r) { wreq.delete(e.data.id); r(e.data); } };
-  worker.onerror = (e) => { log('level worker', e.message || e); for (const r of wreq.values()) r({ error: 'worker' }); wreq.clear(); };
-  return worker;
+function getWorker(k) {
+  if (workers[k]) return workers[k];
+  const w = new Worker(new URL('./loudness-worker.js', import.meta.url), { type: 'module' });
+  w.onmessage = (e) => { const r = wreq.get(e.data.id); if (r) { wreq.delete(e.data.id); r(e.data); } };
+  w.onerror = (e) => { log('level worker', e.message || e); for (const r of wreq.values()) r({ error: 'worker' }); wreq.clear(); };
+  return (workers[k] = w);
 }
 
-/** measure one track → { lufs, peak, truePeak, hist, seconds } | { failed } */
-async function measure(t) {
+/** measure one track in lane `lane` → { lufs, peak, truePeak, hist, seconds } | { failed } */
+async function measure(t, lane) {
   const path = pathOf(t), dur = +t.duration || 0;
   const sr0 = +t.sampleRate || 48000, ch0 = Math.max(1, +t.channels || 2);
-  // pieces of at most ~48 MB of samples (the host caps one buffer at 256 MB)
-  const piece = Math.max(5, Math.min(60, Math.floor(48e6 / (sr0 * ch0 * 4))));
-  const id = ++wseq, w = getWorker();
-  let begun = false, pos = 0;
+  // pieces of ~16 MB of samples (≈ 45 s of CD audio): small enough to keep two in flight per lane
+  const piece = Math.max(4, Math.min(45, Math.floor(16e6 / (sr0 * ch0 * 4))));
+  const w = getWorker(lane), id = ++wseq;
+  const ask = (from) => decodePiece(path, from, dur ? Math.min(dur, from + piece) : from + piece);
+  let begun = false, pos = 0, next = ask(0);
+  const drop = () => { if (begun) w.postMessage({ type: 'drop', id }); };
   for (;;) {
-    if (!running) { if (begun) w.postMessage({ type: 'drop', id }); return { failed: 'stopped' }; }
-    await slot('low');
-    const t0 = performance.now();
-    const end = dur ? Math.min(dur, pos + piece) : pos + piece;
-    const d = await decodePiece(path, pos, end);
-    spent(Math.min(40, performance.now() - t0));
+    const d = await next;
     if (d.failed) {
       if (begun && (d.failed === 'INVALID_PARAMS' || !dur)) break;      // ran past the end of a track of unknown length
-      if (begun) w.postMessage({ type: 'drop', id });
-      return { failed: d.failed };
+      drop(); return { failed: d.failed };
     }
-    if (!begun) { w.postMessage({ type: 'begin', id, fs: d.sr || sr0, ch: d.ch || ch0 }); begun = true; }
-    if (d.frames) w.postMessage({ type: 'push', id, planes: d.planes, frames: d.frames }, d.planes.map((p) => p.buffer));
-    const got = d.frames / (d.sr || sr0), from = pos;
-    state.secondsDone += got; emit();
+    const sr = d.sr || sr0, got = d.frames / sr;
     pos = typeof d.end === 'number' && d.end > pos ? d.end : pos + got;
-    if (!d.frames || d.truncated) break;
-    if (dur ? pos >= dur - 0.01 : got < end - from - 0.05) break;      // the end (a short last piece when the length is unknown)
-    await pace();
+    const more = d.frames > 0 && !d.truncated && (dur ? pos < dur - 0.01 : got >= piece - 0.05);
+    if (more && running) next = ask(pos);                             // decoding the next piece while this one is measured
+    if (!begun) { w.postMessage({ type: 'begin', id, fs: sr, ch: d.ch || ch0 }); begun = true; }
+    if (d.frames) w.postMessage({ type: 'push', id, planes: d.planes, frames: d.frames }, d.planes.map((p) => p.buffer));
+    progress(got);
+    if (!more) break;
+    if (!running) { next.then(() => {}); drop(); return { failed: 'stopped' }; }
+    await gate(lane);
   }
   const res = await new Promise((r) => { wreq.set(id, r); w.postMessage({ type: 'end', id }); });
   return res.error || !res.result ? { failed: res.error || 'measure' } : res.result;
@@ -235,12 +237,25 @@ let wake = null;
 const wakeUp = () => { const w = wake; wake = null; if (w) w(); };
 const waitWake = (ms) => new Promise((r) => { wake = r; setTimeout(() => { if (wake === r) wake = null; r(); }, ms); });
 async function onBattery() { try { const b = navigator.getBattery && await navigator.getBattery(); return !!(b && b.charging === false); } catch { return false; } }
-/** the analysis yields to the user: a short breath between pieces, longer while they are busy */
-async function pace() {
-  const away = document.visibilityState === 'hidden' || userIdleFor() > 30000;
-  await sleep(away ? 20 : 120);
+/* Pacing: full speed while nobody is at the computer (or the window is hidden); while someone is
+   using it, a single lane and a short breath between pieces, so the interface stays smooth */
+const active = () => document.visibilityState === 'visible' && userIdleFor() < 4000;
+async function gate(lane) {
   while (running && settings.levelPaused) { setPhase('paused'); await waitWake(30000); }
+  if (active()) { await sleep(15); while (running && lane > 0 && active()) await sleep(700); }
+  if (state.phase === 'paused') setPhase('measuring');
 }
+let rate0 = { t: 0, s: 0 };
+function progress(sec) {
+  state.secondsDone += sec;
+  const now = performance.now();
+  if (!rate0.t) rate0 = { t: now, s: state.secondsDone - sec };
+  const el = (now - rate0.t) / 1000;
+  if (el > 3) state.rate = (state.secondsDone - rate0.s) / el;      // seconds of audio per second
+  emitSoon();
+}
+let emitT = 0;
+const emitSoon = () => { if (!emitT) emitT = setTimeout(() => { emitT = 0; emit(); }, 250); };
 
 /* ---------------------------------------------------------------- the run */
 let running = false, alive = false, playingKey = '';
@@ -259,7 +274,7 @@ export function rescan() {
   failed = {}; IDB.kvSet(FAIL, {}); try { localStorage.removeItem(NOWRITE); } catch {}
   if (running) wakeUp(); else start();
 }
-export function stop() { running = false; wakeUp(); for (const r of wreq.values()) r({ error: 'stopped' }); wreq.clear(); if (worker) { worker.terminate(); worker = null; } }
+export function stop() { running = false; wakeUp(); for (const r of wreq.values()) r({ error: 'stopped' }); wreq.clear(); workers.splice(0).forEach((w) => w && w.terminate()); }
 
 let failed = {};
 async function run() {
@@ -283,25 +298,11 @@ async function run() {
     state.secondsTotal = groups.reduce((n, g) => n + g.tracks.reduce((m, t) => m + (+t.duration || 0), 0), 0);
     emit();
     if (!groups.length) { setPhase('done'); await waitWake(30 * 60000); if (!running) return; continue; }
-    const t0 = performance.now(); const sec0 = state.secondsDone;
-    for (const g of groups) {
-      if (!running) return;
-      while (running && (settings.levelPaused || await onBattery())) { setPhase('paused', settings.levelPaused ? '' : 'battery'); await waitWake(60000); }
-      if (!running) return;
-      state.current = g.artist ? `${g.artist} — ${g.name}` : g.name;
-      setPhase('measuring');
-      const job = await measureAlbum(g, T, A);
-      state.tracksDone += g.tracks.length;
-      if (job) {
-        if (g.tracks.some((t) => keyOf(t) === playingKey)) { deferred.set(g.key, job); state.deferred = deferred.size; }
-        else await write(job, nowrite);
-      }
-      state.albumsDone++;
-      const el = (performance.now() - t0) / 1000;
-      state.rate = el > 5 ? (state.secondsDone - sec0) / el : 0;     // seconds of audio per second
-      emit();
-      await flushDeferred(nowrite);
-    }
+    rate0 = { t: 0, s: 0 }; state.rate = 0;
+    // the album that is playing first: it is the one to be ready when playback moves on
+    groups.sort((a, b) => (b.tracks.some((t) => keyOf(t) === playingKey) ? 1 : 0) - (a.tracks.some((t) => keyOf(t) === playingKey) ? 1 : 0));
+    await measureAll(groups, T, A, nowrite);
+    if (!running) return;
     state.current = '';
     await IDB.kvSet(FAIL, failed);
     // the album that is playing is written once playback leaves it
@@ -312,25 +313,57 @@ async function run() {
   }
 }
 
-/** measure every track of an album → the tags to write, or null */
-async function measureAlbum(g, T, A) {
-  if (g.single && !T.has(keyOf(g.tracks[0]))) {
-    // a single with a track gain but no album gain: its album gain is that same value
-    const t = g.tracks[0], r = await call('replaygain.get', { paths: [pathOf(t)] }), x = ok(r) && r.results && r.results[0];
-    if (x && x.success && x.trackGainRaw != null) return { key: g.key, items: [{ path: pathOf(t), key: keyOf(t), tags: { REPLAYGAIN_ALBUM_GAIN: fmtGain(x.trackGainRaw), REPLAYGAIN_ALBUM_PEAK: fmtPeak(x.trackPeakRaw != null ? x.trackPeakRaw : 1) } }] };
-  }
-  const results = [];
-  for (const t of g.tracks) {
-    if (!running) return null;
-    const r = await measure(t);
-    if (r.failed) { if (r.failed !== 'stopped') { failed[keyOf(t)] = Date.now(); state.failed++; log('level: cannot measure', pathOf(t), r.failed); } results.push(null); }
-    else {
-      // silence, or shorter than one 400 ms block: no loudness of its own (it still takes the album's)
-      if (r.lufs == null) failed[keyOf(t)] = Date.now();
-      results.push(r);
+/* Every track of every album goes through one queue, served by the lanes; an album is complete when
+   its last track is measured, and its tags then go to the writer (one album at a time, in order). */
+async function measureAll(groups, T, A, nowrite) {
+  let writing = Promise.resolve();
+  const deliver = (job) => {
+    if (!job) return;
+    if (job.items.some((it) => it.key === playingKey)) { deferred.set(job.key, job); state.deferred = deferred.size; return; }
+    writing = writing.then(() => (running ? write(job, nowrite) : null)).then(() => flushDeferred(nowrite));
+  };
+  const queue = [];
+  for (const g of groups) {
+    if (g.single && !T.has(keyOf(g.tracks[0]))) {
+      // a single with a track gain but no album gain: its album gain is that same value, no decoding
+      writing = writing.then(async () => {
+        const t = g.tracks[0], r = await call('replaygain.get', { paths: [pathOf(t)] }), x = ok(r) && r.results && r.results[0];
+        state.albumsDone++; state.tracksDone++;
+        if (x && x.success && x.trackGainRaw != null && running) await write({ key: g.key, items: [{ path: pathOf(t), key: keyOf(t), tags: { REPLAYGAIN_ALBUM_GAIN: fmtGain(x.trackGainRaw), REPLAYGAIN_ALBUM_PEAK: fmtPeak(x.trackPeakRaw != null ? x.trackPeakRaw : 1) } }] }, nowrite);
+      });
+      continue;
     }
+    const job = { g, results: new Array(g.tracks.length).fill(null), left: g.tracks.length };
+    g.tracks.forEach((t, i) => queue.push({ job, t, i }));
   }
-  if (!running) return null;
+  let qi = 0;
+  const lane = async (k) => {
+    while (running && qi < queue.length) {
+      while (running && await onBattery()) { setPhase('paused', 'battery'); await waitWake(60000); }
+      if (!running) return;
+      if (k > 0) while (running && active()) await sleep(700);
+      if (qi >= queue.length) return;
+      const it = queue[qi++], g = it.job.g;
+      state.current = g.artist && g.artist !== g.name ? `${g.artist} — ${g.name}` : g.name;
+      if (state.phase !== 'writing') setPhase('measuring');
+      const r = await measure(it.t, k);
+      if (!running) return;
+      if (r.failed) { failed[keyOf(it.t)] = Date.now(); state.failed++; log('level: cannot measure', pathOf(it.t), r.failed); }
+      else {
+        if (r.lufs == null) failed[keyOf(it.t)] = Date.now();     // silence, or shorter than 400 ms: no loudness of its own
+        it.job.results[it.i] = r;
+      }
+      state.tracksDone++;
+      if (--it.job.left === 0) { state.albumsDone++; deliver(albumTags(it.job, T, A)); }
+      emitSoon();
+    }
+  };
+  await Promise.all(Array.from({ length: LANES }, (_, k) => lane(k)));
+  await writing;
+}
+
+/** the tags for a measured album → a write job, or null */
+function albumTags({ g, results }, T, A) {
   const okRes = results.filter(Boolean);
   if (!okRes.length) return null;
   const al = albumOf(okRes);
@@ -344,9 +377,9 @@ async function measureAlbum(g, T, A) {
     if (al.gain != null) { tags.REPLAYGAIN_ALBUM_GAIN = fmtGain(g.single && tg != null ? tg : al.gain); tags.REPLAYGAIN_ALBUM_PEAK = fmtPeak(g.single ? r.truePeak : al.peak); }
     if (Object.keys(tags).length) items.push({ path: pathOf(t), key: k, tags, had: !T.has(k) || !A.has(k) });
   });
-  // a silent track that could not be measured still belongs to the album: same album values
+  // a track that could not be measured still belongs to the album: the album values
   g.tracks.forEach((t, i) => { if (!results[i] && al.gain != null && !failed[keyOf(t)]) items.push({ path: pathOf(t), key: keyOf(t), tags: { REPLAYGAIN_ALBUM_GAIN: fmtGain(al.gain), REPLAYGAIN_ALBUM_PEAK: fmtPeak(al.peak) } }); });
-  return items.length ? { key: g.key, name: state.current, items, album: al } : null;
+  return items.length ? { key: g.key, items, album: al } : null;
 }
 
 /* ---------------------------------------------------------------- writing and reading back */
@@ -447,6 +480,6 @@ export function init() {
   if (!settings.level) return;
   readFoobar().then((s) => {
     if (s && s.sourceMode === 'none') { setSetting('level', false); try { localStorage.removeItem(PREV); } catch {} emit(); return; }
-    setTimeout(start, 20000);          // after the start-up work
+    setTimeout(start, 4000);           // after the start-up work
   });
 }

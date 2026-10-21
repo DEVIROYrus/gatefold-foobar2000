@@ -470,6 +470,15 @@ async def test_vu(browser, port):
     ctx, pg, errs = await page(browser, port, {'language': 'en'})
     await nav(pg, 'now', 1200)
     check(not await pg.evaluate("!!document.querySelector('.vu-box')") and await pg.evaluate("getComputedStyle(document.getElementById('viz')).display") != 'none', 'off by default: the spectrum, no meters')
+    # the level is read after foobar2000's ReplayGain, as foobar2000 computes it
+    R = await pg.evaluate('''import('/theme/js/rg-now.js').then(R => {
+      const c = (src, proc, pre = 0, preNo = -6) => ({ sourceMode: src, processingMode: proc, preampWithRg: pre, preampWithoutRg: preNo });
+      const v = { trackGainRaw: -6, trackPeakRaw: 0.98, albumGainRaw: -8, albumPeakRaw: 0.99 }, quiet = { trackGainRaw: 12, trackPeakRaw: 0.4, albumGainRaw: 10, albumPeakRaw: 0.3 };
+      const r = (x) => Math.round(x.db * 100) / 100;
+      return [r(R.compute(c('album', 'gain_and_peak', 4), 0, v)), r(R.compute(c('album', 'gain_and_peak', 4), 0, quiet)), r(R.compute(c('auto', 'gain', 0), 4, v)), r(R.compute(c('auto', 'gain', 0), 0, v)),
+              r(R.compute(c('album', 'gain', 0, -9), 0, null)), r(R.compute(c('none', 'gain'), 0, v)), R.compute(c('album', 'gain'), 0, v).lufs];
+    })''')
+    check(R == [-4, 10.46, -6, -8, -9, 0, -10], f'ReplayGain as foobar2000 applies it: album gain + preamp, peak limit, track gain in shuffle, preamp without values, off; album loudness {R}')
     await nav(pg, 'settings', 900)
     await pg.evaluate("[...document.querySelectorAll('#st-look .row')].find(r => r.innerText.includes('VU meters instead of the spectrum')).querySelector('.toggle input').click()"); await pg.wait_for_timeout(500)
     check(await pg.evaluate("JSON.parse(localStorage.getItem('aurora.settings.v1')).vuMeters") is True, 'Settings → Appearance turns them on')

@@ -13,6 +13,9 @@ All notable changes are listed here. Versions follow [Semantic Versioning](https
 - **Albums are found the careful way:** album tag + album folder (CD1 / Disc 2 sub-folders belong to one album), one title by two album artists in one folder stays two albums, and a compilation stays one.
 - **An album missing an album gain on any of its tracks is measured again as a whole.** Otherwise foobar2000 would fall back to that track's own gain, and the interlude would jump up.
 - **The album that is playing gets its values only when playback leaves it**, and nothing is written in the last seconds before a track change, so loudness never shifts mid-listen.
+- **Fast:** several tracks are measured side by side in workers while foobar2000's decoder is kept busy without a break (about as fast as foobar2000 can decode). Only while you are using the computer does it slow down to one track at a time.
+
+**VU meters read what you hear.** The live stream comes before ReplayGain, so the meters now apply the gain foobar2000 applies to the playing track (the same rules: source, preamp, clipping prevention). A new default for 0 VU, «Auto», takes the reference from the loudness of the album that is playing: the needle swings around −4 VU and reaches the red only on the loudest moments, on a loud modern master and a quiet old record alike. The fixed −18 / −14 / −10 dBFS references are still there.
 
 ## [1.1.1] — hotfix
 
