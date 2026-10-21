@@ -10,4 +10,4 @@ Two add-ons for **Default UI** and **Columns UI** layouts. You don't need the Ga
 2. Add a **WebView2 Panel** to your layout.
 3. Right-click the panel → *Configure* → *Template*: `gatefold-seekbar` or `gatefold-covers`.
 
-Details: [panels/README.md](https://github.com/DEVIROYrus/gatefold-foobar2000/blob/main/panels/README.md)
+Details: [Gatefold Seekbar](https://github.com/DEVIROYrus/gatefold-foobar2000/blob/main/panels/seekbar/README.md) · [Gatefold Covers](https://github.com/DEVIROYrus/gatefold-foobar2000/blob/main/panels/covers/README.md)
