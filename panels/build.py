@@ -31,7 +31,7 @@ OUT.mkdir(parents=True, exist_ok=True)
 for name, cfg in PANELS.items():
     src, dst = HERE / name, OUT / f'gatefold-{name}'
     if dst.exists(): shutil.rmtree(dst)
-    shutil.copytree(src, dst)
+    shutil.copytree(src, dst, ignore=shutil.ignore_patterns('README.md'))   # the page on GitHub, not part of the panel
     # the Gatefold modules this panel imports through ./gf/
     need = set()
     for js in src.glob('*.js'):
