@@ -21,8 +21,14 @@ jobs:
           set -euo pipefail
           fb=$(jq -r .foobar2000 installer/deps.lock.json); fuw=$(jq -r .foo_ui_webview2 installer/deps.lock.json)
           mkdir -p installer/.dl-cache && cd installer/.dl-cache
-          get() { curl -fSL --retry 6 --retry-delay 20 --retry-all-errors -A 'gatefold-build (+https://github.com)' -o "$1" "$2"; }
-          get "foobar2000-x64_v$fb.exe" "https://www.foobar2000.org/downloads/foobar2000-x64_v$fb.exe"
+          get() { curl -fSL --retry 3 --retry-delay 15 --retry-all-errors -A 'gatefold-build (+https://github.com)' -o "$1" "$2"; }
+          # foobar2000.org, else the copy of the same official installer attached to this repository's
+          # «bundled-software» pre-release (the Windows build checks its Authenticode signature either way)
+          if ! get "foobar2000-x64_v$fb.exe" "https://www.foobar2000.org/downloads/foobar2000-x64_v$fb.exe"; then
+            echo "::warning::foobar2000.org refused the runner; using the bundled-software release"
+            gh release download bundled-software -R "${{ github.repository }}" -p "foobar2000-x64_v$fb.exe" -D . --clobber \
+              || { echo "::error::foobar2000 $fb is neither on foobar2000.org (from here) nor attached to the bundled-software release"; exit 1; }
+          fi
           api=repos/NereaFantasia/foo_ui_webview2/releases/$([ -n "$fuw" ] && echo "tags/$fuw" || echo latest)
           gh api "$api" --jq '.assets[] | select(.name | endswith(".fb2k-component")) | "\(.name)\t\(.browser_download_url)"' | head -1 | while IFS=$'\t' read -r name url; do get "$name" "$url"; done
           get MicrosoftEdgeWebview2Setup.exe 'https://go.microsoft.com/fwlink/p/?LinkId=2124703'

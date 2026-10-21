@@ -52,7 +52,7 @@ if (-not $Fb2kVersion) {
 $fbFile = "foobar2000-x64_v$Fb2kVersion.exe"
 Write-Host "foobar2000 $Fb2kVersion"
 Fetch "https://www.foobar2000.org/downloads/$fbFile" (Join-Path $OutDir $fbFile) $fbFile
-Check-Signature (Join-Path $OutDir $fbFile)
+Check-Signature (Join-Path $OutDir $fbFile) -Required   # also guards the copy from the bundled-software release
 
 # ---------------------------------------------------------------- foo_ui_webview2
 $api = if ($ComponentTag) { "https://api.github.com/repos/$ComponentRepo/releases/tags/$ComponentTag" } else { "https://api.github.com/repos/$ComponentRepo/releases/latest" }
