@@ -57,21 +57,24 @@ Start-Sleep 15
 Shot '1-first-start'
 $w = Wins 'first start'
 
-# a "choose the user interface" dialog: pick Webview2 UI and confirm
+# foobar2000 asks "New user interface module(s) found": a list (libPPUI:CListControl, its rows are not
+# exposed to UI Automation) and OK. Focus the list, type "w" (type-to-find: "Webview2 UI"), confirm.
 $picked = $false
 foreach ($x in $w) {
-  $item = Find $x 'Webview2 UI|WebView2 UI'
-  if ($item -and $x.Current.Name -notmatch 'Gatefold') {
-    "found $($item.Current.Name) ($($item.Current.ControlType.ProgrammaticName)) in window '$($x.Current.Name)'"
-    try { $item.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select(); 'selected' } catch { try { $item.SetFocus(); 'focused' } catch { "cannot select: $_" } }
-    Start-Sleep 1; Shot '2-picked'
-    $ok = Find $x '^(OK|Use|Apply)$'
-    if ($ok) { try { $ok.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke(); "pressed '$($ok.Current.Name)'" } catch { [System.Windows.Forms.SendKeys]::SendWait('{ENTER}'); 'Enter' } }
-    else { [System.Windows.Forms.SendKeys]::SendWait('{ENTER}'); 'no OK button found - Enter' }
-    $picked = $true; break
-  }
+  if ($x.Current.Name -notmatch 'user interface') { continue }
+  "dialog: '$($x.Current.Name)'"
+  $list = $null
+  foreach ($e in $x.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)) { if ($e.Current.ClassName -match 'CListControl') { $list = $e } }
+  if (-not $list) { 'no list in the dialog'; break }
+  try { $list.SetFocus(); 'list focused' } catch { "cannot focus the list: $_" }
+  Start-Sleep 1; [System.Windows.Forms.SendKeys]::SendWait('{HOME}'); Start-Sleep 1; Shot '2a-home'
+  [System.Windows.Forms.SendKeys]::SendWait('w'); Start-Sleep 1; Shot '2b-typed-w'
+  $ok = Find $x '^OK$'
+  if ($ok) { try { $ok.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke(); "pressed OK" } catch { [System.Windows.Forms.SendKeys]::SendWait('{ENTER}'); 'Enter' } }
+  else { [System.Windows.Forms.SendKeys]::SendWait('{ENTER}'); 'no OK button - Enter' }
+  $picked = $true; break
 }
-if (-not $picked) { 'no dialog offering Webview2 UI' }
+if (-not $picked) { 'no user interface dialog' }
 Start-Sleep 15
 Shot '3-after-choice'
 Wins 'after choice' | Out-Null

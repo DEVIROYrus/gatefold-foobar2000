@@ -11,16 +11,17 @@ jobs:
     name: Theme — ${{ matrix.part }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    permissions: { contents: write }   # the test output goes to a ci-log-<part> branch (below)
     # the end-to-end tests in parallel parts (one job took ~25 min); ONLY= picks tests by name
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { part: 'screens, settings, updates', only: 'language,playlists,youtube,settings,updates,tooltips,canvas_volume,fb2k_prefs,welcome' }
-          - { part: 'editing, windows, smart playlists, radio', only: 'playlist_editing,windows,smart_color_radio' }
-          - { part: 'sound analysis', only: 'sound_ai' }
-          - { part: 'layout', only: 'layout' }
-          - { part: 'stability', only: 'stability' }
+          - { part: 'screens, settings, updates', id: screens, only: 'language,playlists,youtube,settings,updates,tooltips,canvas_volume,fb2k_prefs,welcome' }
+          - { part: 'editing, windows, smart playlists, radio', id: editing, only: 'playlist_editing,windows,smart_color_radio' }
+          - { part: 'sound analysis', id: sound, only: 'sound_ai' }
+          - { part: 'layout', id: layout, only: 'layout' }
+          - { part: 'stability', id: stability, only: 'stability' }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -36,7 +37,19 @@ jobs:
           python -m playwright install --with-deps chromium
       - name: End-to-end (headless Chromium, mocked foobar2000 bridge)
         env: { ONLY: '${{ matrix.only }}', PYTHONUNBUFFERED: '1' }
-        run: python tests/e2e.py
+        run: |
+          set -o pipefail
+          python tests/e2e.py 2>&1 | tee e2e.log
+      # the output, readable with plain git (job logs need a signed-in browser): branch ci-log-<part>
+      - name: Publish the output
+        if: always() && github.event_name == 'push'
+        run: |
+          mkdir -p /tmp/log && cp e2e.log /tmp/log/ 2>/dev/null || echo "no output" > /tmp/log/e2e.log
+          echo "${{ job.status }} ${GITHUB_SHA} $(date -u +%FT%TZ)" > /tmp/log/STATUS
+          cd /tmp/log && git init -q -b ci-log-${{ matrix.id }}
+          git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A && git commit -qm "e2e ${{ matrix.id }} ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ci-log-${{ matrix.id }}
 
   installer:
     name: Installer — builds
