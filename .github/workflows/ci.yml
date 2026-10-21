@@ -65,8 +65,8 @@ jobs:
         env: { GITHUB_TOKEN: '${{ github.token }}' }
         run: |
           $lock = Get-Content installer/deps.lock.json | ConvertFrom-Json
-          ./installer/fetch-deps.ps1 -Fb2kVersion $lock.foobar2000 -ComponentTag $lock.foo_ui_webview2 *>&1 | Tee-Object -FilePath fetch.log
-          if (-not (Test-Path installer/deps/versions.iss)) { throw 'fetch-deps did not finish' }
+          try { ./installer/fetch-deps.ps1 -Fb2kVersion $lock.foobar2000 -ComponentTag $lock.foo_ui_webview2 *>&1 | Tee-Object -FilePath fetch.log }
+          catch { "ERROR: $($_ | Out-String) $($_.ScriptStackTrace)" | Tee-Object -FilePath fetch.log -Append; throw }
       - name: Inno Setup 6.6
         shell: pwsh
         run: choco upgrade innosetup -y --no-progress
