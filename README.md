@@ -5,6 +5,8 @@
 
 Gatefold is a theme for the [foo_ui_webview2](https://github.com/NereaFantasia/foo_ui_webview2) component. It turns foobar2000 into a full-window player whose palette is built live from the cover of the playing album — with your library, artists, playlists, synced lyrics, a full-screen Canvas, YouTube and an optional on-device sound analysis. The installer sets everything up: run it, and foobar2000 opens in Gatefold.
 
+![Gatefold in motion](docs/screenshots/demo.webp)
+
 ![Now playing](docs/screenshots/now-en.webp)
 
 | Playlist with covers | Library by cover colour |
