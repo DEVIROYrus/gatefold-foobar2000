@@ -92,6 +92,14 @@ Everything downloaded is kept on your computer: in the theme's cache, or next to
 ### Optional unofficial sources — off by default
 Settings can turn on lyrics from **Musixmatch, NetEase, QQ Music and Kugou**, and a **YouTube search that reads the results page** without a key. These use the services' private interfaces without their approval. They may break at any time, and using them may go against those services' terms. They are disabled until you turn them on yourself. Lyrics and cover art are copyrighted and are for personal use only.
 
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).
+
+- Committers and reviewers: the members of this repository. Approvers: the repository owner.
+- Every signed release is built by GitHub Actions from this repository (`.github/workflows/release.yml`) and approved by hand before signing.
+- Privacy: this program does not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it — see [Privacy](#privacy) for every request a feature makes.
+
 ## Keyboard shortcuts
 
 | Keys | Action |
