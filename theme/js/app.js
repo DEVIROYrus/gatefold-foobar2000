@@ -109,11 +109,27 @@ async function initWindow() {
   }
   const s = await call('window.getState');
   if (ok(s)) setWinState(s);
+  if (ok(s)) fitOnScreen(s);
   call('window.setMinSize', { width: Math.round(760 * devicePixelRatio), height: Math.round(520 * devicePixelRatio) });
   applyBackdrop();
   updateDragRegions();
   new ResizeObserver(debounce(updateDragRegions, 60)).observe($('titlebar'));
   on('window:stateChanged', setWinState);
+}
+
+/* the first start on a small screen (1366 × 768, a 1024 × 768 VM) can open the window larger than the
+   screen, its left edge and the sidebar out of reach: bring it inside, centred. Only when it is
+   bigger than the work area or mostly off it — a window kept half on another monitor stays put. */
+async function fitOnScreen(s) {
+  if (s.isMaximized || s.maximized || s.isFullscreen || s.fullscreen || s.isMinimized || s.minimized) return;
+  const b = await call('window.getBounds'); if (!ok(b) || !(b.width > 0)) return;
+  const d = devicePixelRatio || 1;
+  const L = (screen.availLeft || 0) * d, T = (screen.availTop || 0) * d, W = screen.availWidth * d, H = screen.availHeight * d;
+  if (!(W > 0 && H > 0)) return;
+  const vis = Math.max(0, Math.min(b.x + b.width, L + W) - Math.max(b.x, L)) * Math.max(0, Math.min(b.y + b.height, T + H) - Math.max(b.y, T));
+  if (b.width <= W + 2 && b.height <= H + 2 && vis >= b.width * b.height * 0.6) return;
+  const w = Math.min(b.width, W), h = Math.min(b.height, H);
+  call('window.setBounds', { x: Math.round(L + (W - w) / 2), y: Math.round(T + (H - h) / 2), width: Math.round(w), height: Math.round(h) });
 }
 
 function setWinState(s) {
