@@ -561,8 +561,10 @@ begin
        '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + ExpandConstant('{tmp}\preset-ui.ps1') + '" -Db "' + Cfg + '"',
        '', SW_HIDE, ewWaitUntilTerminated, RC, Cap) then begin
     for I := 0 to GetArrayLength(Cap.StdOut) - 1 do Log('preset-ui: ' + Cap.StdOut[I]);
+    for I := 0 to GetArrayLength(Cap.StdErr) - 1 do Log('preset-ui (error): ' + Cap.StdErr[I]);
+    Log('preset-ui exit code: ' + IntToStr(RC));
     PresetUI := RC = 0;
-  end;
+  end else Log('preset-ui: PowerShell could not be started');
   Log('Webview2 UI preset: ' + IntToStr(Ord(PresetUI)));
 end;
 
