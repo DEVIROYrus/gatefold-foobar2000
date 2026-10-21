@@ -65,7 +65,8 @@ jobs:
         env: { GITHUB_TOKEN: '${{ github.token }}' }
         run: |
           $lock = Get-Content installer/deps.lock.json | ConvertFrom-Json
-          ./installer/fetch-deps.ps1 -Fb2kVersion $lock.foobar2000 -ComponentTag $lock.foo_ui_webview2
+          ./installer/fetch-deps.ps1 -Fb2kVersion $lock.foobar2000 -ComponentTag $lock.foo_ui_webview2 *>&1 | Tee-Object -FilePath fetch.log
+          if (-not (Test-Path installer/deps/versions.iss)) { throw 'fetch-deps did not finish' }
       - name: Inno Setup 6.6
         shell: pwsh
         run: choco upgrade innosetup -y --no-progress
@@ -107,7 +108,7 @@ jobs:
         if: failure() && github.event_name == 'push'
         shell: bash
         run: |
-          mkdir -p /tmp/log && cp first-start.log first-start.png setup.log /tmp/log/ 2>/dev/null || true
+          mkdir -p /tmp/log && cp fetch.log first-start.log first-start.png setup.log /tmp/log/ 2>/dev/null || true
           echo "${{ job.status }} ${GITHUB_SHA} $(date -u +%FT%TZ)" > /tmp/log/STATUS
           cd /tmp/log && git init -q -b ci-log-installer
           git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
