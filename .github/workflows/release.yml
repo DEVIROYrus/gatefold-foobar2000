@@ -7,8 +7,11 @@ permissions:
   contents: write
 
 jobs:
+  deps:
+    uses: ./.github/workflows/deps-fetch.yml
   release:
     runs-on: windows-2022
+    needs: deps
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -22,11 +25,13 @@ jobs:
           $f = 'theme/js/version.js'
           (Get-Content $f -Raw) -replace "REPO = '[^']*'", "REPO = '${{ github.repository }}'" | Set-Content -NoNewline -Encoding UTF8 $f
           Select-String -Path $f -Pattern 'REPO'
-      - name: Bundled software from the cache (fetched once per pinned version)
-        uses: actions/cache@v4
+      - name: Bundled software (fetched by the deps job)
+        uses: actions/cache/restore@v4
         with:
           path: installer/.dl-cache
-          key: deps-${{ hashFiles('installer/deps.lock.json') }}-v1
+          key: deps-${{ hashFiles('installer/deps.lock.json') }}-x1
+          enableCrossOsArchive: true
+          fail-on-cache-miss: true
       - name: Fetch and verify bundled software
         id: deps
         shell: pwsh

@@ -1,0 +1,29 @@
+# The software the installer bundles, fetched once per pinned version on Linux and kept in the
+# Actions cache for the Windows builds (foobar2000.org has refused Windows runners at times).
+name: Fetch bundled software
+on:
+  workflow_call:
+jobs:
+  fetch:
+    name: Bundled software
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - id: cache
+        uses: actions/cache@v4
+        with:
+          path: installer/.dl-cache
+          key: deps-${{ hashFiles('installer/deps.lock.json') }}-x1
+          enableCrossOsArchive: true
+      - if: steps.cache.outputs.cache-hit != 'true'
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          set -euo pipefail
+          fb=$(jq -r .foobar2000 installer/deps.lock.json); fuw=$(jq -r .foo_ui_webview2 installer/deps.lock.json)
+          mkdir -p installer/.dl-cache && cd installer/.dl-cache
+          get() { curl -fSL --retry 6 --retry-delay 20 --retry-all-errors -A 'gatefold-build (+https://github.com)' -o "$1" "$2"; }
+          get "foobar2000-x64_v$fb.exe" "https://www.foobar2000.org/downloads/foobar2000-x64_v$fb.exe"
+          api=repos/NereaFantasia/foo_ui_webview2/releases/$([ -n "$fuw" ] && echo "tags/$fuw" || echo latest)
+          gh api "$api" --jq '.assets[] | select(.name | endswith(".fb2k-component")) | "\(.name)\t\(.browser_download_url)"' | head -1 | while IFS=$'\t' read -r name url; do get "$name" "$url"; done
+          get MicrosoftEdgeWebview2Setup.exe 'https://go.microsoft.com/fwlink/p/?LinkId=2124703'
+          ls -la

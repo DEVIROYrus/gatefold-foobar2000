@@ -7,6 +7,8 @@ permissions:
   contents: read
 
 jobs:
+  deps:
+    uses: ./.github/workflows/deps-fetch.yml
   theme:
     name: Theme — ${{ matrix.part }}
     runs-on: ubuntu-24.04
@@ -57,14 +59,17 @@ jobs:
   installer:
     name: Installer — builds
     runs-on: windows-2022
+    needs: deps
     permissions: { contents: write }   # the first-start output goes to the ci-log-installer branch
     steps:
       - uses: actions/checkout@v4
-      - name: Bundled software from the cache (fetched once per pinned version)
-        uses: actions/cache@v4
+      - name: Bundled software (fetched by the deps job)
+        uses: actions/cache/restore@v4
         with:
           path: installer/.dl-cache
-          key: deps-${{ hashFiles('installer/deps.lock.json') }}-v1
+          key: deps-${{ hashFiles('installer/deps.lock.json') }}-x1
+          enableCrossOsArchive: true
+          fail-on-cache-miss: true
       - name: Fetch and verify bundled software
         shell: pwsh
         env: { GITHUB_TOKEN: '${{ github.token }}' }
