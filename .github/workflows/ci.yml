@@ -60,6 +60,11 @@ jobs:
     permissions: { contents: write }   # the first-start output goes to the ci-log-installer branch
     steps:
       - uses: actions/checkout@v4
+      - name: Bundled software from the cache (fetched once per pinned version)
+        uses: actions/cache@v4
+        with:
+          path: installer/.dl-cache
+          key: deps-${{ hashFiles('installer/deps.lock.json') }}-v1
       - name: Fetch and verify bundled software
         shell: pwsh
         env: { GITHUB_TOKEN: '${{ github.token }}' }

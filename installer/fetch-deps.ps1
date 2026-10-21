@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Downloads and verifies what the Gatefold installer bundles, and writes installer\deps\versions.iss.
 
@@ -16,12 +16,24 @@ param(
   [string]$Fb2kVersion = '',
   [string]$ComponentRepo = 'NereaFantasia/foo_ui_webview2',
   [string]$ComponentTag = '',
-  [string]$OutDir = (Join-Path $PSScriptRoot 'deps')
+  [string]$OutDir = (Join-Path $PSScriptRoot 'deps'),
+  # downloads kept between runs (actions/cache): the build does not depend on foobar2000.org being
+  # reachable from CI every time, and each file is fetched once per pinned version
+  [string]$Cache = (Join-Path $PSScriptRoot '.dl-cache')
 )
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 $ua = @{ 'User-Agent' = 'gatefold-build (+https://github.com)' }
+New-Item -ItemType Directory -Force -Path $Cache | Out-Null
+function Fetch([string]$Url, [string]$Out, [string]$Name) {
+  $c = Join-Path $Cache $Name
+  if (Test-Path $c) { Copy-Item $c $Out -Force; Write-Host "  from cache: $Name"; return }
+  for ($i = 1; $i -le 5; $i++) {
+    try { Invoke-WebRequest -UseBasicParsing -Headers $ua $Url -OutFile $Out; Copy-Item $Out $c -Force; return }
+    catch { if ($i -eq 5) { throw }; Write-Host "  attempt $i failed ($($_.Exception.Message)), retrying"; Start-Sleep (20 * $i) }
+  }
+}
 
 function Check-Signature($path, [switch]$Required) {
   $sig = Get-AuthenticodeSignature -FilePath $path
@@ -39,7 +51,7 @@ if (-not $Fb2kVersion) {
 }
 $fbFile = "foobar2000-x64_v$Fb2kVersion.exe"
 Write-Host "foobar2000 $Fb2kVersion"
-Invoke-WebRequest -UseBasicParsing -Headers $ua "https://www.foobar2000.org/downloads/$fbFile" -OutFile (Join-Path $OutDir $fbFile)
+Fetch "https://www.foobar2000.org/downloads/$fbFile" (Join-Path $OutDir $fbFile) $fbFile
 Check-Signature (Join-Path $OutDir $fbFile)
 
 # ---------------------------------------------------------------- foo_ui_webview2
@@ -50,7 +62,7 @@ $asset = $rel.assets | Where-Object { $_.name -like '*.fb2k-component' } | Selec
 if (-not $asset) { throw "No .fb2k-component asset in $ComponentRepo $($rel.tag_name)" }
 Write-Host "foo_ui_webview2 $($rel.tag_name) — $($asset.name)"
 $pkg = Join-Path $OutDir $asset.name
-Invoke-WebRequest -UseBasicParsing -Headers $ua $asset.browser_download_url -OutFile $pkg
+Fetch $asset.browser_download_url $pkg $asset.name
 $raw = Join-Path $OutDir 'fuw2_raw'; $dst = Join-Path $OutDir 'foo_ui_webview2'
 Remove-Item -Recurse -Force $raw, $dst -ErrorAction SilentlyContinue
 Expand-Archive -Path $pkg -DestinationPath $raw -Force           # .fb2k-component is a zip
@@ -65,7 +77,7 @@ if ($machine -ne 0x8664) { throw ("root foo_ui_webview2.dll is not x64 (machine 
 
 # ---------------------------------------------------------------- WebView2 bootstrapper
 $wv = Join-Path $OutDir 'MicrosoftEdgeWebview2Setup.exe'
-Invoke-WebRequest -UseBasicParsing -Headers $ua 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile $wv
+Fetch 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' $wv 'MicrosoftEdgeWebview2Setup.exe'
 Check-Signature $wv -Required
 
 # ---------------------------------------------------------------- versions + checksums
