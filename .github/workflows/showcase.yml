@@ -23,8 +23,14 @@ jobs:
         run: |
           sudo apt-get -qq update && sudo apt-get -qq install -y ffmpeg >/dev/null
           pip -q install playwright==1.56.0 pillow mutagen
-          python -m playwright install --with-deps chromium >/dev/null
-          mkdir -p out && python -u tools/showcase/build.py out 2>&1 | tee out/build.log; test ${PIPESTATUS[0]} -eq 0
+          python -m playwright install --with-deps chromium >/dev/null 2>&1
+          mkdir -p out
+          python -u tools/showcase/build.py out > out/build.log 2>&1 &
+          pid=$!
+          # the log, every minute, on the showcase-progress branch (job logs can't be read from outside)
+          push() { rm -rf /tmp/p && mkdir -p /tmp/p && cp out/build.log /tmp/p/ && cd /tmp/p && git init -q -b p && git -c user.name=ci -c user.email=ci@localhost commit -qam log --allow-empty 2>/dev/null; git add -A && git -c user.name=ci -c user.email=ci@localhost commit -qm log; git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" p:showcase-progress; cd - >/dev/null; }
+          while kill -0 $pid 2>/dev/null; do sleep 60; push || true; done
+          wait $pid; rc=$?; push || true; exit $rc
       - name: Publish
         if: always()
         run: |

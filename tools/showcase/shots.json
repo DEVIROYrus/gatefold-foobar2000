@@ -1,0 +1,43 @@
+{
+  "_": "What tools/showcase/shoot.py films. show = options for mock-showcase.js (the playing queue: albums in order, the first track).",
+  "show": { "playlist": ["The Slip", "Calls and Echoes", "Slam Funk", "Cold Wave", "Across Town", "The Black Dot"], "playlistName": "Late night" },
+  "screens": [
+    { "name": "now-en", "steps": [ { "js": "window.__setAlbum('The Slip')", "wait": 2500 }, { "nav": "now", "wait": 2000 },
+      { "until": "document.querySelectorAll('#npBadges .chip.ai').length > 0" } ] },
+    { "name": "sound-smart-en", "steps": [ { "nav": "playlist", "wait": 1500 },
+      { "js": "import('/theme/js/smartpl.js').then(m => m.open('ai-instrumental')).then(() => new Promise(r => setTimeout(r, 700))).then(() => { const l = document.querySelector('.sp-list'); l.scrollTop = l.scrollHeight; })", "wait": 1500 } ] },
+    { "name": "playlist-en", "steps": [ { "nav": "playlist", "wait": 1200 }, { "js": "document.querySelector('#plModes [data-m=covers]').click()", "wait": 2500 } ] },
+    { "name": "library-en", "steps": [ { "nav": "library", "wait": 3500 } ] },
+    { "name": "colors-en", "steps": [ { "nav": "library", "wait": 1500 },
+      { "js": "(async () => { const s = document.querySelector('#libSort'); s.value = 'color'; s.dispatchEvent(new Event('change')); await new Promise(r => setTimeout(r, 5000)); })()", "wait": 1500 } ] },
+    { "name": "smart-en", "steps": [ { "nav": "playlist", "wait": 1500 }, { "js": "import('/theme/js/smartpl.js').then(m => m.open('lossless'))", "wait": 2000 } ] },
+    { "name": "settings-en", "steps": [ { "nav": "settings", "wait": 1500 }, { "js": "document.getElementById('st-foobar').scrollIntoView({ block: 'start' })", "wait": 1500 } ] },
+    { "name": "now-light-en", "settings": { "colorSource": "light" }, "steps": [ { "js": "window.__setAlbum('Calls and Echoes')", "wait": 2500 }, { "nav": "now", "wait": 2000 } ] },
+    { "name": "now-ru", "settings": { "language": "ru" }, "steps": [ { "js": "window.__setAlbum('Cold Wave')", "wait": 2500 }, { "nav": "now", "wait": 2000 } ] }
+  ],
+  "demo": {
+    "size": [1280, 760],
+    "warmup": [ { "nav": "playlist", "wait": 600 }, { "js": "document.querySelector('#plModes [data-m=covers]').click()", "wait": 1500 }, { "nav": "library", "wait": 2500 },
+      { "js": "window.__setAlbum('Calls and Echoes')", "wait": 800 }, { "js": "window.__setAlbum('Slam Funk')", "wait": 800 }, { "js": "window.__setAlbum('The Slip')", "wait": 1500 },
+      { "nav": "now", "wait": 1500 }, { "until": "document.querySelectorAll('#npBadges .chip.ai').length > 0" } ],
+    "steps": [
+      { "cap": "Gatefold — foobar2000 that understands your music", "hold": 2800 },
+      { "cap": "It listens to your library on your PC: genre and mood of every track", "hold": 3000 },
+      { "cap": "Radio and Similar tracks that go by the sound", "hover": "#npActions .btn:has-text('Similar')", "wait": 2600 },
+      { "cap": "Mood playlists from your own files — no server, no subscription", "js": "import('/theme/js/smartpl.js').then(m => m.open('ai-calm'))", "wait": 1800 },
+      { "js": "(c => { c?.scrollIntoView({ block: 'nearest' }); c?.click(); })(document.querySelector('.sp-card[data-id=ai-instrumental]'))", "wait": 1700 },
+      { "js": "(c => { c?.scrollIntoView({ block: 'nearest' }); c?.click(); })(document.querySelector('.sp-card[data-id=ai-energy]'))", "wait": 1700 },
+      { "js": "(c => { c?.scrollIntoView({ block: 'nearest' }); c?.click(); })(document.querySelector('.sp-card[data-id=ai-acoustic]'))", "wait": 1700 },
+      { "cap": "Smart playlists without the query language", "js": "(c => { c?.scrollIntoView({ block: 'nearest' }); c?.click(); })(document.querySelector('.sp-card[data-id=lossless]'))", "wait": 1700 },
+      { "js": "(c => { c?.scrollIntoView({ block: 'nearest' }); c?.click(); })(document.querySelector('.sp-card[data-id=hires]'))", "wait": 1500 },
+      { "key": "Escape", "wait": 500 },
+      { "cap": "foobar2000 underneath: every format, gapless, DSP, your components", "nav": "playlist", "wait": 400 },
+      { "js": "document.querySelector('#plModes [data-m=covers]').click()", "wait": 2600 },
+      { "cap": "And it looks the part", "nav": "now", "wait": 400 },
+      { "js": "window.__setAlbum('Calls and Echoes')", "wait": 1900 },
+      { "js": "window.__setAlbum('Slam Funk')", "wait": 1900 },
+      { "js": "document.querySelector('#btnFull').click()", "wait": 2800 },
+      { "cap": "", "sleep": 400 }
+    ]
+  }
+}

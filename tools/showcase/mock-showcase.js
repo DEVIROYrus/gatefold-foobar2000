@@ -15,7 +15,7 @@
   const PL = (S.playlist || C.albums.slice(0, 6).map((a) => a.album)).flatMap((name) => T.filter((t) => t.album === name));
   let cur = Math.max(0, PL.findIndex((t) => t.title === S.start)) || 0;
   const track = () => ({ ...PL[cur], index: cur });
-  window.__setAlbum = (i) => { const a = typeof i === 'number' ? C.albums[i] : C.albums.find((x) => x.album === i); const j = PL.findIndex((t) => t.album === a.album); if (j >= 0) cur = j + (S.offset || 0); else { PL.unshift(...T.filter((t) => t.album === a.album)); cur = 0; } window.__emit('playback:trackChanged', track()); };
+  window.__setAlbum = (i) => { const a = typeof i === 'number' ? C.albums[i] : C.albums.find((x) => x.album === i); if (!a) return; const j = PL.findIndex((t) => t.album === a.album); if (j >= 0) cur = j + (S.offset || 0); else { PL.unshift(...T.filter((t) => t.album === a.album)); cur = 0; } window.__emit('playback:trackChanged', track()); };
   window.__setTrack = (title) => { const j = PL.findIndex((t) => t.title === title); if (j >= 0) { cur = j; window.__emit('playback:trackChanged', track()); } };
   const b64of = async (u) => { const b = new Uint8Array(await (await fetch(u)).arrayBuffer()); let s = ''; for (let i = 0; i < b.length; i += 8192) s += String.fromCharCode.apply(null, b.subarray(i, i + 8192)); return s; };
   const albums = C.albums.map((a) => { const ts = T.filter((t) => t.album === a.album && t.albumArtist === a.artist); return { name: a.album, albumArtist: a.artist, artist: a.artist, year: a.year, genre: a.genre || '', trackCount: ts.length, duration: ts.reduce((s, t) => s + t.duration, 0), firstTrackAbsolutePath: ts[0].absolutePath }; });

@@ -108,7 +108,8 @@ for A in CFG['albums']:
     for f in pick:
         loc = adir / f['name']
         if not FAKE and (not loc.exists() or loc.stat().st_size < 1000):
-            st, b = fetch(f'https://archive.org/download/{urllib.parse.quote(ident)}/{urllib.parse.quote(f["name"])}', timeout=600)
+            t0 = time.time(); st, b = fetch(f'https://archive.org/download/{urllib.parse.quote(ident)}/{urllib.parse.quote(f["name"])}', timeout=600)
+            print(f'   got {f["name"]} {len(b) / 1e6:.1f} MB in {time.time() - t0:.0f}s', flush=True)
             if st != 200: continue
             loc.write_bytes(b)
         m = MFile(loc)
