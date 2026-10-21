@@ -9,6 +9,12 @@ $fb = "$env:ProgramFiles\foobar2000\foobar2000.exe"
 $prof = Join-Path $env:APPDATA 'foobar2000-v2'
 'profile before the first start:'
 Get-ChildItem -Recurse -File $prof -ErrorAction SilentlyContinue | Where-Object { $_.FullName -notmatch 'webview-ui|user-components' } | ForEach-Object { '  {0,10}  {1}' -f $_.Length, $_.FullName.Substring($prof.Length) }
+# the installer's preset, run again on a copy, so its output is here too
+$copy = Join-Path $env:TEMP 'config-copy.sqlite'
+Copy-Item (Join-Path $prof 'config.sqlite') $copy -Force -ErrorAction SilentlyContinue
+'preset-ui on a copy:'
+& powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot '..\installer\preset-ui.ps1') -Db $copy 2>&1 | ForEach-Object { "  $_" }
+"  exit code: $LASTEXITCODE"
 Start-Process $fb
 Start-Sleep 20
 try {
