@@ -20,7 +20,7 @@ jobs:
       matrix:
         include:
           - { part: 'screens, settings, updates', id: screens, only: 'language,playlists,youtube,settings,updates,tooltips,canvas_volume,fb2k_prefs,welcome' }
-          - { part: 'editing, windows, smart playlists, radio', id: editing, only: 'playlist_editing,windows,panels,smart_color_radio' }
+          - { part: 'editing, windows, smart playlists, radio', id: editing, only: 'playlist_editing,windows,smart_color_radio' }
           - { part: 'sound analysis', id: sound, only: 'sound_ai' }
           - { part: 'layout', id: layout, only: 'layout' }
           - { part: 'stability', id: stability, only: 'stability' }
@@ -84,7 +84,6 @@ jobs:
         shell: pwsh
         run: |
           $v = (Get-Content package.json | ConvertFrom-Json).version
-          python tools/make_panels.py installer/build/panels
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /Qp "/DAppVersion=$v" "/DRepoUrl=${{ github.server_url }}/${{ github.repository }}" installer/gatefold.iss
       # uploaded before the smoke test, so the installer can be tried by hand even when the test fails
       - uses: actions/upload-artifact@v4
@@ -100,10 +99,9 @@ jobs:
           Get-Content setup.log -Tail 40
           if ($p.ExitCode -ne 0) { throw "setup exit code $($p.ExitCode)" }
           $prof = Join-Path $env:APPDATA 'foobar2000-v2'
-          foreach ($f in 'webview-ui\default\index.html', 'webview-ui\default\js\i18n.js', 'user-components-x64\foo_ui_webview2\foo_ui_webview2.dll', 'webview-ui\gatefold-seekbar\index.html', 'webview-ui\gatefold-seekbar\js\seekbar-main.js', 'webview-ui\gatefold-covers\index.html') {
+          foreach ($f in 'webview-ui\default\index.html', 'webview-ui\default\js\i18n.js', 'user-components-x64\foo_ui_webview2\foo_ui_webview2.dll') {
             if (-not (Test-Path (Join-Path $prof $f))) { throw "missing $f" } else { "ok  $f" }
           }
-          if (-not (Select-String -Quiet -Path (Join-Path $prof 'webview-ui\gatefold-covers\index.html') -Pattern 'data-panel="covers"')) { throw 'the covers panel template is not in panel mode' }
           if (-not (Test-Path "$env:ProgramFiles\foobar2000\foobar2000.exe")) { throw 'foobar2000 was not installed' }
           (Get-Item "$env:ProgramFiles\foobar2000\foobar2000.exe").VersionInfo.FileVersion
       - name: First start opens in Gatefold

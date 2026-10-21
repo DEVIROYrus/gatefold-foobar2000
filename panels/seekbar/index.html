@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gatefold · Seekbar</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="seekbar.css">
+  <script src="gf/palette-core.js"></script>
+  <script type="module" src="seekbar.js"></script>
+</head>
+<body class="sb-page">
+  <div class="sb idle" id="sb">
+    <div class="sb-art" id="sbArt"><div class="sb-ph" id="sbPh"></div><img id="sbImg" alt=""></div>
+    <span class="sb-time" id="sbCur"></span>
+    <div class="sb-track" id="sbTrack" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0">
+      <canvas id="sbWave"></canvas>
+      <div class="sb-tip" id="sbTip"></div>
+    </div>
+    <span class="sb-time r" id="sbDur"></span>
+  </div>
+</body>
+</html>

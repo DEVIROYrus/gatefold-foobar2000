@@ -1,4 +1,9 @@
-/* Gatefold · seekbar panel (seekbar.html) */
+/* Gatefold Seekbar — a panel for Default UI / Columns UI layouts */
+@font-face { font-family: 'Inter Var'; font-style: normal; font-display: swap; font-weight: 100 900; src: url('gf/fonts/inter-latin-opsz-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Inter Var'; font-style: normal; font-display: swap; font-weight: 100 900; src: url('gf/fonts/inter-cyrillic-opsz-normal.woff2') format('woff2'); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+:root { --bg: #23262e; --surface: #2b2f38; --text: #eceef3; --text-2: #c3c7d1; --text-3: #9aa0ad; --accent: #9db0ff; --ease: cubic-bezier(.2, .7, .2, 1); color-scheme: dark; }
+:root[data-scheme='light'] { color-scheme: light; }
+html { background: transparent; }
 html, body.sb-page { height: 100%; margin: 0; overflow: hidden; }
 body.sb-page { display: block; font-family: 'Inter Var', 'Segoe UI Variable Text', 'Segoe UI', sans-serif; color: var(--text);
   background: var(--bg); transition: background-color 420ms var(--ease); }
@@ -34,3 +39,9 @@ body.sb-page:not(.sb-transparent) .sb { background: radial-gradient(90% 260% at 
 /* very small panels: the bar alone */
 @container (max-height: 18px) { .sb-time, .sb-art { display: none !important; } }
 @container (max-width: 220px) { .sb-time { display: none; } }
+
+/* options strip (components without menu.show) */
+.sb-opts { position: fixed; inset: 0; display: flex; align-items: center; gap: 4px; padding: 0 6px; overflow-x: auto; background: var(--bg); z-index: 5; }
+.sb-opts button { flex: none; height: min(26px, calc(100% - 4px)); padding: 0 9px; border: 0; border-radius: 6px; font: 600 11px 'Inter Var', 'Segoe UI', sans-serif; color: var(--text); background: color-mix(in oklab, var(--text) 10%, transparent); cursor: pointer; }
+.sb-opts button:hover { background: color-mix(in oklab, var(--text) 18%, transparent); }
+.sb-opts button.x { margin-left: auto; }

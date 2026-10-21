@@ -1042,7 +1042,3 @@ select.sel-native { display: none !important; }
 .snd-status .dim { color: var(--text-3); }
 .snd-bar { display: block; height: 4px; margin-top: 8px; border-radius: 4px; background: var(--line); overflow: hidden; max-width: 360px; }
 .snd-bar i { display: block; height: 100%; border-radius: 4px; background: var(--accent); transition: width 400ms; }
-
-/* ---------- the interface as a single-purpose panel (js/panel-boot.js): one screen, no chrome ---------- */
-:root[data-panel] body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); grid-template-areas: 'main'; }
-:root[data-panel] #titlebar, :root[data-panel] #sidebar, :root[data-panel] #playerbar { display: none; }

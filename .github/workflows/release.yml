@@ -51,14 +51,11 @@ jobs:
         shell: pwsh
         run: |
           $v = if ('${{ github.ref_type }}' -eq 'tag') { '${{ github.ref_name }}'.TrimStart('v') } else { (Get-Content package.json | ConvertFrom-Json).version }
-          python tools/make_panels.py installer/build/panels
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /Qp "/DAppVersion=$v" "/DRepoUrl=${{ github.server_url }}/${{ github.repository }}" installer/gatefold.iss
           New-Item -ItemType Directory -Force stage/gatefold | Out-Null
           Copy-Item -Recurse theme/* stage/gatefold/
           # one top folder (gatefold/…), forward slashes, deflate — what js/updater.js reads
           Compress-Archive -Path stage/gatefold -DestinationPath "dist/gatefold-theme-$v.zip"
-          # the panel templates for Default UI / Columns UI layouts, for a manual install
-          Compress-Archive -Path installer/build/panels/* -DestinationPath "dist/gatefold-panels-$v.zip"
       - name: Check the theme archive (what the in-app updater accepts)
         shell: pwsh
         run: |
@@ -110,5 +107,4 @@ jobs:
           files: |
             dist/Gatefold-Setup-*.exe
             dist/gatefold-theme-*.zip
-            dist/gatefold-panels-*.zip
             dist/SHA256SUMS.txt
