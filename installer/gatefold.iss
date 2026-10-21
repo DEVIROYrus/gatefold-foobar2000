@@ -155,12 +155,31 @@ en.Launch=Open foobar2000
 ru.Launch=Открыть foobar2000
 en.Recommend=Recommended (optional) components: Playback Statistics (foo_playcount) and DR Meter (foo_dr_meter) — foobar2000.org/components
 ru.Recommend=Рекомендуемые (необязательные) компоненты: Playback Statistics (foo_playcount) и DR Meter (foo_dr_meter) — foobar2000.org/components
+en.ModeTitle=How will you use Gatefold?
+ru.ModeTitle=Как вы будете пользоваться Gatefold?
+en.ModeSub=Either way everything is installed, and the choice can be changed later.
+ru.ModeSub=В обоих случаях устанавливается всё, и выбор можно поменять потом.
+en.ModeUI=As foobar2000's interface (recommended) — foobar2000 opens in Gatefold
+ru.ModeUI=Как интерфейс foobar2000 (рекомендуется) — foobar2000 будет открываться в Gatefold
+en.ModePanels=Only as panels in my current layout (Default UI or Columns UI): a waveform seekbar in the colours of the album and the cover finder. My interface stays as it is
+ru.ModePanels=Только панелями в моей текущей раскладке (Default UI или Columns UI): полоса перемотки в виде волны в цветах альбома и поиск обложек. Мой интерфейс остаётся как есть
+en.PlanPanels=Panels for Default UI and Columns UI — the “gatefold-seekbar” and “gatefold-covers” templates
+ru.PlanPanels=Панели для Default UI и Columns UI — шаблоны «gatefold-seekbar» и «gatefold-covers»
+en.PanelsTitle=Add the panels to your layout
+ru.PanelsTitle=Добавьте панели в раскладку
+en.PanelsSteps=Columns UI: File → Preferences → Display → Columns UI → Layout, insert the panel “WebView2 Panel”.%nDefault UI: View → Layout → Enable layout editing mode, right-click where it should go → Add New UI Element → “WebView2 Panel”.%n%nThen right-click the panel → Configure → Template: “gatefold-seekbar” (the seekbar) or “gatefold-covers” (the cover finder). Right-click the seekbar for its options.
+ru.PanelsSteps=Columns UI: File → Preferences → Display → Columns UI → Layout, вставьте панель «WebView2 Panel».%nDefault UI: View → Layout → Enable layout editing mode, правый щелчок в нужном месте → Add New UI Element → «WebView2 Panel».%n%nЗатем правый щелчок по панели → Configure → Template: «gatefold-seekbar» (полоса перемотки) или «gatefold-covers» (поиск обложек). Настройки полосы — по правому щелчку на ней.
+en.PanelsNote=Panels for other layouts (the “gatefold-seekbar” and “gatefold-covers” templates) are installed too.
+ru.PanelsNote=Панели для других раскладок (шаблоны «gatefold-seekbar» и «gatefold-covers») тоже установлены.
 en.NeedsX64=Gatefold needs 64-bit Windows 10 or 11.
 ru.NeedsX64=Gatefold нужна 64-битная Windows 10 или 11.
 
 [Files]
 ; theme
 Source: "..\theme\*"; DestDir: "{code:ThemeDir}"; Flags: recursesubdirs createallsubdirs ignoreversion
+; panel templates for Default UI / Columns UI layouts (tools/make_panels.py → installer\build\panels)
+Source: "build\panels\gatefold-seekbar\*"; DestDir: "{code:ProfileDir}\webview-ui\gatefold-seekbar"; Flags: recursesubdirs createallsubdirs ignoreversion
+Source: "build\panels\gatefold-covers\*"; DestDir: "{code:ProfileDir}\webview-ui\gatefold-covers"; Flags: recursesubdirs createallsubdirs ignoreversion
 ; the component, laid out as foobar2000 itself installs it (see fetch-deps.ps1)
 Source: "deps\foo_ui_webview2\*"; DestDir: "{code:ComponentDir}"; Flags: recursesubdirs createallsubdirs ignoreversion uninsneveruninstall; Check: NeedComponent
 ; installers run during setup, never copied
@@ -178,6 +197,7 @@ Root: HKCU; Subkey: "Software\Gatefold"; ValueType: string; ValueName: "ThemeDir
 Root: HKCU; Subkey: "Software\Gatefold"; ValueType: string; ValueName: "Profile"; ValueData: "{code:ProfileDir}"
 Root: HKCU; Subkey: "Software\Gatefold"; ValueType: string; ValueName: "Foobar2000"; ValueData: "{code:FoobarDir}"
 Root: HKCU; Subkey: "Software\Gatefold"; ValueType: string; ValueName: "Version"; ValueData: "{#AppVersion}"
+Root: HKCU; Subkey: "Software\Gatefold"; ValueType: string; ValueName: "Mode"; ValueData: "{code:ModeName}"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
@@ -204,6 +224,7 @@ var
   FinishNote, FinishHead: TNewStaticText;
   FbMissing: Boolean;
   PresetUI: Boolean;   { the profile had no configuration: Gatefold is set as the interface }
+  ModePage: TInputOptionWizardPage;   { the whole interface, or only panels in the current layout }
 
 { ---------------------------------------------------------------- helpers }
 function VerPart(var S: String): Integer;
@@ -373,6 +394,16 @@ function ComponentDir(Param: String): String; begin Result := AddBackslash(ProfD
 function FoobarExe(Param: String): String; begin Result := AddBackslash(FbDir) + 'foobar2000.exe'; end;
 function NeedComponent: Boolean; begin Result := NeedComp; end;
 function HaveFoobar: Boolean; begin Result := FileExists(AddBackslash(FbDir) + 'foobar2000.exe'); end;
+{ panels only: /MODE=panels on the command line, the choice on the mode page, or the previous install's }
+function PanelsOnly: Boolean;
+var S: String;
+begin
+  if ModePage <> nil then begin Result := ModePage.Values[1]; Exit; end;
+  S := Lowercase(ExpandConstant('{param:MODE|}'));
+  if S = '' then RegQueryStringValue(HKCU, 'Software\Gatefold', 'Mode', S);
+  Result := Lowercase(S) = 'panels';
+end;
+function ModeName(Param: String): String; begin if PanelsOnly then Result := 'panels' else Result := 'ui'; end;
 
 { ---------------------------------------------------------------- the plan page }
 { ✓ nothing to do · ＋ will be installed/updated · ! needs your attention }
@@ -399,6 +430,7 @@ begin
   L := L + #13#10#13#10;
   if InPlace then L := L + Mark(True, False) + FmtMessage(CustomMessage('ThemeUpd'), [TplName])
   else L := L + Mark(True, False) + FmtMessage(CustomMessage('ThemeTo'), ['{#AppVersion}', TplName]);
+  L := L + #13#10#13#10 + Mark(True, False) + CustomMessage('PlanPanels');
   L := L + #13#10#13#10 + FmtMessage(CustomMessage('Profile'), [ProfDir]);
   PlanText.Caption := L;
 end;
@@ -426,6 +458,7 @@ begin
 end;
 
 procedure InitializeWizard;
+var S: String;
 begin
   PlanPage := CreateCustomPage(wpWelcome, CustomMessage('PlanTitle'), CustomMessage('PlanSub'));
   PlanText := TNewStaticText.Create(PlanPage);
@@ -444,6 +477,14 @@ begin
   PickBtn.Height := ScaleY(26);
   PickBtn.OnClick := @PickClick;
   RenderPlan;
+  ModePage := nil;
+  ModePage := CreateInputOptionPage(PlanPage.ID, CustomMessage('ModeTitle'), CustomMessage('ModeSub'), '', True, False);
+  ModePage.Add(CustomMessage('ModeUI'));
+  ModePage.Add(CustomMessage('ModePanels'));
+  ModePage.Values[0] := True;
+  { the previous choice, or /MODE=panels }
+  if (Lowercase(ExpandConstant('{param:MODE|}')) = 'panels') then ModePage.Values[1] := True
+  else if (ExpandConstant('{param:MODE|}') = '') and RegQueryStringValue(HKCU, 'Software\Gatefold', 'Mode', S) and (Lowercase(S) = 'panels') then ModePage.Values[1] := True;
 end;
 
 { ---------------------------------------------------------------- foobar2000 must be closed }
@@ -555,6 +596,7 @@ var Cfg: String; Cap: TExecOutput; RC, I: Integer;
 begin
   PresetUI := False;
   Cfg := AddBackslash(ProfDir) + 'config.sqlite';
+  if PanelsOnly then begin Log('panels only: the interface is left as it is'); Exit; end;
   if InPlace or not FileExists(Cfg) or FoobarRunning then Exit;
   ExtractTemporaryFile('preset-ui.ps1');
   if ExecAndCaptureOutput(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
@@ -579,13 +621,15 @@ procedure CurPageChanged(CurPageID: Integer);
 var T: String;
 begin
   if CurPageID <> wpFinished then Exit;
-  if InPlace then T := CustomMessage('LastStepUpd')
+  if PanelsOnly then T := CustomMessage('PanelsSteps')
+  else if InPlace then T := CustomMessage('LastStepUpd')
   else if PresetUI then T := CustomMessage('ReadyFirstStart')
   else begin
     T := CustomMessage('LastStep1');
     if TplName <> 'default' then T := T + #13#10#13#10 + FmtMessage(CustomMessage('LastStep2'), [TplName]);
   end;
   if FbMissing then T := T + #13#10#13#10 + CustomMessage('FbMissingNote');
+  if not PanelsOnly then T := T + #13#10#13#10 + CustomMessage('PanelsNote');
   T := T + #13#10#13#10 + CustomMessage('Recommend');
   if FinishNote = nil then begin
     FinishHead := TNewStaticText.Create(WizardForm);
@@ -599,10 +643,10 @@ begin
     FinishNote.Left := WizardForm.FinishedLabel.Left;
     FinishNote.Width := WizardForm.FinishedLabel.Width;
   end;
-  FinishHead.Visible := not InPlace and not PresetUI;
-  FinishHead.Caption := CustomMessage('LastStepTitle');
+  FinishHead.Visible := PanelsOnly or (not InPlace and not PresetUI);
+  if PanelsOnly then FinishHead.Caption := CustomMessage('PanelsTitle') else FinishHead.Caption := CustomMessage('LastStepTitle');
   FinishHead.Top := WizardForm.FinishedLabel.Top + WizardForm.FinishedLabel.Height + ScaleY(14);
-  if InPlace or PresetUI then FinishNote.Top := FinishHead.Top else FinishNote.Top := FinishHead.Top + FinishHead.Height + ScaleY(6);
+  if not FinishHead.Visible then FinishNote.Top := FinishHead.Top else FinishNote.Top := FinishHead.Top + FinishHead.Height + ScaleY(6);
   FinishNote.Height := WizardForm.FinishedPage.Height - FinishNote.Top - ScaleY(60);
   FinishNote.Caption := T;
   if WizardForm.RunList.Items.Count > 0 then

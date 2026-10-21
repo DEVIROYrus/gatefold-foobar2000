@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gatefold · Полоса перемотки</title>
+  <link rel="icon" href="data:,">
+  <link rel="preload" href="fonts/inter-latin-opsz-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="stylesheet" href="css/seekbar.css">
+  <script src="js/seekbar-boot.js"></script>
+  <script src="js/palette-core.js"></script>
+  <script type="module" src="js/seekbar-main.js"></script>
+</head>
+<body class="sb-page">
+  <div class="sb" id="sb">
+    <div class="sb-art" id="sbArt"><div class="sb-ph" id="sbPh"></div><img id="sbImg" alt=""></div>
+    <span class="sb-time" id="sbCur"></span>
+    <div class="sb-track" id="sbTrack" role="slider" tabindex="0" aria-label="Позиция" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0">
+      <canvas id="sbWave"></canvas>
+      <div class="sb-tip" id="sbTip"></div>
+    </div>
+    <span class="sb-time r" id="sbDur"></span>
+  </div>
+  <div id="layer"></div><div id="toasts"></div>
+</body>
+</html>

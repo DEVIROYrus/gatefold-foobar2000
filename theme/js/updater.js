@@ -16,6 +16,7 @@ import { call, ok, httpGet, log } from './bridge.js';
 import { VERSION, REPO } from './version.js';
 import { settings } from './settings.js';
 import { $t } from './i18n.js';
+import { PANELS } from './panel-templates.js';
 
 export const events = new EventTarget();
 const KEY = 'aurora.update', DONE = 'aurora.updated', EVERY = 12 * 3600e3;
@@ -163,6 +164,7 @@ export async function install() {
       wrote++;
       if (i % 4 === 0) stage($t('Устанавливаю… {0} из {1}', i + 1, files.length), 0.55 + 0.4 * (i + 1) / files.length);
     }
+    await updatePanels(dir, files);
     try { localStorage.setItem(DONE, JSON.stringify({ from: VERSION, to: info.version, at: Date.now(), backup, notes: info.notes, html: info.html })); } catch {}
     stage($t('Готово — перезапускаю интерфейс'), 1);
     setTimeout(() => location.reload(), 700);
@@ -173,6 +175,28 @@ export async function install() {
     state.error = e.message || String(e); state.needsSetup = !!e.needsSetup;
     state.installing = false; emit();
     return false;
+  }
+}
+
+/* the panel templates next to this one (gatefold-seekbar, gatefold-covers) get the same files, each
+   with its own index.html; a panel that cannot be written stays as it was (the installer fixes it) */
+async function updatePanels(dir, files) {
+  const parent = String(dir).replace(/[\\/]+$/, '').replace(/[\\/][^\\/]+$/, '');
+  const text = (n) => { const f = files.find((x) => x.name === n); return f ? new TextDecoder().decode(f.data) : ''; };
+  for (const [name, def] of Object.entries(PANELS)) {
+    const pdir = parent + '\\' + name;
+    if (pdir.toLowerCase() === String(dir).replace(/[\\/]+$/, '').toLowerCase()) continue;
+    const there = await call('file.getInfo', { path: pdir + '\\js\\panel-boot.js' });
+    if (!ok(there) || there.exists === false) continue;
+    try {
+      const page = new TextEncoder().encode(def.page(text));
+      for (const f of files) {
+        const data = f.name === 'index.html' ? page : f.data;
+        const w = await call('file.write', { path: winPath(pdir, f.name), content: 'base64:' + bytesToB64(data), encoding: 'binary', atomic: true });
+        if (!ok(w)) throw new Error(f.name + ': ' + (w.error || w.code));
+      }
+      log('update: panel template', name, 'updated');
+    } catch (e) { log('update: panel template', name, 'not updated', e); }
   }
 }
 

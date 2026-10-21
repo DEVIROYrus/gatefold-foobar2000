@@ -35,6 +35,14 @@
     if (m === 'file.mkdir') { S('mkdir', p.path); return ok({ path: p.path, created: true }); }
     if (m === 'file.copy') { S('copies', [p.source, p.destination, !!p.overwrite]); return ok({ source: p.source, destination: p.destination }); }
     if (m === 'file.exists') return ok({ exists: true, path: p.path });
+    // the panel templates next to the updated one (js/panel-templates.js)
+    if (m === 'file.getInfo' && /\\webview-ui\\gatefold-(seekbar|covers)\\js\\panel-boot\.js$/.test(p.path)) return ok({ exists: true, isFile: true });
+    const pm = m === 'file.write' && p.path.match(/\\webview-ui\\(gatefold-(?:seekbar|covers))\\(.+)$/);
+    if (pm) {
+      S('panelWritten', [pm[1], pm[2]]);
+      if (pm[2] === 'index.html') sessionStorage.setItem('upd.panel.' + pm[1], decodeURIComponent(escape(atob(p.content.replace(/^base64:/, '')))));
+      return ok({ bytesWritten: p.content.length });
+    }
     if (m === 'file.write' && p.path.startsWith(DIR + '\\')) {
       const rel = p.path.slice(DIR.length + 1);
       S('written', [rel, !!p.atomic, p.encoding]);

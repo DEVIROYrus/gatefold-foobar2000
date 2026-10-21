@@ -204,6 +204,11 @@ async def test_updates(browser, port):
     nh = sum(1 for w in written if w[0].endswith('.html'))
     check(written and nh and all(w[0].endswith('.html') for w in written[-nh:]), 'pages are written last')
     check("VERSION = '1.1.0'" in (await pg.evaluate("sessionStorage.getItem('upd.versionjs')") or ''), 'the written version.js is the new one')
+    pw = await S('panelWritten')
+    for name in ('gatefold-seekbar', 'gatefold-covers'):
+        check(sum(1 for w in pw if w[0] == name) == files, f'the {name} panel template next to it is updated too ({sum(1 for w in pw if w[0] == name)}/{files})')
+    check('seekbar-main.js' in (await pg.evaluate("sessionStorage.getItem('upd.panel.gatefold-seekbar')") or ''), 'with the seekbar page as its index.html')
+    check('data-panel="covers"' in (await pg.evaluate("sessionStorage.getItem('upd.panel.gatefold-covers')") or ''), 'and the covers panel in panel mode')
     toast = await pg.evaluate("[...document.querySelectorAll('.toast')].map(t => t.innerText).join(' | ')")
     check('Gatefold updated to 1.1.0' in toast, f'after the reload a note says what was installed {toast[:80]}')
     check(await pg.evaluate("document.querySelector('#updPill').hidden"), 'no pill once up to date')
@@ -463,6 +468,86 @@ async def test_windows(browser, port):
     if os.environ.get('SHOTS'): await pg.screenshot(path=os.environ['SHOTS'] + '/mini.png')
     check(await pg.evaluate("(() => { const ev = new DragEvent('dragstart', { bubbles: true, cancelable: true }); (document.querySelector('#mini img') || document.body).dispatchEvent(ev); return ev.defaultPrevented; })()"), 'mini: no native drag either')
     check(not errs, f'mini: no page errors {errs[:2]}')
+    await ctx.close()
+
+async def test_panels(browser, port):
+    print('· panels for Default UI / Columns UI: seekbar, covers')
+    PANEL = ("window.__panel = { calls: [], menus: [] }; const _pn = () => { const f = window.fb2k.invoke.bind(window.fb2k); window.fb2k.invoke = (m, p) => {"
+             " if (m === 'window.getMode') return Promise.resolve({ success: true, mode: 'cui', panelMode: true });"
+             " if (m === 'panel.setConfig') { window.__panel.calls.push(p); return Promise.resolve({ success: true, changed: true }); }"
+             " if (m === 'menu.show') { window.__panel.menus.push(p); return Promise.resolve({ success: true, menuId: 'm' + window.__panel.menus.length }); }"
+             " return f(m, p); }; };"
+             " const _pt = setInterval(() => { if (window.fb2k && window.fb2k.invoke && !window.__pnHooked) { window.__pnHooked = 1; _pn(); clearInterval(_pt); } }, 1);")
+    ctx = await browser.new_context(viewport={'width': 1000, 'height': 40})
+    pg = await ctx.new_page(); errs = []
+    pg.on('pageerror', lambda e: errs.append(str(e)))
+    await pg.add_init_script("localStorage.setItem('aurora.settings.v1', JSON.stringify({language: 'en', colorSource: 'dark'}));" + MOCK + PANEL)
+    await pg.goto(f'http://127.0.0.1:{port}/theme/seekbar.html'); await pg.wait_for_timeout(2500)
+    px = await pg.evaluate("""(() => { const c = document.getElementById('sbWave'), d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0, sat = 0, grey = 0;
+      for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 40) { n++; const mx = Math.max(d[i], d[i + 1], d[i + 2]), mn = Math.min(d[i], d[i + 1], d[i + 2]); if (mx - mn > 60) sat++; else grey++; }
+      return { w: c.width, n, sat, grey }; })()""")
+    check(px['n'] > px['w'] * 3, f'the waveform is drawn {px}')
+    check(px['sat'] > 50 and px['grey'] > 50, 'played part in colour, the rest neutral')
+    check(await pg.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--accent')") != '', 'colours come from the album')
+    check(await pg.evaluate("JSON.parse(localStorage.getItem('aurora.settings.v1')).colorSource") == 'dark', 'the full interface keeps its own colour setting')
+    t = await pg.inner_text('#sbCur'), await pg.inner_text('#sbDur')
+    check(re.match(r'^\d+:\d\d$', t[0]) and re.match(r'^\d+:\d\d$', t[1]), f'elapsed and total time {t}')
+    r = await pg.evaluate("(() => { const b = document.getElementById('sbTrack').getBoundingClientRect(); return [b.left, b.width, b.top + b.height / 2]; })()")
+    dur = await pg.evaluate("window.fb2k.invoke('playback.getCurrentTrack').then(r => r.track.duration)")
+    await pg.mouse.move(r[0] + r[1] * 0.25, r[2]); await pg.wait_for_timeout(250)
+    check(await pg.evaluate("document.getElementById('sbTip').classList.contains('on')"), 'hovering shows the time under the pointer')
+    await pg.mouse.down(); await pg.mouse.move(r[0] + r[1] * 0.5, r[2], steps=4); await pg.mouse.up(); await pg.wait_for_timeout(300)
+    pos = [json.loads(json.dumps(c[1])) for c in await pg.evaluate("window.__calls") if c[0] == 'playback.setPosition']
+    check(pos and abs(pos[-1] - dur * 0.5) < dur * 0.03, f'dragging seeks to where it is released ({pos[-1:]} of {dur})')
+    await pg.mouse.wheel(0, 100); await pg.wait_for_timeout(300)
+    pos2 = [c[1] for c in await pg.evaluate("window.__calls") if c[0] == 'playback.setPosition']
+    check(len(pos2) == len(pos) + 1 and 4 < pos2[-1] - pos[-1] < 6.5, f'the wheel steps 5 s {pos2[-1:]}')
+    await pg.mouse.click(r[0] + 50, r[2], button='right'); await pg.wait_for_timeout(300)
+    menus = await pg.evaluate("window.__panel.menus")
+    check(menus and menus[0].get('windowModel') == 'contentSized' and [i.get('type') for i in menus[0]['items'][:4]] == ['segmented'] * 4, 'right click: the settings menu of the component, sized for a panel')
+    check(menus and [s['label'] for s in menus[0]['items'][0]['segments']] == ['Bars', 'Solid', 'Line'], 'translated')
+    await pg.evaluate("window.__emit('menu:valueChanged', { menuId: 'm1', itemId: 'style', value: 1 })"); await pg.wait_for_timeout(200)
+    await pg.evaluate("window.__emit('menu:valueChanged', { menuId: 'm1', itemId: 'bg', value: 1 })"); await pg.wait_for_timeout(200)
+    await pg.evaluate("window.__emit('menu:valueChanged', { menuId: 'm1', itemId: 'colors', value: 2 })"); await pg.wait_for_timeout(600)
+    pref = await pg.evaluate("JSON.parse(localStorage.getItem('gatefold.seekbar.v1'))")
+    check(pref.get('style') == 'solid' and pref.get('bg') == 'none' and pref.get('colors') == 'light', f'the menu changes the panel settings {pref}')
+    check(any(c.get('transparentBackground') is True for c in await pg.evaluate("window.__panel.calls")), 'a transparent background is switched on in the panel too')
+    check(await pg.evaluate("document.documentElement.dataset.scheme") == 'light', 'light colours apply at once')
+    check(await pg.evaluate("JSON.parse(localStorage.getItem('aurora.settings.v1')).colorSource") == 'dark', 'still without touching the full interface')
+    await pg.mouse.click(r[0] + 50, r[2], button='middle'); await pg.wait_for_timeout(200)
+    check(any(c[0] == 'playback.playOrPause' for c in await pg.evaluate("window.__calls")), 'middle click plays / pauses')
+    check(not await pg.evaluate("window.__i18nMissing && window.__i18nMissing.length"), f'no untranslated strings {await pg.evaluate("window.__i18nMissing")}')
+    if os.environ.get('SHOTS'): await pg.screenshot(path=os.environ['SHOTS'] + '/seekbar.png')
+    check(not errs, f'seekbar: no page errors {errs[:2]}')
+    await ctx.close()
+    # covers panel: the interface reduced to the Covers screen
+    ctx = await browser.new_context(viewport={'width': 700, 'height': 600})
+    pg = await ctx.new_page(); errs = []
+    pg.on('pageerror', lambda e: errs.append(str(e)))
+    await pg.add_init_script("if (!sessionStorage.getItem('x')) { sessionStorage.setItem('x', 1); localStorage.setItem('aurora.settings.v1', JSON.stringify({language: 'en', soundAI: true, funMode: true, coverSweep: false})); }" + MOCK + PANEL)
+    await pg.goto(f'http://127.0.0.1:{port}/theme/index.html?panel=covers'); await pg.wait_for_timeout(2500)
+    st = await pg.evaluate("['titlebar', 'sidebar', 'playerbar'].map(id => getComputedStyle(document.getElementById(id)).display)")
+    check(st == ['none'] * 3, f'no title bar, sidebar or player bar {st}')
+    check(await pg.evaluate("document.getElementById('view-covers').classList.contains('active')"), 'the Covers screen fills the panel')
+    check(await pg.evaluate("import('/theme/js/ml/sound.js').then(S => S.state.phase)") in ('off', ''), 'no sound analysis in the panel')
+    check(await pg.evaluate("JSON.parse(localStorage.getItem('aurora.settings.v1')).soundAI") is True, 'while the full interface keeps it on')
+    check(await pg.evaluate("!document.documentElement.hasAttribute('data-skin')"), 'no fun-mode skin')
+    await pg.keyboard.press('Alt+1'); await pg.wait_for_timeout(300)
+    check(await pg.evaluate("document.getElementById('view-covers').classList.contains('active')"), 'Alt+1 does not leave the Covers screen')
+    await pg.evaluate("[...document.querySelectorAll('#coversBody .btn')].find(b => /Check library/.test(b.innerText)).click()"); await pg.wait_for_timeout(1500)
+    sw = await pg.evaluate("import('/theme/js/coverfetch.js').then(m => [m.state.sweeping, m.state.scanned, m.state.sweepDone])")
+    check(sw[0] or sw[2] or sw[1] > 0, f'the library check runs from the panel {sw}')
+    if os.environ.get('SHOTS'): await pg.screenshot(path=os.environ['SHOTS'] + '/covers-panel.png')
+    check(not errs, f'covers panel: no page errors {errs[:2]}')
+    await ctx.close()
+    # the templates the installer and the release ship match what the updater writes
+    import subprocess, tempfile
+    tmp = Path(tempfile.mkdtemp())
+    subprocess.run([sys.executable, str(ROOT / 'tools' / 'make_panels.py'), str(tmp)], check=True, capture_output=True)
+    ctx, pg, errs = await page(browser, port, {'language': 'en'})
+    js = await pg.evaluate("import('/theme/js/panel-templates.js').then(async (M) => { const t = {}; for (const n of ['index.html', 'seekbar.html']) t[n] = await (await fetch('/theme/' + n)).text(); const o = {}; for (const [k, d] of Object.entries(M.PANELS)) o[k] = d.page((n) => t[n]); return o; })")
+    for name in ('gatefold-seekbar', 'gatefold-covers'):
+        check(js.get(name) == (tmp / name / 'index.html').read_text(encoding='utf-8'), f'{name}: make_panels.py and the updater build the same index.html')
     await ctx.close()
 
 async def test_smart_color_radio(browser, port):
@@ -792,7 +877,7 @@ async def main():
             if run('language'): await timed(f'language {lang}', test_language(browser, port, lang))
         for name, fn in [('playlists', test_playlists), ('youtube', test_youtube), ('settings', test_settings), ('updates', test_updates),
                          ('tooltips', test_tooltips), ('canvas_volume', test_canvas_volume), ('fb2k_prefs', test_fb2k_prefs), ('welcome', test_welcome),
-                         ('playlist_editing', test_playlist_editing), ('windows', test_windows), ('smart_color_radio', test_smart_color_radio),
+                         ('playlist_editing', test_playlist_editing), ('windows', test_windows), ('panels', test_panels), ('smart_color_radio', test_smart_color_radio),
                          ('sound_ai', test_sound_ai), ('layout', test_layout), ('stability', test_stability)]:
             if run(name): await timed(name, fn(browser, port))
         await browser.close()

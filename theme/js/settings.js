@@ -75,14 +75,27 @@ export const DEFAULTS = {
   fullscreenTopmost: false, // true: fullscreen stays above every other window (the component's default)
 };
 
+/* A panel page (seekbar.html, the covers panel) shares this storage with the full interface but
+   keeps some settings of its own for its lifetime: window.GATEFOLD_OVERRIDES, set by a classic
+   script before the modules load. Overridden keys are never written back to the shared settings. */
+const OVR = { ...(globalThis.GATEFOLD_OVERRIDES || {}) };
 let state = load();
 const subs = new Set();
-
 function load() {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) || '{}');
-    return { ...DEFAULTS, ...raw, coverSources: { ...DEFAULTS.coverSources, ...(raw.coverSources || {}) }, lyricsSources: { ...DEFAULTS.lyricsSources, ...(raw.lyricsSources || {}) } };
-  } catch { return { ...DEFAULTS }; }
+    return { ...DEFAULTS, ...raw, coverSources: { ...DEFAULTS.coverSources, ...(raw.coverSources || {}) }, lyricsSources: { ...DEFAULTS.lyricsSources, ...(raw.lyricsSources || {}) }, ...OVR };
+  } catch { return { ...DEFAULTS, ...OVR }; }
+}
+function persist() {
+  try {
+    let out = state;
+    if (Object.keys(OVR).length) {
+      const raw = JSON.parse(localStorage.getItem(KEY) || '{}');
+      out = { ...state }; for (const k in OVR) { if (k in raw) out[k] = raw[k]; else delete out[k]; }
+    }
+    localStorage.setItem(KEY, JSON.stringify(out));
+  } catch {}
 }
 
 export const settings = new Proxy({}, { get: (_, k) => state[k] });
@@ -90,7 +103,15 @@ export const settings = new Proxy({}, { get: (_, k) => state[k] });
 export function setSetting(key, value) {
   if (state[key] === value) return;
   state = { ...state, [key]: value };
-  try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {}
+  if (key in OVR) OVR[key] = value;
+  persist();
+  for (const fn of subs) fn(key, value, state);
+}
+/** a setting for this page only (not saved, not shared with the other Gatefold windows) */
+export function overrideSetting(key, value) {
+  OVR[key] = value;
+  if (state[key] === value) return;
+  state = { ...state, [key]: value };
   for (const fn of subs) fn(key, value, state);
 }
 
@@ -104,8 +125,8 @@ window.addEventListener('storage', (e) => {
 });
 
 export function resetSettings() {
-  state = { ...DEFAULTS };
-  try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {}
+  state = { ...DEFAULTS, ...OVR };
+  persist();
   for (const fn of subs) fn('*', null, state);
 }
 

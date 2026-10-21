@@ -34,6 +34,9 @@ import { $t } from './i18n.js';
 const root = document.documentElement, body = document.body;
 const app = { track: null, state: 'stopped', art: { available: false, url: '', small: '', key: '' }, volume: 100, muted: false, order: 0, maximized: false, fullscreen: false, standalone: false };
 window.aurora = app; // handy in DevTools
+/* a single-purpose panel (js/panel-boot.js): «covers» shows only the Covers screen and runs only
+   what it needs (the cover finder, the quality check); no playback chrome, analysis, updates */
+const PANEL = root.dataset.panel || '';
 
 // ================================================================ appearance
 function applyAppearance(key) {
@@ -733,6 +736,7 @@ document.addEventListener('keydown', (e) => {
   if (e.ctrlKey && k.toLowerCase() === 'p') { e.preventDefault(); runMenu({ p: 'File/Preferences' }); return; }
   if (e.altKey && k === 'ArrowLeft') { e.preventDefault(); router.back(); return; }
   if (e.altKey && k === 'ArrowRight') { e.preventDefault(); router.forward(); return; }
+  if (PANEL && ((e.altKey && /^[1-8]$/.test(k)) || (e.ctrlKey && /^[fF]$/.test(k)))) return;
   if (e.altKey && /^[1-8]$/.test(k)) { e.preventDefault(); router.go(['now', 'playlist', 'artists', 'library', 'queue', 'covers', 'settings', 'youtube'][+k - 1]); return; }
   switch (k) {
     case ' ': e.preventDefault(); $('btnPlay').click(); break;
@@ -795,8 +799,9 @@ Lib.shared.onPlayAlbum = () => { if (router.current !== 'now') toast($t('Вос�
   }
   bindEvents();
   await initWindow();
-  router.go(settings.startView || 'now', null, { push: false });
+  router.go(PANEL || settings.startView || 'now', null, { push: false });
   await syncAll();
+  if (PANEL) { bootPanel(); return; }
   Lib.renderPlaylists();
   Lib.renderQueue();
   // album list: from the on-disk snapshot at once (counts, Artists, Library), refreshed in the background
@@ -821,6 +826,13 @@ Lib.shared.onPlayAlbum = () => { if (router.current !== 'now') toast($t('Вос�
   setTimeout(() => idleP(5000).then(() => Lib.prewarm()), 12000);
   $('coverBadge').textContent = CF.getReview().length || '';
   body.classList.remove('booting');
+  coverChores();
+  if (settings.funMode) funCore().then((m) => m.enable({ quiet: true }));
+  log('ready', hasBridge());
+})();
+
+/* the cover finder's start-up chores: shared by the full interface and the covers panel */
+function coverChores() {
   // Covers installed by an earlier version? Check once per start that none of them
   // landed in a folder shared by several albums (see coverfetch.js → diagnosis).
   if (CF.getStats().ok > 0) setTimeout(async () => {
@@ -833,8 +845,15 @@ Lib.shared.onPlayAlbum = () => { if (router.current !== 'now') toast($t('Вос�
   // background sweep after the UI has settled (and never during the first seconds of playback start)
   if (settings.coverSweep) {
     const idle = window.requestIdleCallback || ((f) => setTimeout(f, 1));
-    setTimeout(() => idle(() => CF.sweepLibrary(), { timeout: 10000 }), 25000);
+    setTimeout(() => idle(() => CF.sweepLibrary(), { timeout: 10000 }), PANEL ? 8000 : 25000);
   }
-  if (settings.funMode) funCore().then((m) => m.enable({ quiet: true }));
-  log('ready', hasBridge());
-})();
+}
+
+/* «covers» panel: the album list for the finder, the badge, the chores — nothing else */
+function bootPanel() {
+  body.classList.add('panel-' + PANEL);
+  Lib.getAllAlbums();
+  body.classList.remove('booting');
+  coverChores();
+  log('ready (panel ' + PANEL + ')', hasBridge());
+}

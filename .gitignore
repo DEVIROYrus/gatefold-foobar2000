@@ -10,3 +10,4 @@ tests/.ml-fake/
 .scratch/
 installer/.dl-cache/
 .showcase-dl/
+installer/build/
