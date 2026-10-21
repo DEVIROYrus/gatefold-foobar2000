@@ -2,6 +2,7 @@ name: Release
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:   # a dry run: builds everything and keeps it as an artifact, publishes nothing
 permissions:
   contents: write
 
@@ -34,12 +35,22 @@ jobs:
       - name: Build installer and theme archive
         shell: pwsh
         run: |
-          $v = '${{ github.ref_name }}'.TrimStart('v')
+          $v = if ('${{ github.ref_type }}' -eq 'tag') { '${{ github.ref_name }}'.TrimStart('v') } else { (Get-Content package.json | ConvertFrom-Json).version }
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /Qp "/DAppVersion=$v" "/DRepoUrl=${{ github.server_url }}/${{ github.repository }}" installer/gatefold.iss
           New-Item -ItemType Directory -Force stage/gatefold | Out-Null
           Copy-Item -Recurse theme/* stage/gatefold/
           # one top folder (gatefold/…), forward slashes, deflate — what js/updater.js reads
           Compress-Archive -Path stage/gatefold -DestinationPath "dist/gatefold-theme-$v.zip"
+      - name: Check the theme archive (what the in-app updater accepts)
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $z = [IO.Compression.ZipFile]::OpenRead((Get-ChildItem dist/gatefold-theme-*.zip).FullName)
+          $names = $z.Entries | ForEach-Object { $_.FullName }; $z.Dispose()
+          if ($names | Where-Object { $_ -match '\\' }) { throw 'backslashes in the archive' }
+          foreach ($n in 'gatefold/index.html', 'gatefold/js/version.js', 'gatefold/js/app.js') { if ($names -notcontains $n) { throw "missing $n" } }
+          if ($names | Where-Object { $_ -notmatch '^gatefold/' }) { throw 'files outside gatefold/' }
+          "ok: $($names.Count) entries"
       # Code signing: once the project is accepted by SignPath Foundation (free for open source),
       # upload dist/Gatefold-Setup-*.exe with actions/upload-artifact and submit it with
       # signpath/github-action-submit-signing-request — the exact steps are in docs/SIGNING.md.
@@ -47,7 +58,8 @@ jobs:
         shell: pwsh
         run: |
           Get-ChildItem dist -File | ForEach-Object { "{0}  {1}" -f (Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLower(), $_.Name } | Set-Content -Encoding ASCII dist/SHA256SUMS.txt
-          $v = '${{ github.ref_name }}'.TrimStart('v')
+          $v = if ('${{ github.ref_type }}' -eq 'tag') { '${{ github.ref_name }}'.TrimStart('v') } else { (Get-Content package.json | ConvertFrom-Json).version }
+          if (-not ([regex]::IsMatch((Get-Content CHANGELOG.md -Raw), "(?m)^## \[?$([regex]::Escape($v))\]?"))) { throw "CHANGELOG.md has no section for $v" }
           $log = Get-Content CHANGELOG.md -Raw
           $section = [regex]::Match($log, "(?ms)^## \[?$([regex]::Escape($v))\]?.*?(?=^## |\z)").Value
           @"
@@ -61,7 +73,11 @@ jobs:
           $(Get-Content installer/deps/SHA256SUMS.txt -Raw)
           ``````
           "@ | Set-Content -Encoding UTF8 notes.md
+      - uses: actions/upload-artifact@v4
+        if: github.ref_type != 'tag'
+        with: { name: release-dry-run, path: "dist/*\nnotes.md", retention-days: 7 }
       - uses: softprops/action-gh-release@v2
+        if: github.ref_type == 'tag'
         with:
           body_path: notes.md
           files: |

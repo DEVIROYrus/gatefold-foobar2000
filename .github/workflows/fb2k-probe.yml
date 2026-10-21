@@ -2,9 +2,7 @@
 # chosen user interface (tools/fb2k-probe.ps1). The result is pushed to the probe-log branch.
 name: fb2k probe
 on:
-  workflow_dispatch:
-  push:
-    paths: ['.github/workflows/fb2k-probe.yml', 'tools/fb2k-probe.ps1', 'tools/fb2k-probe-scan.py']
+  workflow_dispatch:   # run by hand after a foobar2000 update, to see whether the configuration keys moved
 permissions:
   contents: write
 jobs:
