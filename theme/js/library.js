@@ -23,6 +23,8 @@ import * as SmartPL from './smartpl.js';
 import * as Colors from './colors.js';
 import * as SoundUI from './ml/sound-ui.js';
 import * as Sound from './ml/sound.js';
+import * as Loud from './loudness.js';
+const ownRg = () => performance.now() < Loud.writingUntil;   // Gatefold's own ReplayGain tag writes change nothing shown
 const dpr = () => Math.min(2, window.devicePixelRatio || 1);
 /** A track as the host's context-menu/handle APIs want it: path, or path|subsong:N. */
 const trackHandle = (t) => t.handle || ((t.subsong ? `${t.absolutePath || t.path}|subsong:${t.subsong}` : (t.absolutePath || t.path)));
@@ -793,7 +795,7 @@ const reloadPl = debounce((d) => { if (router.current === 'playlist' && (!d || d
 ['playlist:itemsAdded', 'playlist:itemsRemoved', 'playlist:itemsReordered', 'playlist:itemsReplaced'].forEach((ev) => on(ev, reloadPl));
 let plStale = false;
 const refreshPlRows = () => { plStale = false; PL.pages.clear(); PL.nodes.forEach((el) => { el.dataset.filled = ''; el.dataset.ok = ''; }); schedulePl(); };
-on('metadb:changed', debounce(() => { if (router.current === 'playlist') refreshPlRows(); else plStale = true; }, 1200));
+on('metadb:changed', debounce(() => { if (ownRg()) return; if (router.current === 'playlist') refreshPlRows(); else plStale = true; }, 1200));
 onRoute((v) => { if (v === 'playlist' && plStale) refreshPlRows(); });
 
 // ============================================================ library grid
@@ -1088,7 +1090,7 @@ $('libSort').addEventListener('change', async (e) => {
   if (!LIB.loaded) return loadLibrary(true);
   await sortLib(); applyFilter(); libScroller.scrollTop = 0;
 });
-['library:itemsAdded', 'library:itemsRemoved', 'library:itemsModified'].forEach((ev) => on(ev, debounce(() => { LIB.stale = true; if (router.current === 'library') idle(4000).then(() => loadLibrary(true)); }, ev === 'library:itemsModified' ? 6000 : 2000)));
+['library:itemsAdded', 'library:itemsRemoved', 'library:itemsModified'].forEach((ev) => on(ev, debounce(() => { if (ev === 'library:itemsModified' && ownRg()) return; LIB.stale = true; if (router.current === 'library') idle(4000).then(() => loadLibrary(true)); }, ev === 'library:itemsModified' ? 6000 : 2000)));
 CF.events.addEventListener('saved', (e) => {
   const p = e.detail.job.path; forgetCover(p);
   for (const a of LIB.albums) if (a.firstTrackAbsolutePath === p) {

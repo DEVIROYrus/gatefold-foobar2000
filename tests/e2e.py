@@ -17,7 +17,7 @@ from playwright.async_api import async_playwright
 
 ROOT = Path(__file__).resolve().parent.parent
 FIX = ROOT / 'tests' / 'fixtures'
-MOCK = ''.join((FIX / f).read_text(encoding='utf-8') for f in ('mock-bridge.js', 'mock-extras.js', 'mock-updates.js', 'mock-prefs.js', 'mock-welcome.js', 'mock-edit.js', 'mock-win.js', 'mock-more.js', 'mock-ml.js'))
+MOCK = ''.join((FIX / f).read_text(encoding='utf-8') for f in ('mock-bridge.js', 'mock-extras.js', 'mock-updates.js', 'mock-prefs.js', 'mock-welcome.js', 'mock-edit.js', 'mock-win.js', 'mock-more.js', 'mock-ml.js', 'mock-level.js'))
 VIEWS = ['now', 'playlist', 'artists', 'library', 'queue', 'youtube', 'covers', 'settings']
 # Russian strings that come from the mock music library itself (data, not interface text)
 DATA = ['Слепое пятно', 'Тихий Час', 'Неизвестный Бэнд', 'Другой альбом', 'Кто-то ещё', 'Без обложки', 'Локальная строка',
@@ -877,6 +877,61 @@ async def test_lyrics_sync(browser, port):
     check(not errs and not errs2, f'no page errors {(errs + errs2)[:2]}')
     await ctx.close()
 
+async def test_level(browser, port):
+    print('· volume levelling: foobar2000 settings, whole albums, tags written and read back')
+    ctx, pg, errs = await page(browser, port, {'language': 'en'}, pre='window.__levelTest = true;')
+    await nav(pg, 'settings', 900)
+    await pg.evaluate("document.getElementById('st-level').scrollIntoView()")
+    check(await pg.evaluate("!!document.querySelector('#st-level input[type=checkbox]')"), 'Settings has a «Volume levelling» switch')
+    await pg.evaluate("document.querySelector('#st-level .toggle input').click()"); await pg.wait_for_timeout(800)
+    calls = await pg.evaluate("window.__calls.filter(c => /^replaygain\\.set/.test(c[0])).map(c => c[0] + ' ' + c[1])")
+    check(any('"sourceMode":"album"' in c and '"processingMode":"gain_and_peak"' in c for c in calls), f'turning it on sets album gain with clipping prevention {calls}')
+    check(any('"withRg":0' in c and '"withoutRg":-9' in c for c in calls), f'preamp for −18 LUFS: 0 dB with tags, −9 dB without {calls}')
+    check(await pg.evaluate("localStorage.getItem('gatefold.level.prev')") is not None, "foobar2000's own ReplayGain settings are saved first")
+    for _ in range(90):
+        await pg.wait_for_timeout(1000)
+        ph = await pg.evaluate("import('/theme/js/loudness.js').then(L => L.state.phase)")
+        if ph in ('waiting', 'done', 'error'): break
+    st = await pg.evaluate("import('/theme/js/loudness.js').then(L => ({ ...L.state }))")
+    check(st['phase'] == 'waiting', f"the playing album waits for playback to leave it ({st['phase']}, {st.get('error')})")
+    T = await pg.evaluate("window.__level.tags")
+    g = lambda p, f: float(T.get(p.lower(), {}).get(f, 'nan').split()[0]) if f in T.get(p.lower(), {}) else None
+    nd = ['D:\\Music\\Night Drive\\CD1\\01.flac', 'D:\\Music\\Night Drive\\CD1\\02 Interlude.flac', 'D:\\Music\\Night Drive\\CD2\\01.flac']
+    ag = [g(p, 'REPLAYGAIN_ALBUM_GAIN') for p in nd]
+    check(None not in ag and len(set(ag)) == 1, f'one album over two disc folders: one album gain on every track {ag}')
+    tg = g(nd[1], 'REPLAYGAIN_TRACK_GAIN')
+    check(ag[0] is not None and -12.2 < ag[0] < -11.0, f'album gain from the whole album, the quiet interlude gated out like the standard says ({ag[0]})')
+    check(tg is not None and 11.8 < tg < 13.0 and tg - ag[1] > 20, f'the interlude keeps its place: its own track gain would be {tg}, it gets the album gain {ag[1]}')
+    mx = [g(f'D:\\Music\\Mixtape\\0{i}.flac', 'REPLAYGAIN_ALBUM_GAIN') for i in (1, 2, 3)]
+    check(None not in mx and len(set(mx)) == 1, f'a compilation with an artist per track stays one album {mx}')
+    la = g('D:\\Music\\Live\\Alpha 1.flac', 'REPLAYGAIN_ALBUM_GAIN'); lb = g('D:\\Music\\Live\\Beta 1.flac', 'REPLAYGAIN_ALBUM_GAIN')
+    check(la is not None and lb is not None and abs(la - lb) > 10, f'one title by two album artists in one folder: two albums ({la} / {lb})')
+    sg = (g('D:\\Music\\Singles\\One.flac', 'REPLAYGAIN_TRACK_GAIN'), g('D:\\Music\\Singles\\One.flac', 'REPLAYGAIN_ALBUM_GAIN'))
+    check(sg[0] is not None and sg[0] == sg[1], f'a single: album gain = track gain {sg}')
+    W = await pg.evaluate("window.__level.writes.map(w => w.path)")
+    check(not any('Tagged' in w for w in W), 'tracks that already have every value are left alone')
+    pa = [g(f'D:\\Music\\Partial\\{n}.flac', 'REPLAYGAIN_ALBUM_GAIN') for n in ('01', '02', '03 Bonus')]
+    cl = await pg.evaluate("window.__level.cleared")
+    check(None not in pa and len(set(pa)) == 1 and pa[0] != -3.0, f'a bonus track added to a scanned album: the whole album is measured again, one new album gain {pa}')
+    check(len(cl) == 2 and all('Partial' in c for c in cl), f'old values are cleared before the new ones are written (no two album gains in a file) {cl}')
+    pk = T.get(nd[0].lower(), {}).get('REPLAYGAIN_ALBUM_PEAK')
+    check(pk is not None and 0.49 < float(pk) < 0.52, f'album peak = the loudest true peak of the album ({pk})')
+    check(st['unwritable'] == 2, f"a format whose tags do not keep the values is counted, not retried ({st['unwritable']})")
+    playing = await pg.evaluate("window.__level.playing")
+    check(not any(w.lower() == playing.lower() for w in W), 'the album that is playing is not written yet')
+    await pg.evaluate("window.__emit('playback:trackChanged', { absolutePath: 'D:\\\\Music\\\\Other\\\\x.flac', title: 'x', artist: 'y', album: 'z', duration: 100 })"); await pg.wait_for_timeout(2500)
+    W = await pg.evaluate("window.__level.writes.map(w => w.path)")
+    check(any(w.lower() == playing.lower() for w in W), 'once playback moves on, the album gets its values')
+    txt = await pg.inner_text('#lvlStatus')
+    check('failed: 2' in txt, f'the status line counts what could not be written ({txt!r})')
+    # off: foobar2000's settings come back
+    await pg.evaluate("window.__calls.length = 0")
+    await pg.evaluate("document.querySelector('#st-level .toggle input').click()"); await pg.wait_for_timeout(800)
+    calls = await pg.evaluate("window.__calls.filter(c => /^replaygain\\.set/.test(c[0])).map(c => c[0] + ' ' + c[1])")
+    check(any('"withoutRg":-6' in c for c in calls), f'turning it off puts back the previous preamp {calls}')
+    check(not errs, f'no page errors {errs[:2]}')
+    await ctx.close()
+
 async def main():
     httpd = serve(); port = httpd.server_address[1]
     async with async_playwright() as p:
@@ -891,7 +946,7 @@ async def main():
         for name, fn in [('playlists', test_playlists), ('youtube', test_youtube), ('settings', test_settings), ('updates', test_updates),
                          ('tooltips', test_tooltips), ('canvas_volume', test_canvas_volume), ('fb2k_prefs', test_fb2k_prefs), ('welcome', test_welcome),
                          ('playlist_editing', test_playlist_editing), ('windows', test_windows), ('vu', test_vu), ('smart_color_radio', test_smart_color_radio),
-                         ('lyrics_sync', test_lyrics_sync), ('sound_offer', test_sound_offer), ('similar_albums', test_similar_albums), ('sound_ai', test_sound_ai), ('layout', test_layout), ('stability', test_stability)]:
+                         ('lyrics_sync', test_lyrics_sync), ('level', test_level), ('sound_offer', test_sound_offer), ('similar_albums', test_similar_albums), ('sound_ai', test_sound_ai), ('layout', test_layout), ('stability', test_stability)]:
             if run(name): await timed(name, fn(browser, port))
         await browser.close()
     httpd.shutdown()

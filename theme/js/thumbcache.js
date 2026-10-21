@@ -23,6 +23,7 @@ import * as IDB from './idb.js';
 import { fetchArt, heavyTransport } from './artbytes.js';
 import { bgCall, slot, spent } from './sched.js';
 import { img as imgOp } from './imgw.js';
+import * as Loud from './loudness.js';
 
 const SIZES = [160, 320, 480, 640];
 export const snap = (s) => SIZES.find((x) => x >= s) || 640;
@@ -275,6 +276,6 @@ export async function clear() {
 /* A track's file changed (tag editor, embedded art…) → its thumbnail is due for a check.
    Play-count updates from the statistics hook don't touch the picture. */
 on('metadb:changed', (d) => {
-  if (!d || d.fromHook) return;
+  if (!d || d.fromHook || performance.now() < Loud.writingUntil) return;   // ReplayGain tags, not pictures
   for (const t of d.tracks || []) if (t && t.path) due.add(lc(t.path));
 });

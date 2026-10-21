@@ -10,6 +10,7 @@ import { isVarious } from './match.js';
 
 import { $t } from './i18n.js';
 import { emptyActions } from './welcome.js';
+import * as Loud from './loudness.js';
 const dpr = () => Math.min(2, window.devicePixelRatio || 1);
 const AR = { list: [], view: [], byKey: new Map(), nodes: new Map(), cols: 1, tw: 160, rh: 210, loaded: false, loading: false };
 const scroller = $('artScroller'), grid = $('artGrid');
@@ -247,7 +248,7 @@ import('./coverfetch.js').then((CF) => CF.events.addEventListener('repaired', ()
   if (router.current === 'artists') layout();
 }));
 router.on('artist', (x) => openArtist(x));
-['library:itemsAdded', 'library:itemsRemoved', 'library:itemsModified'].forEach((ev) => on(ev, debounce(() => { AR.loaded = false; if (router.current === 'artists') loadArtists(true); }, 3000)));
+['library:itemsAdded', 'library:itemsRemoved', 'library:itemsModified'].forEach((ev) => on(ev, debounce(() => { if (ev === 'library:itemsModified' && performance.now() < Loud.writingUntil) return; AR.loaded = false; if (router.current === 'artists') loadArtists(true); }, 3000)));
 /* the library list came back different from the on-disk snapshot → rebuild */
 Lib.libEvents.addEventListener('changed', () => { AR.loaded = false; if (router.current === 'artists') loadArtists(true); });
 export const artistsState = AR;

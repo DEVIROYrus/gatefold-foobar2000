@@ -49,6 +49,7 @@ Covers and titles belong to their authors and are shown under these licences. Th
 - **Playlists in four views** (by album, with covers, tiles, compact) with real editing: Shift/Ctrl selection, drag to reorder or onto a sidebar playlist, Delete, Ctrl+Z (foobar2000's own undo), Alt+↑/↓.
 - **Library and Artists** — cover grids, album pages, artist photos; albums split by guest artists are merged back; the library can be sorted and filtered by cover colour.
 - **Now playing** — a large cover, a spectrum, format badges (codec, bit depth / sample rate, bitrate, DR, ReplayGain, play count), the track's genres and mood, synced lyrics and up next. The interface takes its colours from the cover, or keeps a fixed Dark, Light or Grey theme.
+- **Volume levelling** — one switch in Settings: albums play equally loud while each keeps its own quiet and loud moments (or per track, or «smart»), at −18, −16, −14 or −23 LUFS. Tracks without ReplayGain values are measured in the background like the ReplayGain 2.0 scanner does (EBU R128, true peak, whole albums at once) and get the standard tags; foobar2000 applies them, gapless, with clipping prevention.
 - **Canvas** — full-screen Now playing, also on a second monitor; a **mini player** above other windows; taskbar buttons and progress; an optional tray icon.
 - **«More like this» radio** without sound analysis too: artists related to the seed that you actually have.
 - **Liked** — a heart in the player and on every row, kept in an ordinary foobar2000 playlist.

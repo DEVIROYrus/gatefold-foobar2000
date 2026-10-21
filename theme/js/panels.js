@@ -18,6 +18,7 @@ import { VERSION } from './version.js';
 import { settingsSection as updatesSection } from './update-ui.js';
 import { fb2kGroups } from './fb2kprefs.js';
 import * as SoundUI from './ml/sound-ui.js';
+import * as LoudUI from './loudness-ui.js';
 const CF_pl = (n) => plural(n, 'файл', 'файла', 'файлов');
 
 // ---------------------------------------------------------------- control builders
@@ -241,6 +242,7 @@ export function renderSettings() {
   const t = TC.tstate;
   const thumbs = h(`<div class="row"><div class="lbl"><b>${$t('Кэш миниатюр')}</b><small id="tcInfo">${$t('{0} шт. · {1} МБ', t.count, (t.bytes / 1048576).toFixed(1))}</small></div></div>`);
   thumbs.append(button($t('Очистить'), async () => { await TC.clear(); toast($t('Кэш миниатюр очищен')); renderSettings(); }));
+  LoudUI.settingsSection({ section, group, actions, button, rerender: renderSettings });
   SoundUI.settingsSection({ section, group, actions, button, rerender: renderSettings });
 
   section('foobar', 'disc', 'foobar2000', '' /* Настройки самого плеера — те же, что в его окне Preferences: изменения видны и там */, ...fb2kGroups(group, actions, button));
