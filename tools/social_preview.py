@@ -4,7 +4,7 @@ from pathlib import Path
 from playwright.async_api import async_playwright
 ROOT = Path(__file__).resolve().parent.parent
 svg = (ROOT / 'installer/assets/gatefold.svg').read_text(encoding='utf-8')
-shot = base64.b64encode((ROOT / 'docs/screenshots/sound-now-en.webp').read_bytes()).decode()
+shot = base64.b64encode((ROOT / 'docs/screenshots/now-en.webp').read_bytes()).decode()
 fonts = ROOT / 'theme' / 'fonts'
 HTML = f"""<html><head><style>
 @font-face {{ font-family: Inter; src: url('{(fonts / 'inter-latin-opsz-normal.woff2').as_uri()}'); font-weight: 100 900; }}

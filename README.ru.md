@@ -19,7 +19,7 @@ Gatefold — современный интерфейс для [foobar2000](https
 
 | Плейлисты по звучанию | Радио, «Похожие», жанр и настроение трека |
 |---|---|
-| ![Плейлисты по настроению](docs/screenshots/sound-smart-en.webp) | ![«Сейчас играет» с анализом звука](docs/screenshots/sound-now-en.webp) |
+| ![Плейлисты по настроению](docs/screenshots/sound-smart-en.webp) | ![«Сейчас играет» с анализом звука](docs/screenshots/now-en.webp) |
 | **Умные плейлисты без запросов** | **Плейлист с обложками** |
 | ![Умные плейлисты](docs/screenshots/smart-en.webp) | ![Плейлист](docs/screenshots/playlist-en.webp) |
 | **Медиатека по цвету обложек** | **Постоянная светлая тема** |

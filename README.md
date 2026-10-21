@@ -19,7 +19,7 @@ Gatefold is a modern interface for [foobar2000](https://www.foobar2000.org), the
 
 | Playlists by how the music sounds | Radio, Similar, genre and mood of the track |
 |---|---|
-| ![Mood playlists](docs/screenshots/sound-smart-en.webp) | ![Now playing with sound analysis](docs/screenshots/sound-now-en.webp) |
+| ![Mood playlists](docs/screenshots/sound-smart-en.webp) | ![Now playing with sound analysis](docs/screenshots/now-en.webp) |
 | **Smart playlists without queries** | **Playlist with covers** |
 | ![Smart playlists](docs/screenshots/smart-en.webp) | ![Playlist](docs/screenshots/playlist-en.webp) |
 | **Library by cover colour** | **Fixed light theme** |
