@@ -147,8 +147,8 @@ en.LastStep1=In foobar2000 open File → Preferences → Display, choose “Webv
 ru.LastStep1=В foobar2000 откройте File → Preferences → Display, выберите «Webview2 UI» в списке Default User Interface и нажмите OK. foobar2000 не даёт другим программам менять этот параметр, поэтому нужен один щелчок — только один раз.
 en.LastStep2=Then on the Display → WebView2 UI page choose the “%1” template and press Apply.
 ru.LastStep2=Затем на странице Display → WebView2 UI выберите шаблон «%1» и нажмите Apply.
-en.ReadyFirstStart=Everything is in place: foobar2000 opens straight in Gatefold.
-ru.ReadyFirstStart=Всё готово: foobar2000 сразу откроется в Gatefold.
+en.ReadyFirstStart=Everything is in place: foobar2000 opens straight in Gatefold.%n%nTo go back: File → Preferences → Display → Default User Interface.
+ru.ReadyFirstStart=Всё готово: foobar2000 сразу откроется в Gatefold.%n%nВернуться к прежнему виду: File → Preferences → Display → Default User Interface.
 en.LastStepUpd=Everything is in place — your interface is updated. Restart foobar2000 if it was open.
 ru.LastStepUpd=Всё на месте — интерфейс обновлён. Перезапустите foobar2000, если он был открыт.
 en.Launch=Open foobar2000
@@ -168,9 +168,10 @@ Source: "deps\{#FB2K_FILE}"; Flags: dontcopy
 Source: "deps\MicrosoftEdgeWebview2Setup.exe"; Flags: dontcopy
 ; uninstaller icon
 Source: "assets\gatefold.ico"; DestDir: "{app}"; Flags: ignoreversion
-; a profile without any configuration yet: foobar2000's first start opens in Gatefold instead of asking
-; which interface to use (see tools/make_fresh_config.py). Never over an existing configuration.
-Source: "assets\fresh-config.sqlite"; DestDir: "{code:ProfileDir}"; DestName: "config.sqlite"; Flags: onlyifdoesntexist uninsneveruninstall; Check: IsPresetUI
+; foobar2000 opens straight in Gatefold: a profile without a configuration gets a minimal one
+; (tools/make_fresh_config.py); an existing one is changed by preset-ui.ps1 after the files are in place
+Source: "assets\fresh-config.sqlite"; DestDir: "{code:ProfileDir}"; DestName: "config.sqlite"; Flags: onlyifdoesntexist uninsneveruninstall
+Source: "preset-ui.ps1"; Flags: dontcopy
 
 [Registry]
 Root: HKCU; Subkey: "Software\Gatefold"; ValueType: string; ValueName: "ThemeDir"; ValueData: "{code:ThemeDir}"; Flags: uninsdeletekey
@@ -547,15 +548,28 @@ begin
   end;
 end;
 
-function IsPresetUI: Boolean; begin Result := PresetUI; end;
+{ make Webview2 UI foobar2000's interface (preset-ui.ps1: two values in <profile>\config.sqlite, a backup
+  next to it); on any failure nothing changes and the finish page shows the manual step }
+procedure PresetInterface;
+var Cfg: String; Cap: TExecOutput; RC, I: Integer;
+begin
+  PresetUI := False;
+  Cfg := AddBackslash(ProfDir) + 'config.sqlite';
+  if InPlace or not FileExists(Cfg) or FoobarRunning then Exit;
+  ExtractTemporaryFile('preset-ui.ps1');
+  if ExecAndCaptureOutput(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+       '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + ExpandConstant('{tmp}\preset-ui.ps1') + '" -Db "' + Cfg + '"',
+       '', SW_HIDE, ewWaitUntilTerminated, RC, Cap) then begin
+    for I := 0 to GetArrayLength(Cap.StdOut) - 1 do Log('preset-ui: ' + Cap.StdOut[I]);
+    PresetUI := RC = 0;
+  end;
+  Log('Webview2 UI preset: ' + IntToStr(Ord(PresetUI)));
+end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
-  if CurStep = ssInstall then begin
-    InstallDependencies;
-    PresetUI := not FileExists(AddBackslash(ProfDir) + 'config.sqlite');
-    if PresetUI then Log('Profile has no configuration yet: foobar2000 will start in Webview2 UI');
-  end;
+  if CurStep = ssInstall then InstallDependencies;
+  if CurStep = ssPostInstall then PresetInterface;
 end;
 
 { ---------------------------------------------------------------- finish page: the one manual step }

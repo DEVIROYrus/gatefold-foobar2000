@@ -49,7 +49,7 @@ Gatefold is a theme for the [foo_ui_webview2](https://github.com/NereaFantasia/f
 ## Installation
 
 ### With the installer (recommended)
-Download `Gatefold-Setup.exe` from [Releases](../../releases) and run it. It installs or updates foobar2000, foo_ui_webview2 and the WebView2 Runtime when needed, puts the theme in place and adds Gatefold shortcuts. With a new foobar2000 (or one never started yet) it opens straight in Gatefold; with an existing one the installer shows the one remaining click (choosing Webview2 UI, as in step 4 below).
+Download `Gatefold-Setup.exe` from [Releases](../../releases) and run it. It installs or updates foobar2000, foo_ui_webview2 and the WebView2 Runtime when needed, puts the theme in place, adds Gatefold shortcuts and makes Webview2 UI foobar2000's interface — foobar2000 opens straight in Gatefold (its configuration is backed up as `config.sqlite.before-gatefold`; to go back, choose *Default User Interface* in Preferences → Display).
 
 ### Manually
 1. Install **foo_ui_webview2**. Open the `.fb2k-component` file, confirm in foobar2000, then restart foobar2000.

@@ -47,7 +47,7 @@ Gatefold — тема для компонента [foo_ui_webview2](https://gith
 ## Установка
 
 ### Установщиком (рекомендуется)
-Скачайте `Gatefold-Setup.exe` из [Releases](../../releases) и запустите. При необходимости он установит или обновит foobar2000, foo_ui_webview2 и WebView2 Runtime положит тему на место и добавит ярлыки Gatefold. Новый foobar2000 (или ещё ни разу не запускавшийся) сразу откроется в Gatefold; если foobar2000 у вас уже был, установщик покажет единственный оставшийся щелчок — выбрать Webview2 UI, как в шаге 4 ниже.
+Скачайте `Gatefold-Setup.exe` из [Releases](../../releases) и запустите. При необходимости он установит или обновит foobar2000, foo_ui_webview2 и WebView2 Runtime положит тему на место, добавит ярлыки Gatefold и сделает Webview2 UI интерфейсом foobar2000 — он сразу откроется в Gatefold (настройки сохраняются в `config.sqlite.before-gatefold`; вернуться — *Default User Interface* в Preferences → Display).
 
 ### Вручную
 1. Установите **foo_ui_webview2**: откройте файл `.fb2k-component`, подтвердите установку в foobar2000 и перезапустите его.
