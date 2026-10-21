@@ -79,84 +79,160 @@ WizardSizePercent=110
 [Languages]
 Name: "en"; MessagesFile: "compiler:Default.isl"
 Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"
+Name: "de"; MessagesFile: "compiler:Languages\German.isl"
+Name: "es"; MessagesFile: "compiler:Languages\Spanish.isl"
 
 [Messages]
 en.WelcomeLabel2=This will set up Gatefold — a modern interface for foobar2000 with radio and mood playlists that go by how your music sounds.%n%nAnything that's missing (foobar2000, the WebView2 UI component, the WebView2 Runtime) is installed or updated automatically.
 ru.WelcomeLabel2=Будет установлен Gatefold — современный интерфейс для foobar2000 с радио и плейлистами по настроению, которые подбирают музыку по звучанию.%n%nВсё недостающее (foobar2000, компонент WebView2 UI, среда WebView2) установится или обновится автоматически.
+de.WelcomeLabel2=Gatefold wird eingerichtet — eine moderne Oberfläche für foobar2000 mit Radio und Stimmungs-Playlists, die Musik nach ihrem Klang auswählen.%n%nWas fehlt (foobar2000, die WebView2-UI-Komponente, die WebView2-Laufzeit), wird automatisch installiert oder aktualisiert.
+es.WelcomeLabel2=Se instalará Gatefold — una interfaz moderna para foobar2000 con radio y listas por estado de ánimo que eligen la música por cómo suena.%n%nLo que falte (foobar2000, el componente WebView2 UI, el runtime de WebView2) se instala o actualiza automáticamente.
 
 [CustomMessages]
 en.PlanTitle=What will happen
 ru.PlanTitle=Что будет сделано
+de.PlanTitle=Was passiert
+es.PlanTitle=Qué se hará
 en.PlanSub=Gatefold checked your computer. Nothing is changed until you press Install.
 ru.PlanSub=Установщик проверил компьютер. Ничего не изменится, пока вы не нажмёте «Установить».
+de.PlanSub=Gatefold hat deinen Computer geprüft. Nichts wird verändert, bis du auf Installieren klickst.
+es.PlanSub=Gatefold ha revisado tu ordenador. No se cambia nada hasta que pulses Instalar.
 en.Fb2kNone=foobar2000: not found — foobar2000 %1 (64-bit) will be installed
 ru.Fb2kNone=foobar2000: не найден — будет установлен foobar2000 %1 (64-бит)
+de.Fb2kNone=foobar2000: nicht gefunden — foobar2000 %1 (64-Bit) wird installiert
+es.Fb2kNone=foobar2000: no encontrado — se instalará foobar2000 %1 (64 bits)
 en.Fb2kUpdate=foobar2000 %1 — will be updated to %2
 ru.Fb2kUpdate=foobar2000 %1 — будет обновлён до %2
+de.Fb2kUpdate=foobar2000 %1 — wird auf %2 aktualisiert
+es.Fb2kUpdate=foobar2000 %1 — se actualizará a %2
 en.Fb2kOk=foobar2000 %1 — up to date
 ru.Fb2kOk=foobar2000 %1 — актуальная версия
+de.Fb2kOk=foobar2000 %1 — aktuell
+es.Fb2kOk=foobar2000 %1 — al día
 en.Fb2kPortable=foobar2000 %1 (portable) — used as is
 ru.Fb2kPortable=foobar2000 %1 (портативный) — используется как есть
+de.Fb2kPortable=foobar2000 %1 (portabel) — wird so verwendet
+es.Fb2kPortable=foobar2000 %1 (portable) — se usa tal cual
 en.Fb2kOld=foobar2000 %1 (portable) is older than 2.0 — Gatefold needs foobar2000 2.x 64-bit; update it from foobar2000.org
 ru.Fb2kOld=foobar2000 %1 (портативный) старше 2.0 — Gatefold нужен foobar2000 2.x 64-бит; обновите его с foobar2000.org
+de.Fb2kOld=foobar2000 %1 (portabel) ist älter als 2.0 — Gatefold braucht foobar2000 2.x 64-Bit; aktualisiere es von foobar2000.org
+es.Fb2kOld=foobar2000 %1 (portable) es anterior a la 2.0 — Gatefold necesita foobar2000 2.x de 64 bits; actualízalo desde foobar2000.org
 en.Fb2k32=foobar2000 %1 is 32-bit — a 64-bit foobar2000 %2 will be installed next to it
 ru.Fb2k32=foobar2000 %1 32-битный — рядом будет установлен 64-битный foobar2000 %2
+de.Fb2k32=foobar2000 %1 ist 32-Bit — daneben wird ein 64-Bit-foobar2000 %2 installiert
+es.Fb2k32=foobar2000 %1 es de 32 bits — se instalará al lado un foobar2000 %2 de 64 bits
 en.CompNew=WebView2 UI component — will be installed (%1)
 ru.CompNew=Компонент WebView2 UI — будет установлен (%1)
+de.CompNew=WebView2-UI-Komponente — wird installiert (%1)
+es.CompNew=Componente WebView2 UI — se instalará (%1)
 en.CompUpd=WebView2 UI component %1 — will be updated to %2
 ru.CompUpd=Компонент WebView2 UI %1 — будет обновлён до %2
+de.CompUpd=WebView2-UI-Komponente %1 — wird auf %2 aktualisiert
+es.CompUpd=Componente WebView2 UI %1 — se actualizará a %2
 en.CompOk=WebView2 UI component %1 — up to date
 ru.CompOk=Компонент WebView2 UI %1 — актуальная версия
+de.CompOk=WebView2-UI-Komponente %1 — aktuell
+es.CompOk=Componente WebView2 UI %1 — al día
 en.Wv2New=WebView2 Runtime — will be installed (from Microsoft)
 ru.Wv2New=Среда WebView2 — будет установлена (с сайта Microsoft)
+de.Wv2New=WebView2-Laufzeit — wird installiert (von Microsoft)
+es.Wv2New=Runtime de WebView2 — se instalará (de Microsoft)
 en.Wv2Ok=WebView2 Runtime %1 — present
 ru.Wv2Ok=Среда WebView2 %1 — есть
+de.Wv2Ok=WebView2-Laufzeit %1 — vorhanden
+es.Wv2Ok=Runtime de WebView2 %1 — presente
 en.ThemeTo=Gatefold %1 — into the “%2” template
 ru.ThemeTo=Gatefold %1 — в шаблон «%2»
+de.ThemeTo=Gatefold %1 — in die Vorlage „%2“
+es.ThemeTo=Gatefold %1 — en la plantilla «%2»
 en.ThemeUpd=Gatefold — will update your “%1” template in place
 ru.ThemeUpd=Gatefold — обновит ваш шаблон «%1» на месте
+de.ThemeUpd=Gatefold — deine Vorlage „%1“ wird direkt aktualisiert
+es.ThemeUpd=Gatefold — se actualizará tu plantilla «%1» en su sitio
 en.Profile=Profile: %1
 ru.Profile=Профиль: %1
+de.Profile=Profil: %1
+es.Profile=Perfil: %1
 en.OtherFolder=Use a different foobar2000 folder (e.g. a portable one)…
 ru.OtherFolder=Указать другую папку foobar2000 (например, портативную)…
+de.OtherFolder=Anderen foobar2000-Ordner verwenden (z. B. einen portablen)…
+es.OtherFolder=Usar otra carpeta de foobar2000 (p. ej. una portable)…
 en.PickFolder=Choose the folder that contains foobar2000.exe
 ru.PickFolder=Выберите папку, в которой лежит foobar2000.exe
+de.PickFolder=Wähle den Ordner, der foobar2000.exe enthält
+es.PickFolder=Elige la carpeta que contiene foobar2000.exe
 en.NoExe=There is no foobar2000.exe in this folder.
 ru.NoExe=В этой папке нет foobar2000.exe.
+de.NoExe=In diesem Ordner gibt es keine foobar2000.exe.
+es.NoExe=No hay ningún foobar2000.exe en esta carpeta.
 en.Running=foobar2000 is running. It has to be closed while Gatefold installs into its profile.%n%nClose foobar2000 now?
 ru.Running=foobar2000 запущен. Его нужно закрыть, пока Gatefold устанавливается в профиль.%n%nЗакрыть foobar2000 сейчас?
+de.Running=foobar2000 läuft. Es muss geschlossen sein, während Gatefold in sein Profil installiert wird.%n%nfoobar2000 jetzt schließen?
+es.Running=foobar2000 está en ejecución. Debe cerrarse mientras Gatefold se instala en su perfil.%n%n¿Cerrar foobar2000 ahora?
 en.StillRunning=foobar2000 is still running. Close it and press Next again.
 ru.StillRunning=foobar2000 всё ещё запущен. Закройте его и снова нажмите «Далее».
+de.StillRunning=foobar2000 läuft noch. Schließe es und klicke erneut auf Weiter.
+es.StillRunning=foobar2000 sigue en ejecución. Ciérralo y pulsa Siguiente otra vez.
 en.StInstallFb=Installing foobar2000 %1… Windows asks for permission now — if no prompt is visible, click the flashing shield icon on the taskbar.
 ru.StInstallFb=Устанавливаю foobar2000 %1… Windows сейчас спросит разрешение — если окна не видно, нажмите мигающий значок щита на панели задач.
+de.StInstallFb=Installiere foobar2000 %1… Windows fragt jetzt nach der Erlaubnis — wenn keine Abfrage zu sehen ist, klicke auf das blinkende Schild-Symbol in der Taskleiste.
+es.StInstallFb=Instalando foobar2000 %1… Windows pide permiso ahora — si no ves el aviso, haz clic en el icono del escudo que parpadea en la barra de tareas.
 en.FbDeclined=foobar2000 installs into Program Files, so Windows needs your permission (the “User Account Control” prompt).%n%nTry again?%n%nNo — continue without foobar2000; you can install it yourself from foobar2000.org later, Gatefold will be ready.
 ru.FbDeclined=foobar2000 ставится в Program Files, поэтому Windows нужно ваше разрешение (окно «Контроль учётных записей»).%n%nПопробовать ещё раз?%n%nНет — продолжить без foobar2000: его можно поставить самому с foobar2000.org, Gatefold уже будет готов.
+de.FbDeclined=foobar2000 wird unter Programme installiert, daher braucht Windows deine Erlaubnis (die Abfrage der „Benutzerkontensteuerung“).%n%nErneut versuchen?%n%nNein — ohne foobar2000 fortfahren; du kannst es später selbst von foobar2000.org installieren, Gatefold ist dann bereit.
+es.FbDeclined=foobar2000 se instala en Archivos de programa, así que Windows necesita tu permiso (el aviso del «Control de cuentas de usuario»).%n%n¿Intentarlo de nuevo?%n%nNo — continuar sin foobar2000; puedes instalarlo tú más tarde desde foobar2000.org y Gatefold estará listo.
 en.FbMissing=foobar2000 was not installed (%1).%n%nGatefold, the WebView2 UI component and the theme will still be installed — they are ready the moment foobar2000 is.%n%nOpen the foobar2000 download page now?
 ru.FbMissing=foobar2000 не установился (%1).%n%nКомпонент WebView2 UI и тема всё равно будут установлены — они заработают, как только появится foobar2000.%n%nОткрыть страницу загрузки foobar2000?
+de.FbMissing=foobar2000 wurde nicht installiert (%1).%n%nGatefold, die WebView2-UI-Komponente und das Theme werden trotzdem installiert — sie sind bereit, sobald foobar2000 da ist.%n%nDie Downloadseite von foobar2000 jetzt öffnen?
+es.FbMissing=foobar2000 no se instaló (%1).%n%nGatefold, el componente WebView2 UI y el tema se instalarán igualmente — estarán listos en cuanto lo esté foobar2000.%n%n¿Abrir ahora la página de descarga de foobar2000?
 en.FbMissingNote=foobar2000 is not installed yet: get the 64-bit version from foobar2000.org/download, install it, then do the step above.
 ru.FbMissingNote=foobar2000 ещё не установлен: скачайте 64-битную версию с foobar2000.org/download, установите её и сделайте шаг выше.
+de.FbMissingNote=foobar2000 ist noch nicht installiert: Hol dir die 64-Bit-Version von foobar2000.org/download, installiere sie und mach dann den Schritt oben.
+es.FbMissingNote=foobar2000 aún no está instalado: descarga la versión de 64 bits desde foobar2000.org/download, instálala y luego haz el paso de arriba.
 en.StInstallWv=Installing the WebView2 Runtime (downloaded from Microsoft, may take a few minutes)…
 ru.StInstallWv=Устанавливаю среду WebView2 (скачивается с сайта Microsoft, может занять несколько минут)…
+de.StInstallWv=Installiere die WebView2-Laufzeit (von Microsoft heruntergeladen, kann einige Minuten dauern)…
+es.StInstallWv=Instalando el runtime de WebView2 (se descarga de Microsoft, puede tardar unos minutos)…
 en.WvFailed=The WebView2 Runtime could not be installed (code %1). Install it from Microsoft: https://go.microsoft.com/fwlink/p/?LinkId=2124703
 ru.WvFailed=Не удалось установить среду WebView2 (код %1). Установите её с сайта Microsoft: https://go.microsoft.com/fwlink/p/?LinkId=2124703
+de.WvFailed=Die WebView2-Laufzeit konnte nicht installiert werden (Code %1). Installiere sie von Microsoft: https://go.microsoft.com/fwlink/p/?LinkId=2124703
+es.WvFailed=No se pudo instalar el runtime de WebView2 (código %1). Instálalo desde Microsoft: https://go.microsoft.com/fwlink/p/?LinkId=2124703
 en.LastStepTitle=One last step in foobar2000
 ru.LastStepTitle=Последний шаг в foobar2000
+de.LastStepTitle=Ein letzter Schritt in foobar2000
+es.LastStepTitle=Un último paso en foobar2000
 en.ShortcutComment=foobar2000 with the Gatefold interface
 ru.ShortcutComment=foobar2000 с интерфейсом Gatefold
+de.ShortcutComment=foobar2000 mit der Gatefold-Oberfläche
+es.ShortcutComment=foobar2000 con la interfaz Gatefold
 en.LastStep1=In foobar2000 open File → Preferences → Display, choose “Webview2 UI” as the Default User Interface and press OK. foobar2000 does not let other programs change this setting, so it takes one click — only once.
 ru.LastStep1=В foobar2000 откройте File → Preferences → Display, выберите «Webview2 UI» в списке Default User Interface и нажмите OK. foobar2000 не даёт другим программам менять этот параметр, поэтому нужен один щелчок — только один раз.
+de.LastStep1=Öffne in foobar2000 File → Preferences → Display, wähle „Webview2 UI“ als Default User Interface und klicke OK. foobar2000 lässt andere Programme diese Einstellung nicht ändern, deshalb braucht es einen Klick — nur einmal.
+es.LastStep1=En foobar2000 abre File → Preferences → Display, elige «Webview2 UI» como Default User Interface y pulsa OK. foobar2000 no deja que otros programas cambien este ajuste, así que hace falta un clic — solo una vez.
 en.LastStep2=Then on the Display → WebView2 UI page choose the “%1” template and press Apply.
 ru.LastStep2=Затем на странице Display → WebView2 UI выберите шаблон «%1» и нажмите Apply.
+de.LastStep2=Wähle dann auf der Seite Display → WebView2 UI die Vorlage „%1“ und klicke Apply.
+es.LastStep2=Después, en la página Display → WebView2 UI, elige la plantilla «%1» y pulsa Apply.
 en.ReadyFirstStart=Everything is in place: foobar2000 opens straight in Gatefold.%n%nTo go back: File → Preferences → Display → Default User Interface.
 ru.ReadyFirstStart=Всё готово: foobar2000 сразу откроется в Gatefold.%n%nВернуться к прежнему виду: File → Preferences → Display → Default User Interface.
+de.ReadyFirstStart=Alles ist bereit: foobar2000 öffnet direkt in Gatefold.%n%nZurück geht es über File → Preferences → Display → Default User Interface.
+es.ReadyFirstStart=Todo está listo: foobar2000 se abre directamente en Gatefold.%n%nPara volver: File → Preferences → Display → Default User Interface.
 en.LastStepUpd=Everything is in place — your interface is updated. Restart foobar2000 if it was open.
 ru.LastStepUpd=Всё на месте — интерфейс обновлён. Перезапустите foobar2000, если он был открыт.
+de.LastStepUpd=Alles ist bereit — deine Oberfläche ist aktualisiert. Starte foobar2000 neu, falls es offen war.
+es.LastStepUpd=Todo está listo — tu interfaz está actualizada. Reinicia foobar2000 si estaba abierto.
 en.Launch=Open foobar2000
 ru.Launch=Открыть foobar2000
+de.Launch=foobar2000 öffnen
+es.Launch=Abrir foobar2000
 en.Recommend=Recommended (optional) components: Playback Statistics (foo_playcount) and DR Meter (foo_dr_meter) — foobar2000.org/components
 ru.Recommend=Рекомендуемые (необязательные) компоненты: Playback Statistics (foo_playcount) и DR Meter (foo_dr_meter) — foobar2000.org/components
+de.Recommend=Empfohlene (optionale) Komponenten: Playback Statistics (foo_playcount) und DR Meter (foo_dr_meter) — foobar2000.org/components
+es.Recommend=Componentes recomendados (opcionales): Playback Statistics (foo_playcount) y DR Meter (foo_dr_meter) — foobar2000.org/components
 en.NeedsX64=Gatefold needs 64-bit Windows 10 or 11.
 ru.NeedsX64=Gatefold нужна 64-битная Windows 10 или 11.
+de.NeedsX64=Gatefold braucht 64-Bit-Windows 10 oder 11.
+es.NeedsX64=Gatefold necesita Windows 10 u 11 de 64 bits.
 
 [Files]
 ; theme

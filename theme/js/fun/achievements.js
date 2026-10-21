@@ -3,7 +3,7 @@ import * as App from '../app.js';
 import { store, now, html, esc, router, emit, isEnabled, runtime } from './core.js';
 import { modal } from './kit.js';
 
-import { $t } from '../i18n.js';
+import { $t, locale } from '../i18n.js';
 const day = () => new Date().toDateString();
 const LOSSLESS = /flac|alac|wav|ape|wavpack|tak|aiff|pcm|dsd|dsf|dff/i;
 const SHUFFLE = new Set([3, 4, 5, 6]);
@@ -90,7 +90,7 @@ export function trophyRoom() {
     <div class="grid">${order.map((a) => {
       const g = st.got[a[0]], hidden = a[5] && !g;
       return `<div class="tr ${g ? 'got' : ''} ${hidden ? 'secret' : ''}"><div class="ic">${hidden ? '?' : a[1]}</div><div class="tx"><b>${hidden ? $t('Скрытое') : esc(a[2])}</b>
-        <span>${hidden ? $t('Условие откроется вместе с достижением') : esc(a[3])}</span>${g ? `<em>${esc(a[4])}</em><i>${new Date(g).toLocaleDateString('ru')}</i>` : ''}</div></div>`;
+        <span>${hidden ? $t('Условие откроется вместе с достижением') : esc(a[3])}</span>${g ? `<em>${esc(a[4])}</em><i>${new Date(g).toLocaleDateString(locale)}</i>` : ''}</div></div>`;
     }).join('')}</div></div>`);
   modal({ title: $t('Достижения'), body, cls: 'fun-trophy-back', actions: [{ label: $t('Закрыть'), primary: true }] });
 }

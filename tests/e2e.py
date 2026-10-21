@@ -52,7 +52,7 @@ async def page(browser, port, settings, setup=None, pre=''):
     pg.on('pageerror', lambda e: errs.append(str(e)))
     if pre: await pg.add_init_script(pre)
     # seeded once per context: a reload (e.g. after a language switch) keeps what the page saved
-    seed = "if (!localStorage.getItem('aurora.settings.v1')) localStorage.setItem('aurora.settings.v1', JSON.stringify(%s));" % json.dumps({'fontMode': 'inter', 'coverSweep': False, 'coverAuto': False, 'artistAuto': False, 'canvasIdleMin': 0, **settings})
+    seed = "if (!localStorage.getItem('gatefold.soundOffer') && !window.__offerTest) localStorage.setItem('gatefold.soundOffer', 'tests'); if (!localStorage.getItem('aurora.settings.v1')) localStorage.setItem('aurora.settings.v1', JSON.stringify(%s));" % json.dumps({'fontMode': 'inter', 'coverSweep': False, 'coverAuto': False, 'artistAuto': False, 'canvasIdleMin': 0, **settings})
     await pg.add_init_script(seed + MOCK)
     await pg.goto(f'http://127.0.0.1:{port}/theme/index.html')
     await pg.wait_for_timeout(1500)
@@ -76,15 +76,15 @@ async def test_language(browser, port, lang):
         await nav(pg, v)
         if v == 'now':
             await pg.evaluate("document.querySelector('[data-tab=lyrics]')?.click()"); await pg.wait_for_timeout(900)
-        if lang == 'en':
+        if lang != 'ru':
             for s in await pg.evaluate(SCAN):
                 if not any(d in s for d in DATA): leftovers.setdefault(s, v)
     check(not errs, f'{lang}: no page errors {errs[:2]}')
-    if lang == 'en':
+    if lang != 'ru':
         missing = await pg.evaluate('[...window.__i18nMissing]')
-        check(not missing, f'en: every string has a translation {missing[:5]}')
-        check(not leftovers, f'en: no Russian interface text on screen {list(leftovers.items())[:5]}')
-        check(await pg.evaluate("document.documentElement.lang") == 'en', 'en: <html lang="en">')
+        check(not missing, f'{lang}: every string has a translation {missing[:5]}')
+        check(not leftovers, f'{lang}: no Russian interface text on screen {list(leftovers.items())[:5]}')
+        check(await pg.evaluate("document.documentElement.lang") == lang, f'{lang}: <html lang="{lang}">')
     await ctx.close()
 
 async def test_playlists(browser, port):
@@ -562,6 +562,32 @@ async def test_smart_color_radio(browser, port):
     await ctx.close()
 
 ML_FAKE = ROOT / 'tests' / '.ml-fake'
+async def test_sound_offer(browser, port):
+    print('· the sound analysis is offered once')
+    ctx, pg, errs = await page(browser, port, {'language': 'en'}, pre="window.__offerTest = 1; if (!sessionStorage.getItem('o')) { sessionStorage.setItem('o', 1); localStorage.setItem('gatefold.soundOffer.wait', '1500'); }")
+    await pg.wait_for_timeout(3500)
+    card = await pg.evaluate("document.querySelector('.snd-offer')?.innerText || ''")
+    check('listen to your music' in card and 'Turn on' in card and 'Not now' in card, f'a card offers it a while after the start {card[:70]!r}')
+    await pg.click('.snd-offer [data-a=on]'); await pg.wait_for_timeout(500)
+    check(await pg.evaluate("JSON.parse(localStorage.getItem('aurora.settings.v1')).soundAI") is True, '«Turn on» turns the analysis on')
+    await pg.reload(); await pg.wait_for_timeout(3500)
+    check(not await pg.evaluate("!!document.querySelector('.snd-offer')"), 'and it is never offered again')
+    check(not errs, f'no page errors {errs[:2]}')
+    await ctx.close()
+    ctx, pg, errs = await page(browser, port, {'language': 'en'})
+    await pg.wait_for_timeout(2500)
+    check(not await pg.evaluate("!!document.querySelector('.snd-offer')"), 'not offered when it was offered before')
+    await ctx.close()
+
+async def test_similar_albums(browser, port):
+    print('· albums that sound alike (album page)')
+    ctx, pg, errs = await page(browser, port, {'language': 'en'})
+    await pg.evaluate("(async () => { const L = await import('/theme/js/library.js'); const a = (await L.getAllAlbums())[0]; (await import('/theme/js/ui.js')).router.go('album', a); })()"); await pg.wait_for_timeout(1500)
+    txt = await pg.evaluate("document.getElementById('albumSimilar').innerText")
+    check('Sounds like' in txt and 'Sound analysis' in txt, f'without the analysis: what it would show and where to turn it on {txt[:80]!r}')
+    check(not errs, f'no page errors {errs[:2]}')
+    await ctx.close()
+
 async def test_sound_ai(browser, port):
     print('· sound analysis (neural network, stand-in models)')
     if not (ML_FAKE / 'models' / 'manifest.json').exists():
@@ -654,6 +680,16 @@ async def test_sound_ai(browser, port):
     await pg.click('#plList .vrow >> nth=2', button='right'); await pg.wait_for_timeout(400)
     check(await pg.locator("#layer .menu .mi:has-text('Similar-sounding tracks')").count() == 1, 'a track menu offers similar-sounding tracks')
     await pg.keyboard.press('Escape')
+    # the album page: albums of other artists that sound alike
+    await pg.evaluate("(async () => { const L = await import('/theme/js/library.js'); const a = (await L.getAllAlbums()).find(x => x.albumArtist === 'Lumen Arcade'); (await import('/theme/js/ui.js')).router.go('album', a); })()")
+    for _ in range(15):
+        sim = await pg.evaluate("[...document.querySelectorAll('#albumSimilar .sim-tile')].map(e => e.title)")
+        if sim: break
+        await pg.wait_for_timeout(500)
+    check(sim and not any(x.startswith('Lumen Arcade') for x in sim), f'«Sounds like» lists albums of other artists {sim[:3]}')
+    if sim:
+        await pg.click('#albumSimilar .sim-tile >> nth=0'); await pg.wait_for_timeout(1200)
+        check(await pg.evaluate("document.querySelector('#albumHero h1').textContent") in [x.split(' — ', 1)[1] for x in sim[:1]], 'a click opens that album')
     # turning it off and removing everything
     await nav(pg, 'settings', 800)
     await pg.evaluate("document.querySelector('#st-sound').scrollIntoView()")
@@ -821,12 +857,12 @@ async def main():
         browser = await p.chromium.launch(args=['--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1'], **kw)
         only = os.environ.get('ONLY', '')
         run = lambda name: not only or any(o in name for o in only.split(','))
-        for lang in ('ru', 'en'):
+        for lang in ('ru', 'en', 'de', 'es', 'zh'):
             if run('language'): await timed(f'language {lang}', test_language(browser, port, lang))
         for name, fn in [('playlists', test_playlists), ('youtube', test_youtube), ('settings', test_settings), ('updates', test_updates),
                          ('tooltips', test_tooltips), ('canvas_volume', test_canvas_volume), ('fb2k_prefs', test_fb2k_prefs), ('welcome', test_welcome),
                          ('playlist_editing', test_playlist_editing), ('windows', test_windows), ('vu', test_vu), ('smart_color_radio', test_smart_color_radio),
-                         ('sound_ai', test_sound_ai), ('layout', test_layout), ('stability', test_stability)]:
+                         ('sound_offer', test_sound_offer), ('similar_albums', test_similar_albums), ('sound_ai', test_sound_ai), ('layout', test_layout), ('stability', test_stability)]:
             if run(name): await timed(name, fn(browser, port))
         await browser.close()
     httpd.shutdown()

@@ -56,7 +56,7 @@ function build() {
         </div>
         <span class="cv-time num" data-dur>0:00</span>
         <div class="cv-tools">
-          <div class="cv-seg" data-a="layout"><button data-v="cover" title="${$t('Обложка и текст')}">${$t('Обложка')}</button><button data-v="lyrics" title="${$t('Крупный текст')}">${$t('Текст')}</button><button data-v="minimal" title="${$t('Только обложка')}">${$t('Минимум')}</button></div>
+          <div class="cv-seg" data-a="layout"><button data-v="cover" title="${$t('Обложка и текст')}">${$t('Обложка')}</button><button data-v="lyrics" title="${$t('Крупный текст')}">${$t('Текст\u0004lyrics')}</button><button data-v="minimal" title="${$t('Только обложка')}">${$t('Минимум')}</button></div>
           <div class="cv-vol"><button class="cv-btn" data-a="mute" title="${$t('Без звука (M)')}">${ICON('vol')}</button><input class="cv-range" type="range" min="0" max="100" step="1" aria-label="${$t('Громкость')}"></div>
           <button class="cv-btn" data-a="lyrics" title="${$t('Текст песни (T)')}">${ICON('quote')}</button>
           <button class="cv-btn" data-a="screen" title="${$t('Открыть на другом мониторе')}">${ICON('monitor2')}</button>

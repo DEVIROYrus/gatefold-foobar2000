@@ -813,6 +813,7 @@ Lib.shared.onPlayAlbum = () => { if (router.current !== 'now') toast($t('Вос�
   Lib.shared.similarFor = (t) => SoundUI.similar(t);
   Sound.init();
   Genres.init({ getAllAlbums: Lib.getAllAlbums });
+  Lib.getAllAlbums().then((a) => SoundUI.maybeOffer({ albums: (a || []).length }));
   VU.init({ onNeedSpectrum: updateSpectrum });
   WinInteg.init({
     state: () => app.state, track: () => app.track, pos: () => Viz.getPosition(),

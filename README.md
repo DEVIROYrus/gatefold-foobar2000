@@ -53,7 +53,7 @@ Covers and titles belong to their authors and are shown under these licences. Th
 - **«More like this» radio** without sound analysis too: artists related to the seed that you actually have.
 - **Liked** — a heart in the player and on every row, kept in an ordinary foobar2000 playlist.
 - **YouTube** — paste a link, or search with your own YouTube Data API key.
-- **English and Russian**, picked from Windows or set in Settings.
+- **English, Russian, German, Spanish and Chinese (Simplified)**, picked from Windows or set in Settings.
 - **Fun mode** (hidden — click the “Gatefold” title ten times): three interface styles and 45 achievements.
 
 The sound models (~30 MB, CC BY-NC-SA 4.0, non-commercial) are downloaded only when you turn sound analysis on in Settings → Sound analysis (AI); it runs in the background at the speed you choose.

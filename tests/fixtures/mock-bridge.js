@@ -105,7 +105,7 @@
           t += 1 / sr;
           const env = 0.5 + 0.5 * Math.sin(t * 2 * Math.PI * 2);
           const v = 0.5 * env * Math.sin(2 * Math.PI * 60 * t) + 0.12 * Math.sin(2 * Math.PI * 440 * t) + 0.05 * Math.sin(2 * Math.PI * 3000 * t) + 0.01 * (Math.random() - 0.5);
-          f[16 + slot * ch] = v; f[16 + slot * ch + 1] = v; slot = (slot + 1) % cap; written++;
+          const v2 = v * (0.72 + 0.28 * Math.sin(t * 2 * Math.PI * 0.7)); f[16 + slot * ch] = v; f[16 + slot * ch + 1] = v2; slot = (slot + 1) % cap; written++;
         }
         u[8] = written >>> 0; u[15] = slot; u[7]++;
       }, 16);

@@ -21,6 +21,8 @@ import { $t } from './i18n.js';
 import { emptyActions } from './welcome.js';
 import * as SmartPL from './smartpl.js';
 import * as Colors from './colors.js';
+import * as SoundUI from './ml/sound-ui.js';
+import * as Sound from './ml/sound.js';
 const dpr = () => Math.min(2, window.devicePixelRatio || 1);
 /** A track as the host's context-menu/handle APIs want it: path, or path|subsong:N. */
 const trackHandle = (t) => t.handle || ((t.subsong ? `${t.absolutePath || t.path}|subsong:${t.subsong}` : (t.absolutePath || t.path)));
@@ -1205,6 +1207,43 @@ export async function openAlbum(a) {
   list.ondblclick = (e) => { if (e.target.closest('.row-like')) return; const r = e.target.closest('.vrow'); if (r) playPaths(tracks.map((t) => t.handle || t.absolutePath), +r.dataset.i, a.name); };
   list.oncontextmenu = (e) => { const r = e.target.closest('.vrow'); if (!r) return; e.preventDefault(); const t = tracks[+r.dataset.i]; call('menu.showNativePopup', { mode: 'handles', handles: [trackHandle(t)] }); };
   $('albumScroller').scrollTop = 0;
+  renderSimilar(a, token);
+}
+
+/* «Sounds like»: albums of other artists in the library that sound closest (ml/sound-ui.js) */
+async function renderSimilar(a, token) {
+  const box = $('albumSimilar');
+  box.innerHTML = '';
+  if (!settings.soundAI) {
+    box.innerHTML = `<div class="sim-head"><b>${$t('Похоже по звучанию')}</b><span>${$t('Включите анализ звука — и здесь появятся альбомы из вашей медиатеки, которые звучат похоже.')}</span><button class="btn sm" id="simOn">${$t('Анализ звука…')}</button></div>`;
+    $('simOn').onclick = () => SoundUI.openSettings();
+    return;
+  }
+  // the analysis may still be loading its records (models, database): show the row once it is ready
+  if (!Sound.ready()) {
+    const later = () => { if (token !== albumToken) { Sound.events.removeEventListener('change', later); return; } if (Sound.ready()) { Sound.events.removeEventListener('change', later); renderSimilar(a, token); } };
+    Sound.events.addEventListener('change', later);
+    return;
+  }
+  await idle(1500);
+  if (token !== albumToken) return;
+  const sim = SoundUI.similarAlbums(a, 8);
+  if (!sim.length) return;
+  const find = (x) => LIB.albums.find((b) => b.name === x.name && (b.albumArtist === x.albumArtist || b.artist === x.albumArtist));
+  box.innerHTML = `<div class="sim-head"><b>${$t('Похоже по звучанию')}</b><span>${$t('Альбомы других исполнителей из вашей медиатеки')}</span></div><div class="sim-row"></div>`;
+  const row = box.querySelector('.sim-row');
+  const items = sim.map((x) => { const full = find(x); return { x, full, path: (full && full.firstTrackAbsolutePath) || x.path }; });
+  for (const it of items) {
+    const ph = placeholder(it.x.name, it.x.albumArtist);
+    const el = h(`<button class="sim-tile"><div class="cov"><div class="ph" style="background:${ph.bg}">${esc(ph.ini)}</div><img alt=""></div><div class="tt"></div><div class="ta"></div></button>`);
+    el.querySelector('.tt').textContent = it.x.name; el.querySelector('.ta').textContent = it.x.albumArtist;
+    el.title = `${it.x.albumArtist} — ${it.x.name}`;
+    el.onclick = () => router.go('album', it.full || { name: it.x.name, albumArtist: it.x.albumArtist, artist: it.x.albumArtist, firstTrackAbsolutePath: it.path });
+    row.append(el);
+  }
+  const get = await coversFor(items.map((it) => it.path), Math.round(150 * dpr()));
+  if (token !== albumToken) return;
+  row.querySelectorAll('.sim-tile').forEach((el, i) => { const u = get(items[i].path); if (u) setImg(el.querySelector('img'), u); });
 }
 
 // ============================================================ search

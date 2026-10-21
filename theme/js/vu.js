@@ -30,14 +30,14 @@ function look() {
   const light = scheme() === 'light';
   if (settings.vuStyle !== 'album') return {
     face: ['#fbf1d9', '#efdcb0', '#e2c78f'], ink: '#24190e', ink2: 'rgba(36,25,14,.62)', red: '#c42b22', redBand: 'rgba(196,43,34,.9)',
-    needle: '#140f09', back: 'rgba(255,186,92,.55)', label: '#3a2a15',
+    needle: '#140f09', needleR: '#b8241c', back: 'rgba(255,186,92,.55)', label: '#3a2a15',
     bezel: light ? ['#e9e9ec', '#b9bac0', '#8e9098'] : ['#3a3d44', '#1d1f24', '#0e0f12'], bezelLine: light ? 'rgba(255,255,255,.9)' : 'rgba(255,255,255,.08)',
   };
   const a = css('--accent') || '#8fb4ff', t = css('--text') || '#eee', s = css('--surface') || '#222', s2 = css('--surface-2') || '#333';
   const mix = (x, y, p) => `color-mix(in oklab, ${x} ${p}%, ${y})`;
   return {
     face: light ? [mix(a, '#fff', 6), mix(a, '#fff', 12), mix(a, '#fff', 20)] : [mix(a, s2, 14), mix(a, s, 9), mix(a, '#000', 6)],
-    ink: t, ink2: mix(t, 'transparent', 62), red: '#ff5d4f', redBand: 'rgba(255,93,79,.9)', needle: light ? mix(a, '#000', 55) : mix(a, '#fff', 70),
+    ink: t, ink2: mix(t, 'transparent', 62), red: '#ff5d4f', redBand: 'rgba(255,93,79,.9)', needle: light ? mix(a, '#000', 55) : mix(a, '#fff', 70), needleR: '#ff5d4f',
     back: mix(a, 'transparent', light ? 22 : 30), label: mix(t, 'transparent', 80),
     bezel: light ? ['#f4f4f6', '#cfd0d6', '#a6a8b0'] : [mix(a, '#2a2c33', 10), '#16171b', '#0b0c0e'], bezelLine: light ? 'rgba(255,255,255,.9)' : 'rgba(255,255,255,.07)',
   };
@@ -89,8 +89,11 @@ function dial(w, h, ch, L) {
   c.fillStyle = L.red; c.fillText('+', ...P(ang(1) + 0.06, r0 + R * 0.3));
   c.font = `italic 600 ${Math.round(R * 0.12)}px Georgia, 'Times New Roman', serif`; c.fillStyle = L.label;
   c.fillText('VU', cx, pad + ih * 0.8);
-  c.font = `700 ${Math.round(fs * 0.8)}px 'Inter Var', 'Segoe UI', sans-serif`; c.fillStyle = L.ink2;
-  c.fillText(ch, pad + iw * 0.9, pad + ih * 0.86);
+  c.font = `700 ${Math.round(fs * 0.8)}px 'Inter Var', 'Segoe UI', sans-serif`;
+  if (ch === 'LR') {                      // one dial, two needles: which needle is which
+    c.fillStyle = L.needle; c.fillText('L', pad + iw * 0.1, pad + ih * 0.86);
+    c.fillStyle = L.needleR; c.fillText('R', pad + iw * 0.9, pad + ih * 0.86);
+  } else { c.fillStyle = L.ink2; c.fillText(ch, pad + iw * 0.9, pad + ih * 0.86); }
   c.restore();
   c.save(); c.beginPath(); c.roundRect(pad, pad, iw, ih, rr * 0.6); c.clip();         // the window's inner shadow
   c.shadowColor = 'rgba(0,0,0,.45)'; c.shadowBlur = 10 * d; c.shadowOffsetY = 2 * d; c.lineWidth = 8 * d; c.strokeStyle = 'rgba(0,0,0,.35)';
@@ -107,24 +110,32 @@ function glass(w, h) {
   return cv;
 }
 
-/* ---------------------------------------------------------------- the needle and the peak lamp */
-function needle(c, w, h, f, L, lamp) {
-  const { d, pad, ih, cx, cy, R } = geometry(w, h), a = ang(f);
+/* ---------------------------------------------------------------- needles, the pivot cover, peak lamps */
+function needle(c, w, h, f, color) {
+  const { d, cx, cy, R } = geometry(w, h), a = ang(f);
   const tipR = R * 0.93, baseR = R * 0.22;
   c.save(); c.translate(1.5 * d, 3 * d); c.filter = `blur(${1.6 * d}px)`; c.strokeStyle = 'rgba(0,0,0,.28)'; c.lineWidth = 2.2 * d;
   c.beginPath(); c.moveTo(cx + Math.sin(a) * baseR, cy - Math.cos(a) * baseR); c.lineTo(cx + Math.sin(a) * tipR, cy - Math.cos(a) * tipR); c.stroke(); c.restore();
   const nx = Math.cos(a), ny = Math.sin(a), wB = 1.7 * d, wT = 0.55 * d;
   const bx = cx + Math.sin(a) * baseR, by = cy - Math.cos(a) * baseR, tx = cx + Math.sin(a) * tipR, ty = cy - Math.cos(a) * tipR;
-  c.fillStyle = L.needle; c.beginPath();
+  c.fillStyle = color; c.beginPath();
   c.moveTo(bx - nx * wB, by - ny * wB); c.lineTo(tx - nx * wT, ty - ny * wT); c.lineTo(tx + nx * wT, ty + ny * wT); c.lineTo(bx + nx * wB, by + ny * wB); c.closePath(); c.fill();
+}
+/* the dome over the pivot, and a peak lamp beside it (two, left and right, on a stereo dial) */
+function cap(c, w, h, lamps) {
+  const { d, pad, ih, cx, R } = geometry(w, h);
   const pw = R * 0.27, ph = ih * 0.12, py = pad + ih;
   const g = c.createLinearGradient(0, py - ph, 0, py); g.addColorStop(0, '#2b2b2f'); g.addColorStop(0.35, '#16161a'); g.addColorStop(1, '#050506');
   c.fillStyle = g; c.beginPath(); c.ellipse(cx, py, pw, ph, 0, Math.PI, 0); c.fill();
   c.strokeStyle = 'rgba(255,255,255,.14)'; c.lineWidth = d; c.beginPath(); c.ellipse(cx, py, pw, ph, 0, Math.PI * 1.08, Math.PI * 1.92); c.stroke();
-  const lx = cx - pw - R * 0.12, ly = py - ph * 0.45, lr = Math.max(2.5 * d, R * 0.028);
-  if (lamp > 0) { c.save(); c.globalAlpha = Math.min(1, 0.35 + lamp); c.shadowColor = '#ff3b2f'; c.shadowBlur = 12 * d * Math.min(1, lamp); c.fillStyle = '#ff4a3d'; c.beginPath(); c.arc(lx, ly, lr, 0, Math.PI * 2); c.fill(); c.restore(); }
-  else { c.fillStyle = 'rgba(110,25,20,.55)'; c.beginPath(); c.arc(lx, ly, lr, 0, Math.PI * 2); c.fill(); }
-  c.strokeStyle = 'rgba(0,0,0,.35)'; c.lineWidth = d * 0.8; c.beginPath(); c.arc(lx, ly, lr, 0, Math.PI * 2); c.stroke();
+  const ly = py - ph * 0.45, lr = Math.max(2.5 * d, R * 0.028);
+  const xs = lamps.length > 1 ? [cx - pw - R * 0.12, cx + pw + R * 0.12] : [cx - pw - R * 0.12];
+  lamps.forEach((lamp, i) => {
+    const lx = xs[i];
+    if (lamp > 0) { c.save(); c.globalAlpha = Math.min(1, 0.35 + lamp); c.shadowColor = '#ff3b2f'; c.shadowBlur = 12 * d * Math.min(1, lamp); c.fillStyle = '#ff4a3d'; c.beginPath(); c.arc(lx, ly, lr, 0, Math.PI * 2); c.fill(); c.restore(); }
+    else { c.fillStyle = 'rgba(110,25,20,.55)'; c.beginPath(); c.arc(lx, ly, lr, 0, Math.PI * 2); c.fill(); }
+    c.strokeStyle = 'rgba(0,0,0,.35)'; c.lineWidth = d * 0.8; c.beginPath(); c.arc(lx, ly, lr, 0, Math.PI * 2); c.stroke();
+  });
 }
 
 /* ---------------------------------------------------------------- level and movement */
@@ -142,14 +153,17 @@ function targets() {
 }
 
 /* ---------------------------------------------------------------- mounting */
-const meters = new Map();          // host element → { box, m: [{ cv, ch, n, lamp, w, h, dial, glass }] }
+const meters = new Map();          // host → { box, layout, m: [{ cv, ch, chs: [channel…], n: [{ p, v }…], lamp: […], w, h, dial, glass }] }
 let dirty = true, raf = 0, last = 0;
 function mount(where, after) {
-  if (meters.has(where)) return;
-  const box = document.createElement('div'); box.className = 'vu-box';
-  const m = ['L', 'R'].map((ch) => { const cv = document.createElement('canvas'); cv.className = 'vu-meter'; box.append(cv); return { cv, ch, n: { p: 0, v: 0 }, lamp: 0 }; });
+  const layout = settings.vuLayout === 'stereo' ? 'stereo' : 'pair';
+  if (meters.has(where) && meters.get(where).layout === layout) return;
+  unmount(where);
+  const box = document.createElement('div'); box.className = 'vu-box' + (layout === 'stereo' ? ' stereo' : '');
+  const make = (ch, chs) => { const cv = document.createElement('canvas'); cv.className = 'vu-meter'; box.append(cv); return { cv, ch, chs, n: chs.map(() => ({ p: 0, v: 0 })), lamp: chs.map(() => 0) }; };
+  const m = layout === 'stereo' ? [make('LR', [0, 1])] : [make('L', [0]), make('R', [1])];
   after.after(box);
-  meters.set(where, { box, m });
+  meters.set(where, { box, layout, m });
   dirty = true; kick();
 }
 function unmount(where) { const x = meters.get(where); if (x) { x.box.remove(); meters.delete(where); } }
@@ -170,19 +184,26 @@ function frame(now) {
   const dt = Math.min(0.05, last ? (now - last) / 1000 : 0.016); last = now;
   const tg = targets();
   let moving = Viz.progressState.playing;
-  for (const x of live) for (let i = 0; i < 2; i++) {
-    const m = x.m[i], r = m.cv.getBoundingClientRect(), d = DPR();
+  for (const x of live) for (const m of x.m) {
+    const r = m.cv.getBoundingClientRect(), d = DPR();
     const w = Math.round(r.width * d), h = Math.round(r.height * d);
     if (w < 80 || h < 40) continue;              // not laid out (yet)
     if (dirty || m.w !== w || m.h !== h) { m.cv.width = w; m.cv.height = h; m.w = w; m.h = h; const L = look(); m.L = L; m.dial = dial(w, h, m.ch, L); m.glass = glass(w, h); }
-    for (let k = 0; k < 4; k++) {                                       // sub-steps: stable at any frame rate
-      const acc = OMEGA * OMEGA * (tg[i] - m.n.p) - 2 * ZETA * OMEGA * m.n.v;
-      m.n.v += acc * dt / 4; m.n.p += m.n.v * dt / 4;
-    }
-    if (tg[i] > frac(2)) m.lamp = 1; else m.lamp = Math.max(0, m.lamp - dt * 3);
-    if (Math.abs(m.n.p) > 0.002 || Math.abs(m.n.v) > 0.002 || m.lamp > 0) moving = true;
+    m.chs.forEach((ch, j) => {
+      const n = m.n[j];
+      for (let k = 0; k < 4; k++) {                                     // sub-steps: stable at any frame rate
+        const acc = OMEGA * OMEGA * (tg[ch] - n.p) - 2 * ZETA * OMEGA * n.v;
+        n.v += acc * dt / 4; n.p += n.v * dt / 4;
+      }
+      m.lamp[j] = tg[ch] > frac(2) ? 1 : Math.max(0, m.lamp[j] - dt * 3);
+      if (Math.abs(n.p) > 0.002 || Math.abs(n.v) > 0.002 || m.lamp[j] > 0) moving = true;
+    });
     const c = m.cv.getContext('2d');
-    c.clearRect(0, 0, w, h); c.drawImage(m.dial, 0, 0); needle(c, w, h, m.n.p, m.L, m.lamp); c.drawImage(m.glass, 0, 0);
+    c.clearRect(0, 0, w, h); c.drawImage(m.dial, 0, 0);
+    // on a stereo dial the right needle is drawn first, the left (the dial's own colour) over it
+    for (let j = m.chs.length - 1; j >= 0; j--) needle(c, w, h, m.n[j].p, m.chs[j] === 1 && m.chs.length > 1 ? m.L.needleR : m.L.needle);
+    cap(c, w, h, m.lamp);
+    c.drawImage(m.glass, 0, 0);
   }
   dirty = false;
   // at rest (paused, needles down): no more frames until something changes

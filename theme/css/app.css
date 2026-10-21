@@ -40,8 +40,8 @@
   --ease: cubic-bezier(.22, .7, .18, 1);
   --ease-spring: cubic-bezier(.34, 1.4, .5, 1);
 
-  --font-ui: 'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
-  --font-display: 'Inter Var', 'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif;
+  --font-ui: 'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC', 'Noto Sans CJK SC', system-ui, sans-serif;
+  --font-display: 'Inter Var', 'Segoe UI Variable Display', 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC', 'Noto Sans CJK SC', system-ui, sans-serif;
 
   /* integer pixel type scale — set by JS from settings.baseSize */
   --fs-xs: 11px; --fs-sm: 12px; --fs: 14px; --fs-md: 15px; --fs-lg: 18px; --fs-xl: 24px; --fs-2xl: 34px; --fs-hero: 52px;
@@ -72,8 +72,8 @@
   background: var(--bg);
 }
 :root[data-scheme='light'] { --shadow-pop: 0 18px 50px -14px rgb(0 0 0 / .25), 0 2px 8px rgb(0 0 0 / .08); }
-:root[data-font='inter'] { --font-ui: 'Inter Var', 'Segoe UI Variable Text', 'Segoe UI', sans-serif; }
-:root[data-font='system'] { --font-display: 'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif; }
+:root[data-font='inter'] { --font-ui: 'Inter Var', 'Segoe UI Variable Text', 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC', 'Noto Sans CJK SC', sans-serif; }
+:root[data-font='system'] { --font-display: 'Segoe UI Variable Display', 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC', 'Noto Sans CJK SC', system-ui, sans-serif; }
 /* Crisp mode: list surfaces become opaque so Chromium can keep LCD (ClearType)
    antialiasing on dense text instead of falling back to greyscale. */
 :root[data-crisp='1'] { --list-bg: color-mix(in oklab, var(--bg) 94%, var(--surface)); }
@@ -284,9 +284,34 @@ body.is-playing .np-halo { opacity: .35; }
 .np-actions { display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
 #viz { width: 100%; height: 72px; margin-top: 22px; display: block; }
 body.no-viz #viz { display: none; }
+/* the first-run offer of the sound analysis (ml/sound-ui.js → maybeOffer) */
+.toast.snd-offer { align-items: flex-start; max-width: 440px; padding: 14px 16px; gap: 12px; }
+.snd-offer-ic { flex: none; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; color: var(--accent); background: var(--accent-soft); }
+.snd-offer-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.snd-offer-body b { font-size: var(--fs-md); }
+.snd-offer-body span { color: var(--text-2); font-size: var(--fs-sm); line-height: 1.45; }
+.snd-offer-act { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.btn.ghost { background: transparent; border-color: transparent; color: var(--text-3); }
+/* album page: «Sounds like» (library.js → renderSimilar) */
+.album-similar:empty { display: none; }
+.album-similar { padding: 8px 30px 34px; }
+.sim-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin: 6px 0 12px; }
+.sim-head b { font-family: var(--font-display); font-size: var(--fs-lg); font-weight: 700; letter-spacing: -.012em; }
+.sim-head span { color: var(--text-3); font-size: var(--fs-sm); }
+.sim-head .btn { margin-left: auto; }
+.sim-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 16px; }
+.sim-tile { all: unset; cursor: pointer; min-width: 0; display: flex; flex-direction: column; gap: 6px; border-radius: var(--r); }
+.sim-tile .cov { position: relative; aspect-ratio: 1; border-radius: var(--r); overflow: hidden; background: var(--surface); box-shadow: 0 8px 20px -12px rgb(0 0 0 / .6); transition: transform 180ms var(--ease); }
+.sim-tile:hover .cov { transform: translateY(-2px); }
+.sim-tile:focus-visible .cov { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sim-tile .ph { position: absolute; inset: 0; display: grid; place-items: center; font-weight: 800; font-size: 26px; color: rgb(255 255 255 / .85); }
+.sim-tile img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.sim-tile .tt { font-weight: 600; font-size: var(--fs-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sim-tile .ta { color: var(--text-3); font-size: var(--fs-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: -4px; }
 /* VU meters (vu.js) instead of the spectrum */
 body.vu-on #viz { display: none; }
 .vu-box { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(10px, 1.2vw, 18px); margin-top: 22px; width: 100%; max-width: 620px; aspect-ratio: 3.65; }
+.vu-box.stereo { grid-template-columns: 1fr; max-width: 360px; aspect-ratio: 1.78; }
 .vu-meter { width: 100%; height: 100%; display: block; border-radius: 12px; box-shadow: 0 14px 34px -16px rgb(0 0 0 / .75), 0 2px 4px rgb(0 0 0 / .25); }
 :root[data-scheme='light'] .vu-meter { box-shadow: 0 12px 28px -16px rgb(0 0 0 / .35), 0 1px 3px rgb(0 0 0 / .15); }
 .np-tabs { display: flex; gap: 4px; margin-top: 22px; border-bottom: 1px solid var(--line); }

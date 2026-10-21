@@ -23,6 +23,37 @@ function needSound() {
   toast($t('Включите анализ звука в настройках'), { ms: 6000, action: { label: $t('Открыть'), fn: openSettings } });
 }
 
+/* ---------------------------------------------------------------- the first-run offer
+   The analysis is what sets Gatefold apart, but it is opt-in (it downloads ~30 MB and works the CPU
+   for a while), so it is offered once — a quiet card, a while after the start, on a library worth
+   analysing, never over a dialog. «Not now» is final; the switch stays in Settings. */
+const OFFER = 'gatefold.soundOffer';
+export function maybeOffer({ albums = 0 } = {}) {
+  try { if (settings.soundAI || localStorage.getItem(OFFER) || albums < 10) return; } catch { return; }
+  const tryShow = (left) => {
+    if (settings.soundAI) return;
+    const busy = document.visibilityState !== 'visible' || document.querySelector('.modal, .sp-veil, .upd-veil.on, .menu, .welcome, .cv.on');
+    if (busy) { if (left > 0) setTimeout(() => tryShow(left - 1), 20000); return; }
+    show();
+  };
+  let wait = 45000; try { wait = +localStorage.getItem(OFFER + '.wait') || wait; } catch {}   // the tests shorten it
+  setTimeout(() => tryShow(15), wait);
+}
+function show() {
+  try { localStorage.setItem(OFFER, String(Date.now())); } catch {}
+  const box = document.getElementById('toasts'); if (!box) return;
+  const el = h(`<div class="toast snd-offer" role="dialog" aria-label="${esc($t('Анализ звука'))}">
+    <div class="snd-offer-ic">${icon('wave', 20)}</div>
+    <div class="snd-offer-body"><b>${$t('Пусть Gatefold послушает вашу музыку')}</b>
+      <span>${$t('Нейросеть один раз прослушает медиатеку прямо на компьютере. После этого радио, «Похожие треки» и плейлисты по настроению подбирают музыку по звучанию. Модели ~30 МБ скачиваются один раз, ничего не отправляется.')}</span>
+      <div class="snd-offer-act"><button class="btn sm primary" data-a="on">${$t('Включить')}</button><button class="btn sm" data-a="no">${$t('Не сейчас')}</button><button class="btn sm ghost" data-a="more">${$t('Подробнее')}</button></div></div></div>`);
+  const close = () => { el.classList.add('out'); setTimeout(() => el.remove(), 260); };
+  el.querySelector('[data-a=on]').onclick = () => { close(); setSetting('soundAI', true); toast($t('Анализ звука включён: модели скачиваются, потом медиатека анализируется в фоне'), { ms: 6000, action: { label: $t('Настройки'), fn: openSettings } }); };
+  el.querySelector('[data-a=no]').onclick = close;
+  el.querySelector('[data-a=more]').onclick = () => { close(); openSettings(); };
+  box.appendChild(el);
+}
+
 /* ---------------------------------------------------------------- settings
    Kept short on purpose. What the rows mean, for whoever reads the code:
    · the switch downloads the models (≈ 30 MB, once, from this repository's ml-assets branch) and
@@ -139,6 +170,43 @@ export async function similar(t) {
   if (list.length < 2) { toast($t('Пока не с чем сравнить')); return; }
   await makePlaylist($t('Похоже на «{0}»', t.title || r.ti), list);
   
+}
+
+/* «Sounds like» on the album page: the albums of other artists in the library whose tracks sound
+   closest to this album (its songs averaged into one sound). An album's distance is the mean of its
+   three closest songs, so an intro or a bonus remix does not decide it. */
+const albumKeyR = (r) => artistKey(r) + '|' + norm(r.al || '');
+let albCache = { n: -1, groups: null, res: new Map() };
+function albumGroups() {
+  const n = Sound.count();
+  if (albCache.groups && albCache.n === n) return albCache.groups;
+  const groups = new Map();
+  for (const r of Sound.all()) { if (!r.al) continue; const k = albumKeyR(r); let g = groups.get(k); if (!g) groups.set(k, (g = [])); g.push(r); }
+  albCache = { n, groups, res: new Map() };
+  return groups;
+}
+export function similarAlbums(a, n = 8) {
+  if (!a || !Sound.ready()) return [];
+  const groups = albumGroups();
+  const key = norm(cleanArtist(a.albumArtist || a.artist || '')) + '|' + norm(a.name || '');
+  if (albCache.res.has(key)) return albCache.res.get(key);
+  const own = groups.get(key);
+  if (!own || !own.length) return [];
+  const songs = own.filter(isSong).length >= 2 ? own.filter(isSong) : own;
+  let T = null; songs.forEach((r, i) => { T = Sound.blend(T, r, 1 / (i + 1)); });
+  const ownArtist = artistKey(own[0]), scored = [];
+  for (const [k, list] of groups) {
+    if (k === key || artistKey(list[0]) === ownArtist) continue;
+    const ds = (list.filter(isSong).length ? list.filter(isSong) : list).map((r) => Sound.distance(T, r)).sort((x, y) => x - y);
+    const top = ds.slice(0, 3);
+    scored.push({ d: top.reduce((s, v) => s + v, 0) / top.length, r: list[0] });
+  }
+  scored.sort((x, y) => x.d - y.d);
+  // only what really sounds close: a small library gives a short row, not a padded one
+  const lim = Math.max(0.45, (scored[0] ? scored[0].d : 0) * 1.6 + 0.12);
+  const res = scored.slice(0, n).filter((x) => x.d <= lim).map((x) => ({ name: x.r.al, albumArtist: x.r.aa || x.r.ar, path: x.r.p, d: x.d }));
+  albCache.res.set(key, res);
+  return res;
 }
 
 /* mood and style recipes for the smart-playlist sheet */
