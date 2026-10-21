@@ -10,21 +10,21 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: '3.12' }
       - name: Scout
         if: inputs.step == 'scout'
-        run: python tools/showcase/scout.py out
+        run: mkdir -p out && python -u tools/showcase/scout.py out 2>&1 | tee out/scout.log
       - name: Build
         if: inputs.step == 'build'
         run: |
           sudo apt-get -qq update && sudo apt-get -qq install -y ffmpeg >/dev/null
           pip -q install playwright==1.56.0 pillow mutagen
           python -m playwright install --with-deps chromium >/dev/null
-          python tools/showcase/build.py out
+          mkdir -p out && python -u tools/showcase/build.py out 2>&1 | tee out/build.log; test ${PIPESTATUS[0]} -eq 0
       - name: Publish
         if: always()
         run: |

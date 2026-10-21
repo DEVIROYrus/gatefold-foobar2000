@@ -9,3 +9,4 @@ Thumbs.db
 tests/.ml-fake/
 .scratch/
 installer/.dl-cache/
+.showcase-dl/
