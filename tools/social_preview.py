@@ -4,7 +4,7 @@ from pathlib import Path
 from playwright.async_api import async_playwright
 ROOT = Path(__file__).resolve().parent.parent
 svg = (ROOT / 'installer/assets/gatefold.svg').read_text(encoding='utf-8')
-shot = base64.b64encode((ROOT / 'docs/screenshots/now-en.webp').read_bytes()).decode()
+shot = base64.b64encode((ROOT / 'docs/screenshots/sound-now-en.webp').read_bytes()).decode()
 fonts = ROOT / 'theme' / 'fonts'
 HTML = f"""<html><head><style>
 @font-face {{ font-family: Inter; src: url('{(fonts / 'inter-latin-opsz-normal.woff2').as_uri()}'); font-weight: 100 900; }}
@@ -13,15 +13,15 @@ body {{ margin: 0; width: 1280px; height: 640px; overflow: hidden; font-family: 
 .l {{ position: absolute; left: 72px; top: 110px; width: 470px; }}
 .mark svg {{ width: 92px; height: 92px; filter: drop-shadow(0 16px 30px rgb(0 0 0 / .45)); }}
 h1 {{ margin: 22px 0 10px; font-size: 76px; font-weight: 800; letter-spacing: -.035em; line-height: 1; }}
-p {{ margin: 0; font-size: 28px; line-height: 1.3; color: #d9d2f0; font-weight: 500; letter-spacing: -.01em; }}
+p {{ margin: 0; font-size: 27px; line-height: 1.3; color: #d9d2f0; font-weight: 500; letter-spacing: -.01em; }}
 .tags {{ margin-top: 30px; display: flex; flex-wrap: wrap; gap: 10px; }}
 .tags span {{ padding: 8px 15px; border-radius: 999px; background: rgb(255 255 255 / .09); border: 1px solid rgb(255 255 255 / .14); font-size: 18px; font-weight: 600; color: #ece6ff; }}
 .shot {{ position: absolute; left: 590px; top: 70px; width: 820px; border-radius: 18px; overflow: hidden; box-shadow: 0 40px 90px -20px rgb(0 0 0 / .7), 0 0 0 1px rgb(255 255 255 / .1);
   transform: perspective(1600px) rotateY(-9deg) rotateX(3deg); transform-origin: left center; }}
 .shot img {{ display: block; width: 100%; }}
 </style></head><body>
-<div class="l"><div class="mark">{svg}</div><h1>Gatefold</h1><p>A modern interface for foobar2000 that takes its colours from your music.</p>
-<div class="tags"><span>Smart playlists</span><span>Sound analysis</span><span>Synced lyrics</span><span>Canvas</span><span>One installer</span></div></div>
+<div class="l"><div class="mark">{svg}</div><h1>Gatefold</h1><p>foobar2000 that understands your music: radio and mood playlists by how songs sound.</p>
+<div class="tags"><span>On your PC, no server</span><span>Free, no subscription</span><span>foobar2000 engine</span><span>One installer</span></div></div>
 <div class="shot"><img src="data:image/webp;base64,{shot}"></div>
 </body></html>"""
 async def main():
