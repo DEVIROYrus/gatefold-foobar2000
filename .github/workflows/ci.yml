@@ -89,6 +89,9 @@ jobs:
           }
           if (-not (Test-Path "$env:ProgramFiles\foobar2000\foobar2000.exe")) { throw 'foobar2000 was not installed' }
           (Get-Item "$env:ProgramFiles\foobar2000\foobar2000.exe").VersionInfo.FileVersion
+      - name: First start opens in Gatefold
+        shell: powershell
+        run: .\tools\first-start-check.ps1
       - name: Setup log
         if: always()
         uses: actions/upload-artifact@v4
