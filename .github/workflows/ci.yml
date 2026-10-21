@@ -40,6 +40,9 @@ jobs:
         run: |
           set -o pipefail
           python tests/e2e.py 2>&1 | tee e2e.log
+      - name: Remove an old failure log
+        if: success() && github.event_name == 'push'
+        run: git push "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" --delete ci-log-${{ matrix.id }} 2>/dev/null || true
       # when a part fails, its output goes to the branch ci-log-<part> (readable with plain git)
       - name: Publish the output
         if: failure() && github.event_name == 'push'
@@ -95,6 +98,11 @@ jobs:
         run: |
           .\tools\first-start-check.ps1 *>&1 | Tee-Object -FilePath first-start.log
           if (Select-String -Path first-start.log -Pattern '^ok: ' -Quiet) { exit 0 } else { exit 1 }
+      - name: Remove old logs
+        if: success() && github.event_name == 'push'
+        shell: bash
+        run: |
+          for b in ci-log-installer probe-log; do git push "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" --delete $b 2>/dev/null || true; done
       - name: Publish the output
         if: failure() && github.event_name == 'push'
         shell: bash
