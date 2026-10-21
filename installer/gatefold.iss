@@ -558,7 +558,7 @@ begin
   if InPlace or not FileExists(Cfg) or FoobarRunning then Exit;
   ExtractTemporaryFile('preset-ui.ps1');
   if ExecAndCaptureOutput(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
-       '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + ExpandConstant('{tmp}\preset-ui.ps1') + '" -Db "' + Cfg + '"',
+       '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + ExpandConstant('{tmp}\preset-ui.ps1') + '" -Config "' + Cfg + '"',
        '', SW_HIDE, ewWaitUntilTerminated, RC, Cap) then begin
     for I := 0 to GetArrayLength(Cap.StdOut) - 1 do Log('preset-ui: ' + Cap.StdOut[I]);
     for I := 0 to GetArrayLength(Cap.StdErr) - 1 do Log('preset-ui (error): ' + Cap.StdErr[I]);

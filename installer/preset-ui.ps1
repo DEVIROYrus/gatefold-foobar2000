@@ -3,7 +3,7 @@
   Gatefold instead of asking "New user interface module(s) found" or needing Preferences.
 
   Run by the installer (ssPostInstall) with foobar2000 closed:
-    powershell -NoProfile -ExecutionPolicy Bypass -File preset-ui.ps1 -Db "<profile>\config.sqlite"
+    powershell -NoProfile -ExecutionPolicy Bypass -File preset-ui.ps1 -Config "<profile>\config.sqlite"
 
   foobar2000 keeps its settings in <profile>\config.sqlite (found with tools/fb2k-probe.ps1, 2.26):
     configBlobs  cfg_var.094A28DA-C6E8-4392-BAF1-AD0F29E5B303  the user interface: a GUID (16 bytes)
@@ -11,12 +11,12 @@
   The file is copied to config.sqlite.before-gatefold first. SQLite is Windows' own winsqlite3.dll.
   Exit code 0 = done; anything else = nothing changed (the installer then shows the manual step).
 #>
-param([Parameter(Mandatory = $true)][string]$Db)
+param([Parameter(Mandatory = $true)][string]$Config)
 $ErrorActionPreference = 'Stop'
 try {
-  if (-not (Test-Path -LiteralPath $Db)) { Write-Output "no configuration at $Db"; exit 2 }
-  $bak = "$Db.before-gatefold"
-  if (-not (Test-Path -LiteralPath $bak)) { Copy-Item -LiteralPath $Db -Destination $bak }
+  if (-not (Test-Path -LiteralPath $Config)) { Write-Output "no configuration at $Config"; exit 2 }
+  $bak = "$Config.before-gatefold"
+  if (-not (Test-Path -LiteralPath $bak)) { Copy-Item -LiteralPath $Config -Destination $bak }
 
   Add-Type -TypeDefinition @'
 using System;
@@ -85,7 +85,7 @@ public static class GfSql {
   }
 }
 '@
-  Write-Output ([GfSql]::Run((Resolve-Path -LiteralPath $Db).Path))
+  Write-Output ([GfSql]::Run((Resolve-Path -LiteralPath $Config).Path))
   exit 0
 } catch {
   Write-Output "preset-ui failed: $($_.Exception.Message)"
