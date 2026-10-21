@@ -105,7 +105,7 @@ async def demo(b, port):
     src = glob.glob(str(tmp / '*.webm'))[0]
     total = float(subprocess.check_output(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', src]).decode().strip() or 0)
     start = max(0.0, total - (t1 - t0) / 1000)
-    subprocess.run(['ffmpeg', '-v', 'error', '-y', '-ss', f'{start:.2f}', '-i', src, '-vf', 'fps=15,scale=960:-2:flags=lanczos', '-c:v', 'libwebp_anim', '-quality', '72', '-compression_level', '6', '-loop', '0', str(SHOTS / 'demo.webp')], check=True)
+    subprocess.run(['ffmpeg', '-v', 'error', '-y', '-ss', f'{start:.2f}', '-i', src, '-vf', 'fps=12,scale=960:-2:flags=lanczos', '-c:v', 'libwebp_anim', '-quality', '62', '-compression_level', '6', '-loop', '0', str(SHOTS / 'demo.webp')], check=True)
     subprocess.run(['ffmpeg', '-v', 'error', '-y', '-ss', f'{start:.2f}', '-i', src, '-vf', 'fps=30,scale=1280:-2', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '22', '-movflags', '+faststart', '-an', str(SHOTS / 'demo.mp4')], check=True)
     shutil.rmtree(tmp)
     print('demo', errs[:2], [(f, (SHOTS / f).stat().st_size // 1024) for f in ('demo.webp', 'demo.mp4')], flush=True)
