@@ -78,6 +78,7 @@ export const DEFAULTS = {
   motionFps: 'max',         // 'max': animations at the monitor's refresh rate | 'eco': spectrum ≤ 60 fps, background 12 fps
   plViewDefault: 'auto',   // playlist view when the playlist has none of its own: auto | albums | covers | grid | compact
   fullscreenTopmost: false, // true: fullscreen stays above every other window (the component's default)
+  albumDetails: false,      // album page: the details card and the extra columns (album-details.js)
   level: false,             // volume levelling (loudness.js): foobar2000's ReplayGain, set up and fed by Gatefold
   levelMode: 'album',       // 'album' (whole albums) | 'auto' (albums unless shuffling) | 'track'
   levelTarget: -18,         // target loudness, LUFS: -18 (ReplayGain 2.0) | -16 | -14 | -23

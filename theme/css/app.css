@@ -426,6 +426,55 @@ body.vu-on #viz { display: none; }
 #view-album .album-actions, #view-artist .album-actions { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
 .kicker { color: var(--text-3); font-size: var(--fs-xs); font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
 
+/* ---------- album details (album-details.js): a card in the header's free right side, extra columns ---------- */
+#view-album { container: album / inline-size; }
+.more-link { cursor: pointer; border-radius: 4px; text-decoration: underline dotted color-mix(in oklab, var(--text-3) 70%, transparent); text-underline-offset: 4px; transition: color 140ms; }
+.more-link:hover { color: var(--text); text-decoration-color: currentColor; }
+.more-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn.toggle-btn.on { background: color-mix(in oklab, var(--accent) 20%, var(--hover)); border-color: color-mix(in oklab, var(--accent) 50%, transparent); color: var(--accent-ink); }
+.album-facts { display: none; }
+#view-album.details .album-hero { grid-template-columns: 220px minmax(0, 1fr) minmax(300px, 440px); }
+#view-album.details .album-facts {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 18px; align-self: end; align-content: start;
+  padding: 14px 16px; border-radius: 14px; max-height: 220px; overflow: hidden;
+  background: color-mix(in oklab, var(--surface) 60%, transparent); border: 1px solid var(--line);
+  box-shadow: 0 18px 40px -28px rgb(0 0 0 / .55); backdrop-filter: blur(14px); animation: factsIn 260ms var(--ease) both;
+}
+@keyframes factsIn { from { opacity: 0; transform: translateY(6px); } }
+.album-facts .f { min-width: 0; }
+.album-facts .k { font-size: var(--fs-xs); color: var(--text-3); font-weight: 650; letter-spacing: .07em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.album-facts .v { margin-top: 3px; font-size: var(--fs-sm); font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.album-facts .v small { margin-left: 6px; font-size: var(--fs-xs); font-weight: 500; color: var(--text-3); }
+.album-facts .f.wide { grid-column: 1 / -1; }
+.album-facts .f.act { cursor: pointer; margin: -5px -8px; padding: 5px 8px; border-radius: 8px; transition: background 140ms; }
+.album-facts .f.act:hover { background: var(--hover); }
+.album-facts .f.act:hover .v { color: var(--accent-ink); }
+.album-facts .f.act:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
+.album-facts .f.sk .k { width: 46%; height: 9px; }
+.album-facts .f.sk .v { width: 78%; height: 13px; margin-top: 7px; }
+/* narrower: a two-column card with the six most useful facts; narrower still: a smaller cover and
+   the facts in one line under it (scrolls sideways), so the track list keeps its room */
+@container album (max-width: 1180px) {
+  #view-album.details .album-hero { grid-template-columns: 220px minmax(0, 1fr) minmax(240px, 300px); }
+  #view-album.details .album-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #view-album.details .album-facts .f:not(.wide):nth-child(n+7) { display: none; }
+}
+@container album (max-width: 900px) {
+  #view-album.details .album-hero { grid-template-columns: 160px minmax(0, 1fr); }
+  #view-album.details .album-cover { width: 160px; height: 160px; }
+  #view-album.details .album-facts { grid-column: 1 / -1; display: flex; gap: 24px; overflow-x: auto; overflow-y: hidden; max-height: none; padding: 11px 40px 11px 16px; scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); }
+  #view-album.details .album-facts::-webkit-scrollbar { display: none; }
+  #view-album.details .album-facts .f { flex: none; max-width: 260px; }
+  #view-album.details .album-facts .f:not(.wide):nth-child(n+7) { display: block; }
+  #view-album.details .album-facts .f.act { margin: -5px -8px; }
+}
+.vlist.cols .vrow, .list-head.cols { grid-template-columns: var(--cols); }
+.vrow .c-fmt { color: var(--text-2); }
+.vrow .c-x { text-align: right; color: var(--text-3); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.list-head.cols .c-x, .list-head.cols .c-dur, .list-head.cols .c-n { text-align: right; }
+.list-head.cols > div { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
 /* ---------- player bar ---------- */
 #playerbar {
   grid-area: bar; display: grid; grid-template-columns: minmax(200px, 1fr) minmax(360px, 2fr) minmax(200px, 1fr);

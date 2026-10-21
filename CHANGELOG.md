@@ -15,6 +15,12 @@ All notable changes are listed here. Versions follow [Semantic Versioning](https
 - **The album that is playing gets its values only when playback leaves it**, and nothing is written in the last seconds before a track change, so loudness never shifts mid-listen.
 - **Fast:** several tracks are measured side by side in workers while foobar2000's decoder is kept busy without a break (about as fast as foobar2000 can decode). Only while you are using the computer does it slow down to one track at a time.
 
+**Album details, on request.** An album page stays as it was until you ask for more: the «Details» button, a click on the track count, or the I key (remembered). Then:
+
+- **A card** fills the empty right side of the header with what the album actually has: format (FLAC 24/96), bitrate, size, loudness (LUFS, from ReplayGain), dynamic range (foo_dr_meter), plays and the last one, date added (foo_playcount), release date, label and catalogue number, genres, discs, and the folder (a click opens it).
+- **The track list gains columns:** format, bitrate, loudness, DR and plays — only the ones this album has values for, and without the artist column when every track is by the album artist.
+- **It fits any window:** the card narrows to two columns, then becomes one line under a smaller cover, so the track list always keeps its room.
+
 **VU meters read what you hear.** The live stream comes before ReplayGain, so the meters now apply the gain foobar2000 applies to the playing track (the same rules: source, preamp, clipping prevention). A new default for 0 VU, «Auto», takes the reference from the loudness of the album that is playing: the needle swings around −4 VU and reaches the red only on the loudest moments, on a loud modern master and a quiet old record alike. The fixed −18 / −14 / −10 dBFS references are still there.
 
 ## [1.1.1] — hotfix

@@ -24,6 +24,7 @@ import * as Colors from './colors.js';
 import * as SoundUI from './ml/sound-ui.js';
 import * as Sound from './ml/sound.js';
 import * as Loud from './loudness.js';
+import * as AD from './album-details.js';
 const ownRg = () => performance.now() < Loud.writingUntil;   // Gatefold's own ReplayGain tag writes change nothing shown
 const dpr = () => Math.min(2, window.devicePixelRatio || 1);
 /** A track as the host's context-menu/handle APIs want it: path, or path|subsong:N. */
@@ -1169,20 +1170,27 @@ export async function openAlbum(a) {
     <div style="min-width:0">
       <div class="kicker">${$t('Альбом')}${year ? ' · ' + year : ''}${a.genre ? ' · ' + esc(a.genre) : ''}</div>
       <h1>${esc(a.name)}</h1>
-      <div class="album-meta"><b class="link" id="albumArtistLink">${esc(a.artist || a.albumArtist || '')}</b> · ${a.trackCount || 0} ${plural(a.trackCount || 0, 'трек', 'трека', 'треков')} · ${fmtDuration(a.duration || 0)}${a.label ? ' · ' + esc(a.label) : ''}</div>
+      <div class="album-meta"><b class="link" id="albumArtistLink">${esc(a.artist || a.albumArtist || '')}</b> · <span class="more-link" id="albumMore" role="button" tabindex="0" title="${$t('Подробнее об альбоме (I)')}">${a.trackCount || 0} ${plural(a.trackCount || 0, 'трек', 'трека', 'треков')} · ${fmtDuration(a.duration || 0)}</span>${a.label ? ' · ' + esc(a.label) : ''}</div>
       <div class="album-actions">
         <button class="btn primary" id="alPlay">${icon('play')}${$t('Слушать')}</button>
         <button class="btn" id="alQueue">${icon('queue')}${$t('В очередь')}</button>
         <button class="btn" id="alCover">${icon('image')}${$t('Обложка…')}</button>
         <button class="btn" id="alFolder">${icon('folder')}${$t('Папка')}</button>
+        <button class="btn toggle-btn" id="alDetails" aria-pressed="false" title="${$t('Подробнее об альбоме (I)')}">${icon('info')}${$t('Подробнее\u0004album')}</button>
       </div>
-    </div>`;
+    </div>
+    <div class="album-facts" id="albumFacts" aria-live="polite"></div>`;
   $('albumHero').prepend(backButton('library'));
   $('alPlay').onclick = () => playAlbumRow(a);
   $('alQueue').onclick = () => queueAlbum(a);
   $('alCover').onclick = () => router.go('covers', { manual: CF.jobFromAlbum(a) });
   $('alFolder').onclick = () => call('shell.showInExplorer', { path: a.firstTrackAbsolutePath });
   $('albumArtistLink').onclick = () => router.go('artist', a.albumArtist || a.artist);
+  $('alDetails').onclick = toggleAlbumDetails;
+  $('albumMore').onclick = toggleAlbumDetails;
+  $('albumMore').onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleAlbumDetails(); } };
+  ALB.a = a; ALB.tracks = null; ALB.ext = null; ALB.token = token; ALB.loading = null; ALB.plainOnce = false;
+  paintDetailsState();
   if (a.firstTrackAbsolutePath) {
     const get = await coversFor([a.firstTrackAbsolutePath], Math.round(220 * dpr()));
     const u = get(a.firstTrackAbsolutePath);
@@ -1197,19 +1205,74 @@ export async function openAlbum(a) {
   const tracks = await albumTracks(a);
   if (token !== albumToken) return;
   const list = $('albumList');
-  list.style.height = tracks.length * ROW + 24 + 'px';
-  let disc = -1;
-  const multiDisc = new Set(tracks.map((t) => t.discNumber || 0)).size > 1;
-  list.innerHTML = tracks.map((t, i) => {
-    const d = multiDisc && t.discNumber !== disc ? (disc = t.discNumber, `<span class="chip" style="margin-left:6px">CD${t.discNumber}</span>`) : '';
-    return `<div class="vrow" data-i="${i}"${likeAttr(t)} style="transform:translateY(${i * ROW}px)"><div class="c-n num">${t.trackNumber || i + 1}</div><div class="c-title">${esc(t.title)}${d}</div><div class="c-artist">${esc(t.artist)}</div><div class="c-album">${esc([t.codec, t.sampleRate ? (t.sampleRate / 1000).toFixed(1).replace('.0', '') + $t(' кГц') : ''].filter(Boolean).join(' · '))}</div><div class="c-dur num">${fmtTime(t.duration)}</div>${LIKE_BTN}</div>`;
-  }).join('');
-  list.querySelectorAll('.vrow').forEach(likeRow);
+  ALB.tracks = tracks;
+  renderAlbumRows();
   list.onclick = (e) => heartClick(e, (r) => tracks[+r.dataset.i]);
   list.ondblclick = (e) => { if (e.target.closest('.row-like')) return; const r = e.target.closest('.vrow'); if (r) playPaths(tracks.map((t) => t.handle || t.absolutePath), +r.dataset.i, a.name); };
   list.oncontextmenu = (e) => { const r = e.target.closest('.vrow'); if (!r) return; e.preventDefault(); const t = tracks[+r.dataset.i]; call('menu.showNativePopup', { mode: 'handles', handles: [trackHandle(t)] }); };
   $('albumScroller').scrollTop = 0;
   renderSimilar(a, token);
+}
+
+/* ---------------------------------------------------------------- album details (album-details.js)
+   Off by default; «Details», a click on the track count, or I. The choice is remembered. */
+const ALB = { a: null, tracks: null, ext: null, token: 0, loading: null, plainOnce: false };
+const albumHead = albumView.querySelector('.list-head');
+const HEAD0 = () => `<div>#</div><div>${$t('Название')}</div><div>${$t('Исполнитель')}</div><div class="h-album">${$t('Формат')}</div><div>${$t('Время')}</div>`;
+export function toggleAlbumDetails() {
+  setSetting('albumDetails', !settings.albumDetails);
+  paintDetailsState();
+  renderAlbumRows();
+}
+function paintDetailsState() {
+  const on = !!settings.albumDetails;
+  albumView.classList.toggle('details', on);
+  const b = $('alDetails'); if (b) { b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); }
+  const box = $('albumFacts'); if (!box) return;
+  if (!on) { box.innerHTML = ''; return; }
+  if (ALB.ext && ALB.tracks) {
+    box.innerHTML = AD.factsHtml(AD.facts(ALB.a, ALB.tracks, ALB.ext));
+    box.querySelectorAll('[data-act=folder]').forEach((el) => { el.onclick = () => $('alFolder').click(); el.onkeydown = (e) => { if (e.key === 'Enter') el.click(); }; });
+    // a single line of facts (narrow window) scrolls sideways with the wheel too
+    box.onwheel = (e) => { if (box.scrollWidth > box.clientWidth + 2 && Math.abs(e.deltaY) > Math.abs(e.deltaX)) { e.preventDefault(); box.scrollLeft += e.deltaY; } };
+  } else box.innerHTML = '<div class="f sk"><div class="k skeleton"></div><div class="v skeleton"></div></div>'.repeat(6);
+}
+function renderAlbumRows() {
+  const tracks = ALB.tracks, list = $('albumList');
+  if (!tracks) return;
+  const on = !!settings.albumDetails;
+  if (on && !ALB.ext) {
+    // the values usually arrive within a few frames: wait for them rather than draw the plain
+    // columns and swap them a moment later (a slow answer still gets the plain list after 600 ms)
+    const token = ALB.token;
+    if (!ALB.loading) {
+      ALB.loading = AD.load(tracks).then((ext) => { ALB.loading = null; if (token !== albumToken || ALB.tracks !== tracks) return; ALB.ext = ext; paintDetailsState(); if (settings.albumDetails) renderAlbumRows(); });
+      setTimeout(() => { if (token === albumToken && ALB.tracks === tracks && !ALB.ext && !list.children.length) { ALB.plainOnce = true; renderAlbumRows(); } }, 600);
+    }
+    if (!ALB.plainOnce) { if (!list.querySelector('.vrow') || list.dataset.album !== String(ALB.token)) { list.innerHTML = ''; list.style.height = tracks.length * ROW + 24 + 'px'; } return; }
+  }
+  ALB.plainOnce = false;
+  const detailed = on && ALB.ext;
+  list.style.height = tracks.length * ROW + 24 + 'px';
+  let disc = -1;
+  const multiDisc = new Set(tracks.map((t) => t.discNumber || 0)).size > 1;
+  const discChip = (t) => (multiDisc && t.discNumber !== disc ? (disc = t.discNumber, `<span class="chip" style="margin-left:6px">CD${t.discNumber}</span>`) : '');
+  if (detailed) {
+    const C = AD.columns(ALB.a, tracks, ALB.ext);
+    albumHead.innerHTML = C.head; albumHead.classList.add('cols'); albumHead.style.setProperty('--cols', C.cols);
+    list.classList.add('cols'); list.style.setProperty('--cols', C.cols);
+    list.innerHTML = tracks.map((t, i) => {
+      const x = ALB.ext[i];
+      const cells = C.cells.map((c) => `<div class="${c.cls}">${c.cls === 'c-title' ? c.cell(t, x, i) + discChip(t) : c.cell(t, x, i)}</div>`).join('');
+      return `<div class="vrow" data-i="${i}"${likeAttr(t)} style="transform:translateY(${i * ROW}px)">${cells}${LIKE_BTN}</div>`;
+    }).join('');
+  } else {
+    albumHead.innerHTML = HEAD0(); albumHead.classList.remove('cols'); albumHead.style.removeProperty('--cols');
+    list.classList.remove('cols'); list.style.removeProperty('--cols');
+    list.innerHTML = tracks.map((t, i) => `<div class="vrow" data-i="${i}"${likeAttr(t)} style="transform:translateY(${i * ROW}px)"><div class="c-n num">${t.trackNumber || i + 1}</div><div class="c-title">${esc(t.title)}${discChip(t)}</div><div class="c-artist">${esc(t.artist)}</div><div class="c-album">${esc([t.codec, t.sampleRate ? (t.sampleRate / 1000).toFixed(1).replace('.0', '') + $t(' кГц') : ''].filter(Boolean).join(' · '))}</div><div class="c-dur num">${fmtTime(t.duration)}</div>${LIKE_BTN}</div>`).join('');
+  }
+  list.dataset.album = String(ALB.token);
+  list.querySelectorAll('.vrow').forEach(likeRow);
 }
 
 /* «Sounds like»: albums of other artists in the library that sound closest (ml/sound-ui.js) */

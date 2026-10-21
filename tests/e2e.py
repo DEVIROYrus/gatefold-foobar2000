@@ -941,6 +941,64 @@ async def test_level(browser, port):
     check(not errs, f'no page errors {errs[:2]}')
     await ctx.close()
 
+async def test_album_details(browser, port):
+    print('· album details: off by default, a button / the track count / I, facts and columns that fit')
+    ctx, pg, errs = await page(browser, port, {'language': 'en'})
+    async def open_album(name):
+        await nav(pg, 'library', 2200)
+        await pg.evaluate(f"[...document.querySelectorAll('#libGrid .tile')].find(t => t.querySelector('.tt')?.textContent === {json.dumps(name)})?.click()")
+        await pg.wait_for_timeout(1300)
+    await open_album('Nightdrive')
+    check(not await pg.evaluate("document.getElementById('view-album').classList.contains('details')") and await pg.evaluate("document.getElementById('albumFacts').children.length") == 0, 'off by default: no card, the usual columns')
+    head0 = await pg.evaluate("[...document.querySelectorAll('#view-album .list-head > div')].map(d => d.textContent)")
+    check('Artist' in head0 and 'LUFS' not in head0, f'usual columns {head0}')
+    await pg.click('#alDetails'); await pg.wait_for_timeout(900)
+    facts = await pg.evaluate("[...document.querySelectorAll('#albumFacts .f')].map(f => [f.querySelector('.k').textContent, f.querySelector('.v').textContent])")
+    F = dict(facts)
+    check(F.get('Format') == 'FLAC 24/96' and F.get('Loudness') == '−9.8 LUFS' and F.get('Dynamics') == 'DR10' and 'Folder' in F, f'the card: format, loudness (from ReplayGain, with a real minus), DR, folder {facts}')
+    check(len(facts) <= 10, f'at most nine facts and the folder ({len(facts)})')
+    head = await pg.evaluate("[...document.querySelectorAll('#view-album .list-head > div')].map(d => d.textContent)")
+    check('LUFS' in head and 'DR' in head and 'Artist' not in head, f'detailed columns; no artist column when every track is by the album artist {head}')
+    geo = await pg.evaluate("""(() => {
+      const row = document.querySelector('#albumList .vrow'), cells = [...row.children].filter(c => c.tagName === 'DIV'), hd = [...document.querySelector('#view-album .list-head').children];
+      const card = document.getElementById('albumFacts').getBoundingClientRect(), hero = document.getElementById('albumHero').getBoundingClientRect(), cover = document.querySelector('#view-album .album-cover').getBoundingClientRect();
+      const overlap = cells.some((c, i) => i && cells[i - 1].getBoundingClientRect().right > c.getBoundingClientRect().left + .5);
+      const aligned = hd.every((h, i) => Math.abs(h.getBoundingClientRect().left - cells[i].getBoundingClientRect().left) < 2 || Math.abs(h.getBoundingClientRect().right - cells[i].getBoundingClientRect().right) < 2);
+      const inCard = [...document.querySelectorAll('#albumFacts .f')].every(f => { const r = f.getBoundingClientRect(); return r.bottom <= card.bottom + 1 && r.right <= card.right + 1; });
+      const heart = row.querySelector('.row-like').getBoundingClientRect(), gap = row.querySelector('.c-gap').getBoundingClientRect(), prev = row.querySelector('.c-gap').previousElementSibling.getBoundingClientRect();
+      return { cells: cells.length, heads: hd.length, overlap, aligned, inCard, cardInHero: card.right <= hero.right + 1 && card.bottom <= cover.bottom + 2, heartClear: heart.left >= prev.right };
+    })()""")
+    check(geo['cells'] == geo['heads'] and not geo['overlap'] and geo['aligned'], f'head and cells line up, no cell runs into the next {geo}')
+    check(geo['inCard'] and geo['cardInHero'], f'every fact inside the card, the card inside the header and no taller than the cover {geo}')
+    check(geo['heartClear'], 'the heart on hover does not cover the plays column')
+    check(await pg.evaluate("JSON.parse(localStorage.getItem('aurora.settings.v1')).albumDetails") is True, 'the choice is remembered')
+    calls0 = len(await pg.evaluate("window.__calls"))
+    await pg.evaluate("document.querySelector('#albumFacts [data-act=folder]').click()"); await pg.wait_for_timeout(300)
+    check(any(c[0] == 'shell.showInExplorer' for c in (await pg.evaluate("window.__calls"))[calls0:]), 'the folder fact opens the folder')
+    # a bare album: only what it has
+    await open_album('Sand & Signal')
+    facts = await pg.evaluate("[...document.querySelectorAll('#albumFacts .f .k')].map(k => k.textContent)")
+    head = await pg.evaluate("[...document.querySelectorAll('#view-album .list-head > div')].map(d => d.textContent)")
+    check('Loudness' not in facts and 'Plays' not in facts and 'LUFS' not in head and 'DR' not in head, f'an album without ReplayGain, DR or plays shows none of them {facts} {head}')
+    # off again from the track count, and on with I
+    await pg.click('#albumMore'); await pg.wait_for_timeout(400)
+    check(not await pg.evaluate("document.getElementById('view-album').classList.contains('details')"), 'a click on the track count turns it off')
+    await pg.keyboard.press('i'); await pg.wait_for_timeout(700)
+    check(await pg.evaluate("document.getElementById('view-album').classList.contains('details')"), 'I turns it on')
+    # mixed formats, two discs, a compilation
+    mix = await pg.evaluate("""import('/theme/js/album-details.js').then(AD => {
+      const T = (codec, sr, disc, artist, br, size) => ({ codec, sampleRate: sr, discNumber: disc, artist, bitrate: br, duration: 200, fileSize: size, channels: 2, title: 't' });
+      const tracks = [T('FLAC', 44100, 1, 'A', 900, 3e7), T('MP3', 44100, 1, 'B', 320, 8e6), T('FLAC', 96000, 2, 'C', 2800, 7e7)];
+      const ext = [{ lossless: true, bits: 16 }, { lossless: false, prof: 'CBR' }, { lossless: true, bits: 24 }].map((x) => ({ dr: null, adr: null, tg: null, ag: null, plays: null, genre: 'Rock; Pop', ...x }));
+      const f = AD.facts({ name: 'X', albumArtist: 'Various', year: '2001', firstTrackAbsolutePath: 'D:\\\\Music\\\\X\\\\01.flac' }, tracks, ext);
+      const c = AD.columns({ albumArtist: 'Various' }, tracks, ext);
+      return { f: Object.fromEntries(f.map((x) => [x.k, x.v])), head: c.head, fmt: tracks.map((t, i) => AD.trackFormat(t, ext[i])) };
+    })""")
+    check(mix['f'].get('Format', '').startswith('FLAC, MP3') and mix['f'].get('Discs') == '2' and 'Artist' in mix['head'], f'mixed formats, two discs, a compilation keeps its artist column {mix}')
+    check(mix['fmt'] == ['FLAC 16/44.1', 'MP3 CBR', 'FLAC 24/96'], f'per-track formats {mix["fmt"]}')
+    check(not errs, f'no page errors {errs[:2]}')
+    await ctx.close()
+
 async def main():
     httpd = serve(); port = httpd.server_address[1]
     async with async_playwright() as p:
@@ -955,7 +1013,7 @@ async def main():
         for name, fn in [('playlists', test_playlists), ('youtube', test_youtube), ('settings', test_settings), ('updates', test_updates),
                          ('tooltips', test_tooltips), ('canvas_volume', test_canvas_volume), ('fb2k_prefs', test_fb2k_prefs), ('welcome', test_welcome),
                          ('playlist_editing', test_playlist_editing), ('windows', test_windows), ('vu', test_vu), ('smart_color_radio', test_smart_color_radio),
-                         ('lyrics_sync', test_lyrics_sync), ('level', test_level), ('sound_offer', test_sound_offer), ('similar_albums', test_similar_albums), ('sound_ai', test_sound_ai), ('layout', test_layout), ('stability', test_stability)]:
+                         ('lyrics_sync', test_lyrics_sync), ('album_details', test_album_details), ('level', test_level), ('sound_offer', test_sound_offer), ('similar_albums', test_similar_albums), ('sound_ai', test_sound_ai), ('layout', test_layout), ('stability', test_stability)]:
             if run(name): await timed(name, fn(browser, port))
         await browser.close()
     httpd.shutdown()

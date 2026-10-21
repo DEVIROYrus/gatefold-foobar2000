@@ -753,6 +753,7 @@ document.addEventListener('keydown', (e) => {
     case 'm': case 'M': case 'ь': case 'Ь': call('playback.toggleMute'); break;
     case 'l': case 'L': case 'д': case 'Д': if (!e.ctrlKey && !e.altKey) toggleLike(); break;
     case 'F11': e.preventDefault(); toggleFullscreen(); break;
+    case 'i': case 'I': case 'ш': case 'Ш': if (!e.ctrlKey && !e.altKey && router.current === 'album') Lib.toggleAlbumDetails(); break;
     case 'f': case 'F': case 'а': case 'А': if (!e.ctrlKey && !e.altKey) { e.preventDefault(); Canvas.open(); } break;
     case '[': case 'х': case 'Х': if (lyrView && $('lyrBar')?._step) $('lyrBar')._step(-0.2); break;
     case ']': case 'ъ': case 'Ъ': if (lyrView && $('lyrBar')?._step) $('lyrBar')._step(0.2); break;
