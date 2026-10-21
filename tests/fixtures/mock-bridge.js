@@ -66,6 +66,7 @@
       return ok({ available: false, path: p.path });
     },
     'lyrics.save': (p) => { window.__calls.push(['lyrics.save', p.path, JSON.stringify(p.target), p.format || '', p.lyrics.length]); return ok({ savedTo: p.path.replace(/\.flac$/, '.lrc') }); },
+    'shell.showInExplorer': (p) => { window.__calls.push(['shell.showInExplorer', p.path]); return ok({}); },
     'playback.setPosition': (p) => { window.__calls.push(['playback.setPosition', p.position]); return ok({}); },
     'window.createPopup': (p) => { window.__calls.push(['window.createPopup', p.url, p.frame, p.width + 'x' + p.height]); return ok({ windowId: 'popup-1' }); },
     'window.getAllWindows': () => ok({ windows: [{ windowId: 'main' }] }),
@@ -126,7 +127,15 @@
       if (p.command === 'File/Preferences') return Promise.resolve({ success: false, code: 'MENU_MATCH_AMBIGUOUS', error: 'Command is ambiguous; address it by GUID instead: File/Preferences', candidates: [] });
       return ok({ guid: p.command });
     },
-    'library.getAlbumTracks': (p) => ok({ tracks: PL_TRACKS.filter((t) => t.album === p.album).map((t, i) => ({ ...t, index: i, sampleRate: 96000 })) }),
+    'library.getAlbumTracks': (p) => ok({ tracks: PL_TRACKS.filter((t) => t.album === p.album).map((t, i) => ({ ...t, index: i, sampleRate: 96000, channels: 2, bitrate: 2700 + ((i * 37) % 300), fileSize: Math.round(t.duration * 345000) })) }),
+    // album details: rich values for most albums, none at all for the albums of Mirage Theory (a bare album)
+    'titleformat.evalFieldsBatch': (p) => ok({ total: p.paths.length, results: p.paths.map((path, i) => {
+      const t = PL_TRACKS.find((x) => x.absolutePath === String(path).split('|')[0]) || {};
+      if (/^M/.test(t.albumArtist || '')) return { path, success: true, infoAvailable: true, ...Object.fromEntries(Object.keys(p.fields).map((k) => [k, ''])) };
+      const v = { bits: '24', prof: 'Lossless', enc: 'lossless', dr: String(8 + (i % 5)), adr: '10', tg: (-7.5 - (i % 4) * 0.8).toFixed(2) + ' dB', ag: '-8.20 dB', ap: '0.998',
+        plays: String((i * 3) % 7), last: '2026-10-19 21:14:03', added: '2025-03-02 10:00:00', date: (t.date || '2020') + '-05-12', odate: '', label: 'Night Owl Records', cat: 'NOR-0' + (10 + i % 3), genre: 'Synthwave; Electronic' };
+      return { path, success: true, infoAvailable: true, ...Object.fromEntries(Object.keys(p.fields).map((k) => [k, v[k] ?? ''])) };
+    }) }),
     'library.search': () => ok({ tracks: PL_TRACKS.slice(0, 30), total: 30 }),
     'queue.get': () => ok({ items: PL_TRACKS.slice(20, 23) }),
     'http.get': async (p) => {
