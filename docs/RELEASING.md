@@ -2,7 +2,7 @@
 
 1. Update `CHANGELOG.md` (a `## [x.y.z]` section), bump `version` in `package.json`, `VERSION` in `theme/js/version.js` and `version` in `theme/gatefold.json`. If the release relies on a newer foo_ui_webview2, raise `requires.foo_ui_webview2` in `theme/gatefold.json` — the in-app updater then sends people to the installer instead of updating the theme alone.
 2. `node tools/check.mjs && python tests/e2e.py`.
-3. Commit, then `git tag vX.Y.Z && git push --tags`.
+3. Commit, then `git tag vX.Y.Z && git push --tags` — or, without pushing a tag: Actions → **Release** → *Run workflow* with **publish** ticked (it builds the version in `package.json` and creates the tag on that commit). Without **publish** it is a dry run that keeps the files as an artifact.
 4. The **Release** workflow writes this repository's name into `theme/js/version.js` (`REPO`, which the in-app updater asks for `releases/latest`; until then the update check stays off), fetches the versions pinned in `installer/deps.lock.json`, verifies them, builds `Gatefold-Setup-X.Y.Z.exe` and `gatefold-theme-X.Y.Z.zip`, writes `SHA256SUMS.txt` and publishes the GitHub release with the changelog section.
 5. When **Watch bundled software** opens a pull request (a new foobar2000 or foo_ui_webview2), merge it after CI passes and tag a patch release.
 
