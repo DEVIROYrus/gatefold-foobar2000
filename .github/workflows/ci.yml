@@ -32,7 +32,7 @@ jobs:
         with: { python-version: '3.12' }
       - name: Playwright
         run: |
-          pip install playwright==1.48.0 onnx==1.17.0 numpy
+          pip install playwright==1.56.0 onnx==1.17.0 numpy
           python -m playwright install --with-deps chromium
       - name: End-to-end (headless Chromium, mocked foobar2000 bridge)
         env: { ONLY: '${{ matrix.only }}', PYTHONUNBUFFERED: '1' }

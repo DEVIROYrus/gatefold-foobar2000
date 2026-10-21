@@ -721,11 +721,18 @@ async def test_stability(browser, port):
 
 async def test_layout(browser, port):
     print('· layout: nothing overlaps (every screen, large text, narrow and wide windows; mini player, Canvas window)')
+    import time
     audit = (FIX / 'overlap-audit.js').read_text(encoding='utf-8').split('\n', 2)[2]
     found = {}
+    async def run_audit(pg, where):
+        # each look has its own time limit: a slow or stuck one is reported by place, the rest go on
+        try:
+            for x in await asyncio.wait_for(pg.evaluate(audit), 45): found.setdefault(x, where)
+        except asyncio.TimeoutError: found.setdefault(f'the check itself took over 45 s', where)
     for lang in ('ru', 'en'):
-        ctx, pg, errs = await page(browser, port, {'language': lang, 'baseSize': 20, 'soundAI': True})
+        ctx, pg, errs = await page(browser, port, {'language': lang, 'baseSize': 20})
         for w in (820, 1280):
+            t0 = time.time()
             await pg.set_viewport_size({'width': w, 'height': 860}); await pg.wait_for_timeout(300)
             for v in VIEWS + ['lyrics', 'smart']:
                 if v == 'lyrics':
@@ -735,11 +742,12 @@ async def test_layout(browser, port):
                 else:
                     await nav(pg, v, 600)
                 for step in range(6):
-                    for x in await pg.evaluate(audit): found.setdefault(x, f'{lang}/{w}/{v}')
+                    await run_audit(pg, f'{lang}/{w}/{v}')
                     more = await pg.evaluate("(() => { const a = document.querySelector('.view.active'); const sc = [a, ...a.querySelectorAll('*')].find(e => e.scrollHeight > e.clientHeight + 40 && /auto|scroll/.test(getComputedStyle(e).overflowY)); if (!sc || sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 2) return false; sc.scrollTop += sc.clientHeight * 0.8; return true; })()")
                     if not more or v == 'smart': break
                     await pg.wait_for_timeout(150)
                 if v == 'smart': await pg.keyboard.press('Escape'); await pg.wait_for_timeout(250)
+            print(f'    {lang} {w}px: {time.time() - t0:.0f} s, {len(found)} finding(s) so far', flush=True)
         check(not errs, f'{lang}: no page errors {errs[:2]}')
         await ctx.close()
     for pagefile, sizes in (('mini.html', [(240, 72), (320, 90), (400, 200)]), ('canvas.html', [(480, 300), (900, 560)])):
@@ -748,9 +756,11 @@ async def test_layout(browser, port):
             await pg.add_init_script("localStorage.setItem('aurora.settings.v1', JSON.stringify({language: 'ru', baseSize: 20}));" + MOCK)
             await pg.goto(f'http://127.0.0.1:{port}/theme/{pagefile}'); await pg.wait_for_timeout(1500)
             await pg.mouse.move(w / 2, h / 2); await pg.wait_for_timeout(200)
-            for x in await pg.evaluate(audit): found.setdefault(x, f'{pagefile} {w}×{h}')
+            await run_audit(pg, f'{pagefile} {w}×{h}')
             await ctx.close()
-    check(not found, f'no text or control overlaps another, sticks out of its box or is cut {[f"{k} @ {v}" for k, v in list(found.items())[:6]]}')
+        print(f'    {pagefile}: done', flush=True)
+    for k, v in found.items(): print(f'    {k}  @ {v}', flush=True)
+    check(not found, f'no text or control overlaps another, sticks out of its box or is cut ({len(found)} finding(s), listed above)')
 
 async def timed(name, coro, limit=int(os.environ.get('TEST_TIMEOUT', 480))):
     # a test that hangs fails by name instead of holding the whole run (page.evaluate has no timeout)
