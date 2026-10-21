@@ -2,7 +2,12 @@ name: Release
 on:
   push:
     tags: ['v*']
-  workflow_dispatch:   # a dry run: builds everything and keeps it as an artifact, publishes nothing
+  workflow_dispatch:   # by hand: a dry run (an artifact, nothing published), or publish v<package.json version>
+    inputs:
+      publish:
+        description: 'Publish the release (creates the tag v<version> on this commit)'
+        type: boolean
+        default: false
 permissions:
   contents: write
 
@@ -84,11 +89,20 @@ jobs:
           ``````
           "@ | Set-Content -Encoding UTF8 notes.md
       - uses: actions/upload-artifact@v4
-        if: github.ref_type != 'tag'
+        if: github.ref_type != 'tag' && !inputs.publish
         with: { name: release-dry-run, path: "dist/*\nnotes.md", retention-days: 7 }
+      - name: Version to publish
+        if: github.ref_type == 'tag' || inputs.publish
+        shell: pwsh
+        run: |
+          $v = if ('${{ github.ref_type }}' -eq 'tag') { '${{ github.ref_name }}'.TrimStart('v') } else { (Get-Content package.json | ConvertFrom-Json).version }
+          "VERSION=$v" >> $env:GITHUB_ENV
       - uses: softprops/action-gh-release@v2
-        if: github.ref_type == 'tag'
+        if: github.ref_type == 'tag' || inputs.publish
         with:
+          tag_name: v${{ env.VERSION }}
+          target_commitish: ${{ github.sha }}
+          name: Gatefold ${{ env.VERSION }}
           body_path: notes.md
           files: |
             dist/Gatefold-Setup-*.exe
