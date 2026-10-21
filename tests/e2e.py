@@ -406,6 +406,15 @@ async def test_playlist_editing(browser, port):
 
 async def test_windows(browser, port):
     print('· taskbar, tray, mini player')
+    # first start on a small screen: a window bigger than the screen is brought inside, centred
+    pre = ("window.__fit = []; const _fi = () => { const f = window.fb2k.invoke.bind(window.fb2k); window.fb2k.invoke = (m, p) => {"
+           " if (m === 'window.getBounds') return Promise.resolve({ success: true, x: -300, y: 0, width: 2400, height: 1300 });"
+           " if (m === 'window.setBounds') { window.__fit.push(p); return Promise.resolve({ success: true }); } return f(m, p); }; };"
+           " const _t = setInterval(() => { if (window.fb2k && window.fb2k.invoke && !window.__fitHooked) { window.__fitHooked = 1; _fi(); clearInterval(_t); } }, 1);")
+    ctx, pg, errs = await page(browser, port, {'language': 'en'}, pre=pre)
+    fit = await pg.evaluate("[window.__fit, screen.availWidth * devicePixelRatio, screen.availHeight * devicePixelRatio]")
+    check(fit[0] and fit[0][-1]['width'] <= fit[1] and fit[0][-1]['height'] <= fit[2] and fit[0][-1]['x'] >= 0, f'a window larger than the screen is fitted onto it {fit}')
+    await ctx.close()
     ctx, pg, errs = await page(browser, port, {'language': 'en'})
     await pg.wait_for_timeout(1500)
     W = lambda: pg.evaluate("window.__win.calls.map(c => [c[0], JSON.stringify(c[1])])")
