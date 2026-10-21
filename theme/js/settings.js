@@ -27,7 +27,7 @@ export const DEFAULTS = {
   vuStyle: 'classic',       // 'classic' (ivory dial) | 'album' (the album's colours)
   vuLayout: 'pair',         // 'pair' (a meter per channel) | 'stereo' (one dial, two needles)
   vuCanvas: true,           // the meters in the Canvas too
-  vuRef: -14,               // dBFS of a sine that reads 0 VU: -18 (studio) | -14 | -10 (loud masters)
+  vuCal: 'auto',            // 0 VU: 'auto' (from the playing album's loudness) | dBFS of a sine: -18 (studio) | -14 | -10 (loud masters)
   waveformSeek: true,       // waveform seek bar coloured by the palette
   transitionMs: 1100,       // palette crossfade duration
   frameless: true,          // draw own title bar (standalone mode only)

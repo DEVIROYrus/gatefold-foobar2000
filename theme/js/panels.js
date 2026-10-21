@@ -74,7 +74,7 @@ function lsToggle(label, hint, get, set) {
   return el;
 }
 const group = (title, ...rows) => { const g = h(`<div class="card st-group">${title ? `<div class="st-gt">${title}</div>` : ''}</div>`); g.append(...rows.filter(Boolean)); return g; };
-const actions = (...btns) => { const r = h('<div class="row st-acts"></div>'); r.append(...btns); return r; };
+const actions = (...btns) => { const r = h('<div class="row st-acts"></div>'); r.append(...btns.filter(Boolean)); return r; };
 const button = (html, fn, cls = '') => { const b = h(`<button class="btn sm ${cls}">${html}</button>`); b.onclick = fn; return b; };
 let stSection = '';
 /* interface language: applied by reloading the page (i18n.js reads it before anything renders) */
@@ -160,7 +160,7 @@ export function renderSettings() {
         seg('vuStyle', $t('Вид'), '', [['classic', $t('Классика')], ['album', $t('Цвета альбома')]]),
         seg('vuLayout', $t('Приборы'), '', [['pair', $t('Два')], ['stereo', $t('Один, две стрелки')]]),
         toggle('vuCanvas', $t('Показывать в «Холсте»'), ''),
-        seg('vuRef', $t('0 VU соответствует'), '' /* Уровень синусоиды, при котором стрелка стоит на 0. Громкая современная музыка — −14 или −10 */, [[-18, '−18 dBFS'], [-14, '−14 dBFS'], [-10, '−10 dBFS']]),
+        seg('vuCal', $t('0 VU соответствует'), '' /* «Авто» — по громкости играющего альбома; иначе уровень синусоиды, при котором стрелка стоит на 0 */, [['auto', $t('Авто')], [-18, '−18 dBFS'], [-14, '−14 dBFS'], [-10, '−10 dBFS']]),
       ] : [])),
   );
 

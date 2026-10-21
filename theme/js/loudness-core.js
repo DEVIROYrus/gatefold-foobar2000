@@ -144,23 +144,27 @@ export class Meter {
     this.peak = pk;
     const prev = this.tail[c], n = prev.length + frames;
     const y = new Float32Array(n); y.set(prev); y.set(x.subarray(0, frames), prev.length);
-    // only between two samples of one sign that are both near the top: the half-way point first
-    // (an over sits around it), the quarter points only when that one already rises above both
-    let tp = Math.max(this.tp, pk), thr = tp * 0.75;
+    // only between two samples of one sign, one of them near the top, at a local maximum
+    // candidates: pairs that reach 75 % of the sample peak (not of the true peak found so far, which
+    // on a clipped master can exceed every sample and would shut every candidate out)
+    let tp = Math.max(this.tp, pk);
+    const thr = pk * 0.75;
     const [q1, mid, q3] = TP;
     for (let i = 5; i + 6 < n; i++) {
       const u = y[i], w = y[i + 1];
       if ((u > 0) !== (w > 0)) continue;
       const a = u < 0 ? -u : u, b = w < 0 ? -w : w;
-      if (a < thr || b < thr) continue;
+      if (a < thr && b < thr) continue;
+      // an over between two samples sits at a local maximum of the waveform: skip the slopes
+      const m = a > b ? a : b, l = y[i - 1] < 0 ? -y[i - 1] : y[i - 1], r = y[i + 2] < 0 ? -y[i + 2] : y[i + 2];
+      if (m < l || m < r) continue;
       let v = 0; for (let k = 0; k < TP_TAPS; k++) v += mid[k] * y[i - 5 + k];
       if (v < 0) v = -v;
-      if (v <= (a > b ? a : b)) continue;
-      if (v > tp) { tp = v; thr = tp * 0.75; }
+      if (v > tp) tp = v;
       for (const hh of [q1, q3]) {
         let x2 = 0; for (let k = 0; k < TP_TAPS; k++) x2 += hh[k] * y[i - 5 + k];
         if (x2 < 0) x2 = -x2;
-        if (x2 > tp) { tp = x2; thr = tp * 0.75; }
+        if (x2 > tp) tp = x2;
       }
     }
     this.tp = tp;
@@ -185,3 +189,4 @@ export function album(results) {
   const peak = ok.reduce((m, r) => Math.max(m, r.truePeak || 0), 0);
   return { lufs: L, gain: gainOf(L), peak };
 }
+export const _TP = TP;

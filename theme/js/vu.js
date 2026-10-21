@@ -4,13 +4,15 @@
  *
  *   level      the RMS of each channel of what foobar2000 plays (viz.js reads it from the same live
  *              PCM as the spectrum); without live PCM, the spectrum level on both sides.
- *              0 VU = a sine at settings.vuRef dBFS (−14 by default, −18 is the studio convention).
+ *              0 VU = a sine at settings.vuCal dBFS (−18 studio, −14, −10), or «auto» from the album's
+ *              loudness; the level is read after foobar2000's ReplayGain (rg-now.js).
  *   movement   VU ballistics (IEC 60268-17): a second-order needle, 99 % of a step in 300 ms,
  *              about 1.5 % overshoot; it falls back to rest on pause.
  *   drawing    the dial is painted once per size and colours (offscreen), each frame only the needle
  *              and the peak lamp are drawn over it; nothing runs while no meter is on screen.
  */
 import * as Viz from './viz.js';
+import * as RG from './rg-now.js';
 import { settings, onSettings } from './settings.js';
 import { onPalette } from './theme.js';
 import * as Canvas from './canvas.js';
@@ -140,8 +142,20 @@ function cap(c, w, h, lamps) {
 
 /* ---------------------------------------------------------------- level and movement */
 const ZETA = 0.81, OMEGA = 2 * Math.PI * 2.1;                // 99 % in ~300 ms, ~1.5 % overshoot
-const toVu = (rms) => (rms > 1e-6 ? 20 * Math.log10(rms * Math.SQRT2) - (+settings.vuRef || -14) : -60);   // a sine's RMS × √2 = its peak
+/* What is played, not what is decoded: the stream comes before ReplayGain, so the gain foobar2000
+   applies to this track is put back in (rg-now.js).
+   0 VU: a sine at a fixed level (−18 / −14 / −10 dBFS), or «Auto» — from the loudness of the album
+   that is playing (its ReplayGain value, after the gain): the needle then swings around −4 VU and
+   reaches the red on the loudest moments, on a modern master and a quiet 1970s record alike. */
+function ref() {
+  const v = settings.vuCal;
+  if (v !== 'auto' && Number.isFinite(+v)) return +v;
+  if (RG.now.lufs == null) return -10;                                   // no ReplayGain values: right for most modern masters
+  return Math.max(-26, Math.min(-4, RG.now.lufs + RG.now.db + 7));
+}
+const toVu = (rms) => (rms > 1e-6 ? 20 * Math.log10(rms * RG.now.gain * Math.SQRT2) - ref() : -60);   // a sine's RMS × √2 = its peak
 function targets() {
+  RG.follow();                                     // once, when a meter first shows
   if (!Viz.progressState.playing) return [0, 0];
   const r = Viz.channelRms();
   if (r) return [frac(toVu(r[0])), frac(toVu(r[1]))];
