@@ -1,50 +1,45 @@
 <p align="center"><img src="installer/assets/gatefold.svg" width="88" alt=""></p>
 <h1 align="center">Gatefold</h1>
-<p align="center"><b>A modern interface for foobar2000 that takes its colours from your music.</b><br>
+<p align="center"><b>foobar2000 that understands your music.</b><br>
+Radio and mood playlists that go by how your songs <i>sound</i> — for your own files, on your own PC.<br>No server, no subscription, nothing to configure.<br>
 <a href="../../releases/latest"><b>Download the installer</b></a> · <a href="README.ru.md">Русская версия</a></p>
 
-Gatefold is a theme for the [foo_ui_webview2](https://github.com/NereaFantasia/foo_ui_webview2) component. It turns foobar2000 into a full-window player whose palette is built live from the cover of the playing album — with your library, artists, playlists, synced lyrics, a full-screen Canvas, YouTube and an optional on-device sound analysis. The installer sets everything up: run it, and foobar2000 opens in Gatefold.
+Gatefold is a modern interface for [foobar2000](https://www.foobar2000.org), the audiophile's music player for Windows, built on the [foo_ui_webview2](https://github.com/NereaFantasia/foo_ui_webview2) component. You keep foobar2000's playback engine and every component you use; you gain a player that knows which of your songs belong together.
 
 ![Gatefold in motion](docs/screenshots/demo.webp)
 
-![Now playing](docs/screenshots/now-en.webp)
+## Why Gatefold
 
-| Playlist with covers | Library by cover colour |
+- **Radio and playlists that listen.** An optional neural network (Discogs-EffNet) listens to each track of your library once, on your computer. Then a radio from any song stays in its mood, **Similar tracks** finds the songs that sound closest, and smart playlists offer moods — calm, energetic, sad, happy, party, acoustic, and instrumental that means *no voice at all*. Streaming services and Plexamp do this for their catalogues or with a media server and a subscription; Gatefold does it for the files on your disk, free, and nothing is uploaded.
+- **foobar2000 underneath.** Gapless playback, every format, ReplayGain, DSP, WASAPI exclusive output, foobar2000's own context menus and all your components keep working. Output, ReplayGain, DSP and the whole Advanced tree are in Gatefold's settings.
+- **Nothing to set up.** One installer brings foobar2000 (if you don't have it), the component, the WebView2 Runtime and the theme, and foobar2000 opens in Gatefold. No fonts to install, no layouts to import, no scripts to edit. Updates install in one click and can be rolled back.
+- **Smart playlists without the query language.** Recently added, most played, forgotten favourites, never played, a genre, a decade, lossless, hi-res, long tracks — pick one, see how many tracks match and a few of them, create. They are real foobar2000 autoplaylists and keep themselves up to date.
+- **A library that looks after itself.** Missing covers are found (iTunes · Deezer · MusicBrainz/Cover Art Archive), low-resolution ones are replaced (with a backup), synced lyrics come from your tags, `.lrc` files or LRCLIB, and genres come from MusicBrainz — even for files with no genre tag.
+- **Private by design.** No account, no telemetry; every network request belongs to a feature you can see and switch off ([Privacy](#privacy)).
+
+| Playlists by how the music sounds | Radio, Similar, genre and mood of the track |
 |---|---|
-| ![Playlist](docs/screenshots/playlist-en.webp) | ![Colour wall](docs/screenshots/colors-en.webp) |
-| **Smart playlists** | **Fixed light theme** |
-| ![Smart playlists](docs/screenshots/smart-en.webp) | ![Light theme](docs/screenshots/now-light-en.webp) |
+| ![Mood playlists](docs/screenshots/sound-smart-en.webp) | ![Now playing with sound analysis](docs/screenshots/sound-now-en.webp) |
+| **Smart playlists without queries** | **Playlist with covers** |
+| ![Smart playlists](docs/screenshots/smart-en.webp) | ![Playlist](docs/screenshots/playlist-en.webp) |
+| **Library by cover colour** | **Fixed light theme** |
+| ![Colour wall](docs/screenshots/colors-en.webp) | ![Light theme](docs/screenshots/now-light-en.webp) |
 
 <sub>Screenshots use placeholder artwork from the test fixtures, not real album covers.</sub>
 
-## Features
+## Everything else
 
-**Looks and listening**
-- **Album-driven colour** — the colour roles are picked from each cover (k-means in OKLab, WCAG contrast). Or a fixed **Dark**, **Light** or **Grey** theme; text size 13–20 px; animations at your monitor's refresh rate.
-- **Now playing** — a large cover that breathes with the bass, a spectrum in the album's colours, format badges (codec, bit depth / sample rate, bitrate, DR, ReplayGain, play count), synced lyrics and up next.
-- **Canvas** — full-screen Now playing with slow motion, lyrics and a clock; it can open on a second monitor.
-- **Synced lyrics** from tags, an `.lrc` next to the track or LRCLIB; click a line to seek, `[` `]` to adjust the timing.
-
-**Your music**
-- **Playlists in four views** (by album, with covers, tiles, compact) with real editing: Shift/Ctrl selection, drag to reorder or onto a sidebar playlist, Delete, Ctrl+Z, Alt+↑/↓.
-- **Library and Artists** — cover grids, album pages, artist photos; albums split by guest artists are merged back. **The colour wall** sorts the library by cover colour and filters by one of twelve named colours.
-- **Smart playlists without the query language** — recently added, most played, forgotten favourites, never played, a genre, a decade, lossless, hi-res, long tracks or your own query; a live count and a few example tracks before you create it. They stay up to date by themselves.
-- **«More like this» radio** — similar artists you actually have, every candidate track measured by its sound so the mood holds; skipped artists come up less.
+- **Playlists in four views** (by album, with covers, tiles, compact) with real editing: Shift/Ctrl selection, drag to reorder or onto a sidebar playlist, Delete, Ctrl+Z (foobar2000's own undo), Alt+↑/↓.
+- **Library and Artists** — cover grids, album pages, artist photos; albums split by guest artists are merged back; the library can be sorted and filtered by cover colour.
+- **Now playing** — a large cover, a spectrum, format badges (codec, bit depth / sample rate, bitrate, DR, ReplayGain, play count), the track's genres and mood, synced lyrics and up next. The interface takes its colours from the cover, or keeps a fixed Dark, Light or Grey theme.
+- **Canvas** — full-screen Now playing, also on a second monitor; a **mini player** above other windows; taskbar buttons and progress; an optional tray icon.
+- **«More like this» radio** without sound analysis too: artists related to the seed that you actually have.
 - **Liked** — a heart in the player and on every row, kept in an ordinary foobar2000 playlist.
-- **Cover art** — finds missing covers (iTunes · Deezer · MusicBrainz/CAA), checks the quality of the ones you have and replaces weak ones (with backups).
-
-**Sound analysis (AI), optional**
-- A neural network (Discogs-EffNet) listens to each track of your library once — on your computer, in the background, at the speed you choose (from Gentle to Maximum). The analysis never leaves your computer.
-- With it the radio and **Similar tracks** pick songs by how they *sound*; smart playlists gain moods — calm, energetic, sad, happy, party, instrumental (no voice at all), acoustic — and genres by sound; Now playing shows the track's genres (MusicBrainz votes, ordered by how the track sounds) and its mood.
-- The models (~30 MB, CC BY-NC-SA 4.0, non-commercial) are downloaded only when you turn it on in Settings → Sound analysis (AI).
-
-**Around the window**
-- ⏮ ⏯ ⏭ ♡ on the taskbar thumbnail, progress on the taskbar button, an optional tray icon with a player menu, and a **mini player** that stays above other windows.
-- **YouTube** — paste a link, or search with your own YouTube Data API key; its own controls, quality, queue, history and mini player. Music pauses while a video plays.
-- **Your foobar2000 stays yours** — right-click opens the native context menu, ☰ the full main menu, and all your components still work. Settings → foobar2000 covers output, ReplayGain, DSP and the whole Advanced tree.
+- **YouTube** — paste a link, or search with your own YouTube Data API key.
 - **English and Russian**, picked from Windows or set in Settings.
-- **One-click updates** from this repository's releases, checksum-verified, with «Restore previous version».
 - **Fun mode** (hidden — click the “Gatefold” title ten times): three interface styles and 45 achievements.
+
+The sound models (~30 MB, CC BY-NC-SA 4.0, non-commercial) are downloaded only when you turn sound analysis on in Settings → Sound analysis (AI); it runs in the background at the speed you choose.
 
 ## Requirements
 

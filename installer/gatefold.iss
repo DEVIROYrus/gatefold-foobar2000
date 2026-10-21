@@ -81,8 +81,8 @@ Name: "en"; MessagesFile: "compiler:Default.isl"
 Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"
 
 [Messages]
-en.WelcomeLabel2=This will set up Gatefold — a modern interface for foobar2000 that takes its colours from your music.%n%nAnything that's missing (foobar2000, the WebView2 UI component, the WebView2 Runtime) is installed or updated automatically.
-ru.WelcomeLabel2=Будет установлен Gatefold — современный интерфейс для foobar2000, который берёт цвета из вашей музыки.%n%nВсё недостающее (foobar2000, компонент WebView2 UI, среда WebView2) установится или обновится автоматически.
+en.WelcomeLabel2=This will set up Gatefold — a modern interface for foobar2000 with radio and mood playlists that go by how your music sounds.%n%nAnything that's missing (foobar2000, the WebView2 UI component, the WebView2 Runtime) is installed or updated automatically.
+ru.WelcomeLabel2=Будет установлен Gatefold — современный интерфейс для foobar2000 с радио и плейлистами по настроению, которые подбирают музыку по звучанию.%n%nВсё недостающее (foobar2000, компонент WebView2 UI, среда WebView2) установится или обновится автоматически.
 
 [CustomMessages]
 en.PlanTitle=What will happen
