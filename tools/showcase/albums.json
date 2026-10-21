@@ -1,0 +1,19 @@
+{
+  "_": "Creative-Commons albums from the Internet Archive used for the README screenshots, the social preview and the demo. pick = 1-based track numbers (in file order); skip = a regex of titles left out.",
+  "albums": [
+    { "id": "nine_inch_nails_the_slip", "artist": "Nine Inch Nails", "album": "The Slip", "year": "2008", "pick": [2, 3, 4, 5, 6, 7, 8, 10] },
+    { "id": "nineinchnails_ghosts_I_IV", "artist": "Nine Inch Nails", "album": "Ghosts I–IV", "year": "2008", "pick": [1, 4, 6, 10, 14, 19, 21, 28, 31, 35] },
+    { "id": "JocoLooksBack", "artist": "Jonathan Coulton", "album": "JoCo Looks Back", "pick": [1, 2, 3, 4, 5, 6, 7, 8, 9] },
+    { "id": "SCL115", "artist": "Kai Engel", "album": "Calls and Echoes", "year": "2014", "pick": [1, 2, 3, 4, 5, 6, 7, 8] },
+    { "id": "Slam_Funk-7603", "artist": "Broke For Free", "album": "Slam Funk", "year": "2010", "skip": "Fuck", "pick": [1, 3, 4, 5, 6, 7, 8, 9] },
+    { "id": "diymAR06", "artist": "Derek Clegg", "album": "Across Town", "year": "2011", "pick": [1, 2, 3, 4, 5, 6, 7, 8] },
+    { "id": "SCL160", "artist": "Tigerberry", "album": "Cold Wave", "year": "2015", "pick": [1, 2, 3, 4, 5, 6, 7, 8] },
+    { "id": "TheBlackDot", "artist": "rolemusic", "album": "The Black Dot", "year": "2017", "pick": [1, 2, 3, 4, 5, 6, 7, 8] },
+    { "id": "csr027", "artist": "Edith Frost", "album": "Demos", "year": "2004", "pick": [1, 2, 3, 4, 5, 6, 7, 8] },
+    { "id": "12rec.026", "artist": "Giraffe", "album": "Giraffe LP", "year": "2005", "pick": [1, 2, 3, 4, 5, 6, 7, 8] },
+    { "id": "NS051", "artist": "Sergi Boal", "album": "Nylon & Turtle", "year": "2012", "pick": [1, 2, 3, 4, 5, 6, 7, 8] },
+    { "id": "hujan018", "artist": "Bottlesmoker", "album": "Let's Die Together in 2012", "year": "2011", "pick": [2, 3, 4, 5, 6, 7, 8, 9] },
+    { "id": "Dune-13188", "artist": "Jahzzar", "album": "Dune", "pick": [1, 2, 3, 5, 6, 7, 8, 9] },
+    { "id": "12rec.054", "artist": "The Sleeping Tree", "album": "Leaves and Roots", "year": "2008", "pick": [1, 2, 3, 4, 5, 6, 7, 8] }
+  ]
+}
