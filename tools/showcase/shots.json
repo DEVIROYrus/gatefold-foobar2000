@@ -249,5 +249,63 @@
     "sleep": 400
    }
   ]
- }
+ },
+ "seekbars": [
+  {
+   "album": "Cold Wave",
+   "prefs": {
+    "style": "bars"
+   },
+   "hover": 0.64,
+   "at": 0.38
+  },
+  {
+   "album": "Calls and Echoes",
+   "prefs": {
+    "style": "solid",
+    "cover": true,
+    "time": "remaining"
+   },
+   "size": [
+    1100,
+    56
+   ],
+   "at": 0.55
+  },
+  {
+   "album": "Slam Funk",
+   "prefs": {
+    "style": "bars",
+    "cover": true
+   },
+   "size": [
+    1100,
+    48
+   ],
+   "at": 0.3
+  },
+  {
+   "album": "Dune",
+   "prefs": {
+    "style": "bars",
+    "colors": "light"
+   },
+   "size": [
+    1100,
+    40
+   ],
+   "at": 0.7
+  },
+  {
+   "album": "Ghosts I–IV",
+   "prefs": {
+    "style": "line"
+   },
+   "size": [
+    1100,
+    34
+   ],
+   "at": 0.45
+  }
+ ]
 }
