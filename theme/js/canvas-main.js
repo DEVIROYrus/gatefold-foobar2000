@@ -10,18 +10,20 @@ import { waitForBridge, call, on, ok, normTrack, artUrl, log } from './bridge.js
 import * as Theme from './theme.js';
 import * as Canvas from './canvas.js';
 import { setFullscreen, unpin } from './winfs.js';
+import { follower } from './position.js';
 
 import { $t } from './i18n.js';
 const S = { track: null, state: 'stopped', pos: 0, dur: 0, t0: performance.now(), art: { available: false, url: '', small: '' } };
 const getPos = () => (S.state === 'playing' ? S.pos + (performance.now() - S.t0) / 1000 : S.pos);
 const setPos = (p, d) => { S.pos = +p || 0; S.t0 = performance.now(); if (d != null && +d > 0) S.dur = +d; };
+const Pos = follower({ set: setPos, get: getPos, playing: () => S.state === 'playing' });
 const stateOf = (v) => { const x = String(v || '').toLowerCase(); return /play/.test(x) && !/pause/.test(x) ? 'playing' : /pause/.test(x) ? 'paused' : 'stopped'; };
 
 const host = {
   standalone: true, fullscreen: false,
   getPos, getDur: () => S.dur || (S.track && S.track.duration) || 0,
   state: () => S.state, track: () => S.track, art: () => S.art,
-  onSeek: (p) => { setPos(p); Canvas.notify('seek'); },
+  onSeek: (p) => { Pos.seeked(p); Canvas.notify('seek'); },
 };
 
 async function loadSprite() {
@@ -62,7 +64,7 @@ async function setTrack(t) {
 async function sync() {
   const [cur, st, pos] = await Promise.all([call('playback.getCurrentTrack'), call('playback.getState'), call('playback.getPosition')]);
   if (ok(st)) S.state = stateOf(st.state);
-  if (ok(pos)) setPos(pos.position, pos.duration);
+  if (ok(pos)) Pos.sample(pos);
   const t = ok(cur) && cur.found !== false ? normTrack(cur.track || cur.playing || cur) : null;
   await setTrack(t);
   Canvas.notify('state');
@@ -71,17 +73,18 @@ async function sync() {
 function bind() {
   on('playback:trackChanged', (d) => { setPos(0); setTrack(normTrack(d)); });
   on('playback:starting', (d) => { if (!d.paused) { S.state = 'playing'; Canvas.notify('state'); } });
-  on('playback:stateChanged', (d) => { if (d.state) S.state = stateOf(d.state); if (d.position != null) setPos(d.position, d.duration); Canvas.notify('state'); });
+  on('playback:stateChanged', (d) => { if (d.state) S.state = stateOf(d.state); if (d.position != null) Pos.sample(d); Canvas.notify('state'); });
   on('playback:paused', (d) => { setPos(getPos()); S.state = d.paused ? 'paused' : 'playing'; Canvas.notify('state'); });
   on('playback:stopped', (d) => { if (!/another|starting/i.test(String(d.reason || ''))) { S.state = 'stopped'; setPos(0); Canvas.notify('state'); } });
-  on('playback:time', (d) => setPos(d.position));
-  on('playback:seeked', (d) => { setPos(d.position); Canvas.notify('seek'); });
+  on('playback:time', Pos.coarse);
+  on('playback:timeHighRes', Pos.fine);
+  on('playback:seeked', (d) => { Pos.seeked(d.position); Canvas.notify('seek'); });
   on('playback:dynamicInfoTrack', (d) => { if (S.track && d.title) { S.track = { ...S.track, title: d.title, artist: d.artist || S.track.artist }; Canvas.notify('track'); } });
   on('playback:edited', (d) => { const t = normTrack(d); if (t) setTrack(t); });
   Theme.onPalette(() => Canvas.notify('palette'));
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') sync(); });
   // events can be missed while the window is hidden; a cheap resync keeps the clock honest
-  setInterval(() => { if (document.visibilityState === 'visible') call('playback.getPosition').then((r) => { if (ok(r) && Math.abs(+r.position - getPos()) > 0.6) { setPos(r.position, r.duration); Canvas.notify('seek'); } }); }, 5000);
+  setInterval(() => { if (document.visibilityState === 'visible') call('playback.getPosition').then((r) => { if (ok(r) && Math.abs(+r.position - getPos()) > 0.6) { Pos.sample(r); Canvas.notify('seek'); } }); }, 5000);
 }
 
 function firstRunTip() {

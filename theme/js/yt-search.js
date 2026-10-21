@@ -103,7 +103,7 @@ async function apiGet(path, params) {
   return j;
 }
 async function apiSearch(q, pageToken) {
-  const s = await apiGet('search', { part: 'snippet', type: 'video', maxResults: 24, q, relevanceLanguage: HL, ...(pageToken ? { pageToken } : {}) });
+  const s = await apiGet('search', { part: 'snippet', type: 'video', maxResults: 24, q, relevanceLanguage: lang === 'zh' ? 'zh-Hans' : lang, ...(pageToken ? { pageToken } : {}) });
   const ids = (s.items || []).map((x) => x.id && x.id.videoId).filter(Boolean);
   const meta = new Map();
   if (ids.length) {

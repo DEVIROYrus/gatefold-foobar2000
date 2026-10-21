@@ -1,3 +1,5 @@
+**1.0.1** — the seekbar follows foobar2000's precise position (~10 Hz, latency-compensated) instead of the once-a-second clock, so it no longer runs ahead or jumps; German, Spanish and Chinese (Simplified).
+
 Two add-ons for **Default UI** and **Columns UI** layouts. You don't need the Gatefold interface for them, only the foo_ui_webview2 component.
 
 - **Gatefold Seekbar** (`gatefold-seekbar-*.zip`): a waveform seekbar in the colours of the playing album. Bars, solid or line style. Album, dark, light or grey colours, on a coloured or transparent background. Click or drag to seek; the wheel steps 5 s.
