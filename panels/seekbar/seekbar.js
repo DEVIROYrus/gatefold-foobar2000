@@ -1,24 +1,94 @@
 /*
- * Gatefold · seekbar-main.js — the seekbar panel (seekbar.html; template «gatefold-seekbar»).
- *
- * A waveform seek bar in the colours of the playing album, for any foobar2000 layout: put a
- * «WebView2 Panel» into Default UI or Columns UI and choose this template for it. It follows
- * playback on its own (own WebView, own bridge), like the mini player.
+ * Gatefold Seekbar — a waveform seek bar in the colours of the playing album, for any foobar2000
+ * layout: a «WebView2 Panel» in Default UI or Columns UI with this template (gatefold-seekbar).
+ * A separate add-on: it needs foo_ui_webview2, not the Gatefold interface. gf/ holds a few
+ * modules copied unchanged from Gatefold (the bridge to foobar2000, the palette maths).
  *
  *   · the waveform comes from the component (audio.generateFullWaveform, cached by it);
- *   · colours: the album palette of the full interface (theme.js), or a fixed dark / light / grey;
+ *   · colours: worked out from the cover (gf/palette-core.js), or a fixed dark / light / grey;
  *   · click or drag to seek, the wheel steps ±5 s (Shift ±30 s), middle click plays / pauses,
  *     ← / → when focused; right click: the panel's settings.
  *   · drawing: three pre-rendered layers (rest, played, hover) composited per frame, and a frame
  *     only when a pixel would change — an idle panel costs nothing.
  */
-import './i18n-boot.js';
-import './input-guard.js';
-import { waitForBridge, call, on, ok, normTrack, artUrl, fmtTime, log } from './bridge.js';
-import { overrideSetting } from './settings.js';
-import * as Theme from './theme.js';
-import { placeholder, popupMenu } from './ui.js';
-import { $t } from './i18n.js';
+import './gf/input-guard.js';
+import { waitForBridge, call, on, ok, normTrack, artUrl, fmtTime, log } from './gf/bridge.js';
+
+/* ---------------------------------------------------------------- language (English / Russian) */
+const RU = {
+  'Seekbar': 'Полоса перемотки', 'Position': 'Позиция', 'No connection to foobar2000': 'Нет связи с foobar2000',
+  'Bars': 'Столбики', 'Solid': 'Сплошная', 'Line': 'Линия', 'Album': 'Из обложки', 'Dark': 'Тёмные', 'Light': 'Светлые', 'Grey': 'Серые',
+  'Colour': 'Цветной', 'Transparent': 'Прозрачный', 'Elapsed / total': 'Прошло / всего', 'Remaining': 'Осталось', 'None': 'Нет',
+  'Style': 'Вид', 'Colours': 'Цвета', 'Background': 'Фон', 'Time': 'Время', 'Show the cover': 'Показывать обложку',
+  'Mouse wheel seeks': 'Колесо мыши перематывает', 'Reset this panel': 'Сбросить настройки панели',
+};
+const LANG = (() => {
+  try { const l = (JSON.parse(localStorage.getItem('aurora.settings.v1') || '{}') || {}).language; if (l === 'ru' || l === 'en') return l; } catch {}
+  for (const l of navigator.languages || [navigator.language || 'en']) { const b = String(l).toLowerCase().split('-')[0]; if (b === 'ru' || b === 'be' || b === 'kk') return 'ru'; if (b === 'en') return 'en'; }
+  return 'en';
+})();
+const $t = (s) => (LANG === 'ru' && RU[s]) || s;
+document.documentElement.lang = LANG;
+
+/* ---------------------------------------------------------------- palettes */
+const PC = window.PaletteCore;
+const pack = ([L, C, h]) => ({ hex: PC.srgbHex(PC.lchToSrgb(L, C, h)) });
+// the fixed themes of Gatefold (OKLCH, contrast-checked there)
+const FIXED = {
+  dark: { dark: true, bg: [0.172, 0.012, 266], surface: [0.207, 0.013, 266], text: [0.93, 0.008, 266], text2: [0.795, 0.012, 266], text3: [0.655, 0.014, 266], accent: [0.74, 0.12, 270], accent2: [0.76, 0.09, 205] },
+  light: { dark: false, bg: [0.972, 0.005, 85], surface: [0.993, 0.003, 85], text: [0.235, 0.012, 266], text2: [0.42, 0.013, 266], text3: [0.53, 0.012, 266], accent: [0.53, 0.17, 268], accent2: [0.56, 0.11, 200] },
+  gray: { dark: true, bg: [0.262, 0.003, 250], surface: [0.298, 0.003, 250], text: [0.94, 0.003, 250], text2: [0.83, 0.003, 250], text3: [0.708, 0.004, 250], accent: [0.88, 0.006, 250], accent2: [0.74, 0.01, 250] },
+};
+const KEYS = ['bg', 'surface', 'text', 'text2', 'text3', 'accent', 'accent2'];
+function fixedPalette(id) { const f = FIXED[id]; const p = { dark: f.dark }; for (const k of KEYS) p[k] = pack(f[k]); return p; }
+const hashStr = (s) => { let x = 2166136261; for (let i = 0; i < s.length; i++) { x ^= s.charCodeAt(i); x = Math.imul(x, 16777619); } return x >>> 0; };
+function synthetic(seed) {   // a stable palette for a track without a cover (hue from the album name)
+  const h = hashStr(seed || 'gatefold') % 360;
+  const mk = (L, C, hh, share) => ({ L, C, h: hh, share, lab: [L, C * Math.cos(hh * Math.PI / 180), C * Math.sin(hh * Math.PI / 180)] });
+  return PC.buildPalette([mk(0.28, 0.05, h, 0.55), mk(0.62, 0.13, (h + 30) % 360, 0.25), mk(0.45, 0.09, (h + 320) % 360, 0.2)], { mode: 'auto', intensity: 1 });
+}
+const palCache = new Map();
+async function albumPalette(url, key) {
+  if (palCache.has(key)) return palCache.get(key);
+  let p = null;
+  try {
+    const bm = await createImageBitmap(await (await fetch(url)).blob(), { resizeWidth: 64, resizeHeight: 64, resizeQuality: 'high' });
+    const c = document.createElement('canvas'); c.width = c.height = 64;
+    const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(bm, 0, 0, 64, 64); bm.close && bm.close();
+    p = PC.buildPalette(PC.analyze(x.getImageData(0, 0, 64, 64).data, 64, 64, {}).clusters, { mode: 'auto', intensity: 1 });
+  } catch (e) {
+    // fb2k:// pixels unreadable: the cover as a data: URL instead
+    const r = await call('artwork.getCurrent', { type: 'front' });
+    if (ok(r) && r.dataUrl && r.dataUrl !== url) return albumPalette(r.dataUrl, key);
+    log('seekbar: palette', e);
+  }
+  if (p) { palCache.set(key, p); if (palCache.size > 40) palCache.delete(palCache.keys().next().value); }
+  return p;
+}
+const palListeners = new Set();
+function applyPalette(p) {
+  const r = document.documentElement.style;
+  r.setProperty('--bg', p.bg.hex); r.setProperty('--surface', p.surface.hex); r.setProperty('--text', p.text.hex);
+  r.setProperty('--text-2', p.text2.hex); r.setProperty('--text-3', p.text3.hex); r.setProperty('--accent', p.accent.hex);
+  document.documentElement.dataset.scheme = p.dark ? 'dark' : 'light';
+  for (const fn of palListeners) fn(p);
+}
+const Theme = { onPalette: (fn) => palListeners.add(fn) };
+let palTok = 0;
+async function themeFor(t, url) {
+  const tok = ++palTok;
+  if (P.colors !== 'album') { applyPalette(fixedPalette(P.colors)); return; }
+  const key = t ? (t.albumArtist || t.artist || '') + '|' + (t.album || '') : 'none';
+  const p = (url && await albumPalette(url, key)) || synthetic(key);
+  if (tok === palTok) applyPalette(p);
+}
+
+/* placeholder cover: a two-hue gradient + initials */
+function placeholder(name, artist) {
+  const hh = hashStr((artist || '') + '|' + (name || '')) % 360;
+  const ini = String(name || '?').replace(/[^\p{L}\p{N} ]/gu, '').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '♪';
+  return { bg: `linear-gradient(135deg, oklch(55% 0.13 ${hh}), oklch(32% 0.09 ${(hh + 50) % 360}))`, ini };
+}
 
 const $ = (id) => document.getElementById(id);
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -225,7 +295,7 @@ async function loadArt(t) {
   const img = $('sbImg');
   img.classList.remove('on');
   if (url) { img.onload = () => img.classList.add('on'); img.onerror = () => img.removeAttribute('src'); img.src = url; } else img.removeAttribute('src');
-  Theme.themeForTrack(t, { available: !!url, url, small: url });
+  themeFor(t, url);
 }
 function setTrack(t) {
   const prev = S.track;
@@ -234,7 +304,7 @@ function setTrack(t) {
   const ph = placeholder(t ? t.album || t.title : 'Gatefold', t ? t.albumArtist || t.artist : '');
   $('sbPh').style.background = ph.bg; $('sbPh').textContent = ph.ini;
   $('sb').classList.toggle('idle', !t);
-  document.title = t ? `${t.title} — ${t.artist} · Gatefold` : $t('Gatefold · Полоса перемотки');
+  document.title = t ? `${t.title} — ${t.artist} · Gatefold` : 'Gatefold · ' + $t('Seekbar');
   track.title = t ? [t.artist, t.title].filter(Boolean).join(' — ') : '';
   if (!t) { wave = null; waveFor = ''; dirty = true; kick(); return; }
   const same = prev && (prev.handle || prev.path) === (t.handle || t.path);
@@ -262,16 +332,16 @@ function applyLook() {
 function setPref(k, v) {
   if (P[k] === v) return;
   P[k] = v; save();
-  if (k === 'colors') { overrideSetting('colorSource', v); Theme.refreshSource(); }
+  if (k === 'colors') themeFor(S.track, $('sbImg').getAttribute('src') || '');
   applyLook();
 }
 
 /* ---------------------------------------------------------------- settings menu (right click) */
 const L = () => ({
-  style: [$t('Столбики'), $t('Сплошная'), $t('Линия')],
-  colors: [$t('Из обложки'), $t('Тёмные'), $t('Светлые'), $t('Серые')],
-  bg: [$t('Цветной'), $t('Прозрачный')],
-  time: [$t('Прошло / всего'), $t('Осталось'), $t('Нет')],
+  style: [$t('Bars'), $t('Solid'), $t('Line')],
+  colors: [$t('Album'), $t('Dark'), $t('Light'), $t('Grey')],
+  bg: [$t('Colour'), $t('Transparent')],
+  time: [$t('Elapsed / total'), $t('Remaining'), $t('None')],
 });
 let menuId = '';
 on('menu:valueChanged', (d) => {
@@ -292,35 +362,44 @@ async function openMenu(e) {
   const l = L();
   const seg = (id, label, list, vals) => ({ id, type: 'segmented', label, value: Math.max(0, vals.indexOf(P[id])), segments: list.map((x) => ({ label: x })) });
   const items = [
-    seg('style', $t('Вид'), l.style, STYLES),
-    seg('colors', $t('Цвета'), l.colors, COLORS),
-    seg('bg', $t('Фон'), l.bg, BGS),
-    seg('time', $t('Время'), l.time, TIMES),
+    seg('style', $t('Style'), l.style, STYLES),
+    seg('colors', $t('Colours'), l.colors, COLORS),
+    seg('bg', $t('Background'), l.bg, BGS),
+    seg('time', $t('Time'), l.time, TIMES),
     { type: 'separator' },
-    { id: 'cover', label: $t('Показывать обложку'), checked: !!P.cover },
-    { id: 'wheel', label: $t('Колесо мыши перематывает'), checked: !!P.wheel },
+    { id: 'cover', label: $t('Show the cover'), checked: !!P.cover },
+    { id: 'wheel', label: $t('Mouse wheel seeks'), checked: !!P.wheel },
     { type: 'separator' },
-    { id: 'reset', label: $t('Сбросить настройки панели') },
+    { id: 'reset', label: $t('Reset this panel') },
   ];
   const d = dpr();
   const r = await call('menu.show', { items, x: Math.round(e.screenX * d), y: Math.round(e.screenY * d), windowModel: 'contentSized', backdrop: 'acrylic', backdropDarkMode: col ? col.dark : true });
   if (ok(r) && r.menuId) { menuId = r.menuId; return; }
-  // an older component: Gatefold's own menu, inside the panel
-  const sub = (id, list, vals) => vals.map((v, i) => ({ id: id + ':' + v, label: list[i], checked: P[id] === v }));
-  const pick = await popupMenu([
-    { id: 'm-style', label: $t('Вид'), children: sub('style', l.style, STYLES) },
-    { id: 'm-colors', label: $t('Цвета'), children: sub('colors', l.colors, COLORS) },
-    { id: 'm-bg', label: $t('Фон'), children: sub('bg', l.bg, BGS) },
-    { id: 'm-time', label: $t('Время'), children: sub('time', l.time, TIMES) },
-    { type: 'sep' },
-    { id: 'cover', label: $t('Показывать обложку'), checked: !!P.cover },
-    { id: 'wheel', label: $t('Колесо мыши перематывает'), checked: !!P.wheel },
-    { type: 'sep' },
-    { id: 'reset', label: $t('Сбросить настройки панели') },
-  ], e.clientX, e.clientY);
-  if (!pick) return;
-  const m = String(pick).match(/^(style|colors|bg|time):(.+)$/);
-  if (m) setPref(m[1], m[2]); else menuAction(pick);
+  // an older component without menu.show: a strip of options over the bar itself
+  inlineOptions();
+}
+function inlineOptions() {
+  document.querySelector('.sb-opts')?.remove();
+  const l = L(), bar = document.createElement('div'); bar.className = 'sb-opts';
+  const lists = { style: STYLES, colors: COLORS, bg: BGS, time: TIMES };
+  const paint = () => {
+    bar.innerHTML = '';
+    for (const [k, vals] of Object.entries(lists)) {
+      const btn = document.createElement('button');
+      btn.textContent = `${$t({ style: 'Style', colors: 'Colours', bg: 'Background', time: 'Time' }[k])}: ${l[k][Math.max(0, vals.indexOf(P[k]))]}`;
+      btn.onclick = () => { setPref(k, vals[(vals.indexOf(P[k]) + 1) % vals.length]); paint(); };
+      bar.append(btn);
+    }
+    for (const k of ['cover', 'wheel']) {
+      const btn = document.createElement('button');
+      btn.textContent = (P[k] ? '✓ ' : '') + $t(k === 'cover' ? 'Show the cover' : 'Mouse wheel seeks');
+      btn.onclick = () => { setPref(k, !P[k]); paint(); };
+      bar.append(btn);
+    }
+    const x = document.createElement('button'); x.textContent = '✕'; x.className = 'x'; x.onclick = () => bar.remove(); bar.append(x);
+  };
+  paint();
+  document.body.append(bar);
 }
 
 /* ---------------------------------------------------------------- input */
@@ -380,13 +459,14 @@ function bind() {
 
 (async function boot() {
   applyLook();
-  if (!(await waitForBridge())) { $('sbCur').textContent = $t('Нет связи с foobar2000'); return; }
+  if (!(await waitForBridge())) { $('sbCur').textContent = $t('No connection to foobar2000'); return; }
   const m = await call('window.getMode');
   S.isPanel = ok(m) && (!!m.panelMode || /^(dui|cui)$/i.test(String(m.mode || '')));
   document.body.classList.toggle('sb-panel', S.isPanel);
   if (S.isPanel) applyLook();
   bind();
-  if (!Theme.current.palette) Theme.refreshSource();
+  track.setAttribute('aria-label', $t('Position'));
   await sync();
+  if (!S.track) themeFor(null, '');
   kick();
 })();
