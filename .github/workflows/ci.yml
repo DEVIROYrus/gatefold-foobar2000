@@ -54,6 +54,7 @@ jobs:
   installer:
     name: Installer — builds
     runs-on: windows-2022
+    permissions: { contents: write }   # the first-start output goes to the ci-log-installer branch
     steps:
       - uses: actions/checkout@v4
       - name: Fetch and verify bundled software
@@ -91,7 +92,19 @@ jobs:
           (Get-Item "$env:ProgramFiles\foobar2000\foobar2000.exe").VersionInfo.FileVersion
       - name: First start opens in Gatefold
         shell: powershell
-        run: .\tools\first-start-check.ps1
+        run: |
+          .\tools\first-start-check.ps1 *>&1 | Tee-Object -FilePath first-start.log
+          if (Select-String -Path first-start.log -Pattern '^ok: ' -Quiet) { exit 0 } else { exit 1 }
+      - name: Publish the output
+        if: always() && github.event_name == 'push'
+        shell: bash
+        run: |
+          mkdir -p /tmp/log && cp first-start.log first-start.png setup.log /tmp/log/ 2>/dev/null || true
+          echo "${{ job.status }} ${GITHUB_SHA} $(date -u +%FT%TZ)" > /tmp/log/STATUS
+          cd /tmp/log && git init -q -b ci-log-installer
+          git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A && git commit -qm "installer ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ci-log-installer
       - name: Setup log
         if: always()
         uses: actions/upload-artifact@v4
