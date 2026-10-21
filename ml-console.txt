@@ -1,0 +1,1 @@
+%c[Gatefold] color:#9cf ml decode mode foobar foobar2000 16 kHz 200 ms native 196 ms
