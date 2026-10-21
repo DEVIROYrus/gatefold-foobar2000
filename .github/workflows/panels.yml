@@ -1,0 +1,50 @@
+# Gatefold panels (panels/): separate add-ons for Default UI / Columns UI layouts. Tested on every
+# change to them; published by hand as their own release (tag panels-v<panels/VERSION>), which never
+# becomes the repository's «latest» release, so Gatefold's in-app update is not affected.
+name: Panels
+on:
+  push:
+    paths: ['panels/**', '.github/workflows/panels.yml']
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish the panels release (tag panels-v<panels/VERSION>)'
+        type: boolean
+        default: false
+permissions:
+  contents: write
+jobs:
+  panels:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Playwright
+        run: |
+          pip install playwright==1.56.0
+          python -m playwright install --with-deps chromium
+      - name: Build and test (headless Chromium, mocked foobar2000 bridge)
+        env: { PYTHONUNBUFFERED: '1' }
+        run: python panels/test.py
+      - name: Archives
+        run: |
+          v=$(cat panels/VERSION)
+          python panels/build.py dist "$v"
+          cd dist && sha256sum gatefold-*.zip > SHA256SUMS.txt && cat SHA256SUMS.txt
+          echo "VERSION=$v" >> $GITHUB_ENV
+      - uses: actions/upload-artifact@v4
+        with: { name: gatefold-panels, path: "dist/*.zip\ndist/SHA256SUMS.txt", retention-days: 14 }
+      - uses: softprops/action-gh-release@v2
+        if: inputs.publish
+        with:
+          tag_name: panels-v${{ env.VERSION }}
+          target_commitish: ${{ github.sha }}
+          name: Gatefold panels ${{ env.VERSION }} — seekbar and covers for Default UI / Columns UI
+          body_path: panels/RELEASE.md
+          make_latest: 'false'
+          files: |
+            dist/gatefold-seekbar-*.zip
+            dist/gatefold-covers-*.zip
+            dist/SHA256SUMS.txt

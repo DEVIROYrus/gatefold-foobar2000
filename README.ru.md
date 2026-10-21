@@ -25,7 +25,24 @@ Gatefold — современный интерфейс для [foobar2000](https
 | **Медиатека по цвету обложек** | **Постоянная светлая тема** |
 | ![Стена по цветам](docs/screenshots/colors-en.webp) | ![Светлая тема](docs/screenshots/now-light-en.webp) |
 
-<sub>На скриншотах — условные обложки из тестовых данных, а не настоящие альбомы.</sub>
+<details><summary><sub>На скриншотах и в видео — настоящие альбомы под лицензиями Creative Commons, проанализированные самим Gatefold.</sub></summary>
+
+- Nine Inch Nails — *The Slip* · [CC BY-NC-SA 3.0 US](https://creativecommons.org/licenses/by-nc-sa/3.0/us/) · [Internet Archive](https://archive.org/details/nine_inch_nails_the_slip)
+- Nine Inch Nails — *Ghosts I–IV* · [CC BY-NC-SA 3.0 US](https://creativecommons.org/licenses/by-nc-sa/3.0/us/) · [Internet Archive](https://archive.org/details/nineinchnails_ghosts_I_IV)
+- Kai Engel — *Calls and Echoes* · [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) · [Internet Archive](https://archive.org/details/SCL115)
+- Broke For Free — *Slam Funk* · [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) · [Internet Archive](https://archive.org/details/Slam_Funk-7603)
+- Derek Clegg — *Across Town* · [CC BY-NC 3.0 US](https://creativecommons.org/licenses/by-nc/3.0/us/) · [Internet Archive](https://archive.org/details/diymAR06)
+- Tigerberry — *Cold Wave* · [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) · [Internet Archive](https://archive.org/details/SCL160)
+- rolemusic — *The Black Dot* · [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) · [Internet Archive](https://archive.org/details/TheBlackDot)
+- Edith Frost — *Demos* · [CC BY-NC 1.0](https://creativecommons.org/licenses/by-nc/1.0/) · [Internet Archive](https://archive.org/details/csr027)
+- Giraffe — *Giraffe LP* · [CC BY-NC-SA 2.5](https://creativecommons.org/licenses/by-nc-sa/2.5/) · [Internet Archive](https://archive.org/details/12rec.026)
+- Sergi Boal — *Nylon & Turtle* · [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) · [Internet Archive](https://archive.org/details/NS051)
+- Bottlesmoker — *Let's Die Together in 2012* · [CC BY-NC-SA 3.0](https://creativecommons.org/licenses/by-nc-sa/3.0/) · [Internet Archive](https://archive.org/details/hujan018)
+- Jahzzar — *Dune* · [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) · [Internet Archive](https://archive.org/details/Dune-13188)
+- The Sleeping Tree — *Leaves and Roots* · [CC BY-NC-SA 3.0 DE](https://creativecommons.org/licenses/by-nc-sa/3.0/de/) · [Internet Archive](https://archive.org/details/12rec.054)
+
+Обложки и названия принадлежат авторам и показаны на условиях этих лицензий. Жанры, настроения и плейлисты на картинках — то, что анализ звука Gatefold сделал из этих записей (`tools/showcase/`).
+</details>
 
 ## Остальное
 
