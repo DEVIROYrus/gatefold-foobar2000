@@ -12,7 +12,8 @@ All notable changes are listed here. Versions follow [Semantic Versioning](https
 - **Tracks without ReplayGain values are measured in the background**, the way the ReplayGain 2.0 scanner measures them: EBU R128 / ITU-R BS.1770-4 loudness with both gates, true peak by 4× oversampling, mono as dual mono, LFE left out. It runs in a worker, gives way to what you are doing and pauses on battery. The standard REPLAYGAIN_* tags are written and read back to check them; the audio is never touched.
 - **Albums are found the careful way:** album tag + album folder (CD1 / Disc 2 sub-folders belong to one album), one title by two album artists in one folder stays two albums, and a compilation stays one.
 - **An album missing an album gain on any of its tracks is measured again as a whole.** Otherwise foobar2000 would fall back to that track's own gain, and the interlude would jump up.
-- **The album that is playing gets its values only when playback leaves it**, and nothing is written in the last seconds before a track change, so loudness never shifts mid-listen.
+- **The album you are listening to comes first:** its playing track is measured before anything else and its tags are written at once, so the following tracks play levelled; when playback moves to another album that is still waiting, that album jumps to the front of the queue. Nothing is written in the last seconds before a track change.
+- **Opus files** get R128_TRACK_GAIN / R128_ALBUM_GAIN (their own standard, RFC 7845) next to the REPLAYGAIN_* fields. The status line counts only the albums that still lack values and names any format whose files do not keep them.
 - **Fast:** several tracks are measured side by side in workers while foobar2000's decoder is kept busy without a break (about as fast as foobar2000 can decode). Only while you are using the computer does it slow down to one track at a time.
 
 **Album details, on request.** An album page stays as it was until you ask for more: the «Details» button, a click on the track count, or the I key (remembered). Then:
@@ -21,7 +22,7 @@ All notable changes are listed here. Versions follow [Semantic Versioning](https
 - **The track list gains columns:** format, bitrate, loudness, DR and plays — only the ones this album has values for, and without the artist column when every track is by the album artist.
 - **It fits any window:** the card narrows to two columns, then becomes one line under a smaller cover, so the track list always keeps its room.
 
-**VU meters read what you hear.** The live stream comes before ReplayGain, so the meters now apply the gain foobar2000 applies to the playing track (the same rules: source, preamp, clipping prevention). A new default for 0 VU, «Auto», takes the reference from the loudness of the album that is playing: the needle swings around −4 VU and reaches the red only on the loudest moments, on a loud modern master and a quiet old record alike. The fixed −18 / −14 / −10 dBFS references are still there.
+**VU meters read what you hear.** The live stream comes before ReplayGain, so the meters now apply the gain foobar2000 applies to the playing track (the same rules: source, preamp, clipping prevention). A new default for 0 VU, «Auto», measures the level of the album that is playing from the very signal the meter shows (a gated running mean: quick to follow a louder stretch, slow to follow a quieter one), so the needle swings around −6 VU and reaches the red only on the loudest moments — on a loud modern master and a quiet old record alike, with or without tags. Hover the meter to see what 0 VU stands for right now. The fixed −18 / −14 / −10 dBFS references are still there.
 
 ## [1.1.1] — hotfix
 

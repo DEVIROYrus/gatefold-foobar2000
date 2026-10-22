@@ -24,6 +24,8 @@
     T('D:\\Music\\Tagged\\01.flac', 'Tagged', 'Old', 'Old', 0.3, { tagged: true }), T('D:\\Music\\Tagged\\02.flac', 'Tagged', 'Old', 'Old', 0.3, { tagged: true }),
     // an album scanned before, then a bonus track added: the old album gain must not stay
     T('D:\\Music\\Partial\\01.flac', 'Partial', 'Pt', 'Pt', 0.2, { stale: true }), T('D:\\Music\\Partial\\02.flac', 'Partial', 'Pt', 'Pt', 0.2, { stale: true }), T('D:\\Music\\Partial\\03 Bonus.flac', 'Partial', 'Pt', 'Pt', 0.4),
+    // Opus: R128_* gains next to the REPLAYGAIN_* fields
+    T('D:\\Music\\OpusAlb\\01.opus', 'Opus Album', 'Op', 'Op', 0.3), T('D:\\Music\\OpusAlb\\02.opus', 'Opus Album', 'Op', 'Op', 0.3),
     // a format whose tags do not keep the values
     T('D:\\Music\\Ape\\01.ape', 'Monkey', 'Ape', 'Ape', 0.2), T('D:\\Music\\Ape\\02.ape', 'Monkey', 'Ape', 'Ape', 0.2),
   ];
@@ -67,6 +69,7 @@
     if (m === 'audio.decodePcm') {
       const t = lib.find((x) => x.absolutePath.toLowerCase() === String(p.path).split('|')[0].toLowerCase());
       if (!t) return base(m, p);
+      if (!(p.start > 0)) (L.decoded = L.decoded || []).push(t.absolutePath);
       const start = p.start || 0, end = Math.min(t.duration, p.end || t.duration);
       if (start >= t.duration) { const taskId = 'lvl_' + (++task); setTimeout(() => window.__emit('audio:pcmFailed', { taskId, code: 'INVALID_PARAMS', error: 'start past the end' }), 5); return ok({ taskId, status: 'pending' }); }
       const n = Math.round((end - start) * SR), buf = new ArrayBuffer(64 + n * 2 * 4);

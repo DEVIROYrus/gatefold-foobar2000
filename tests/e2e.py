@@ -502,6 +502,19 @@ async def test_vu(browser, port):
     c = await pg.evaluate("(() => { const c = document.querySelector('.vu-box canvas'); const d = c.getContext('2d').getImageData(Math.round(c.width * 0.3), Math.round(c.height * 0.35), 1, 1).data; return [...d]; })()")
     check(c[0] < 200 or c[1] < 180, f'«Album colours» repaints the dial {c}')
     if os.environ.get('SHOTS'): await pg.screenshot(path=os.environ['SHOTS'] + '/vu-now.png')
+    # «Auto» 0 VU follows what is played: the needle averages around −6 VU and rarely reaches the red,
+    # however hot the master (the mock stream is a loud, pumping signal)
+    await pg.evaluate("import('/theme/js/settings.js').then(S => S.setSetting('vuStyle', 'classic'))")
+    for gain in (1.0, 3.0):
+        await pg.evaluate(f"window.__streamGain = {gain}"); await pg.wait_for_timeout(7000)
+        vus = []
+        for _ in range(30):
+            d = await pg.evaluate("import('/theme/js/vu.js').then(V => V._debug())"); vus.append(sum(d['vu']) / 2); await pg.wait_for_timeout(100)
+        mean = sum(vus) / len(vus); red = sum(1 for v in vus if v > 1) / len(vus)
+        check(-10.5 < mean < -3.5 and red < 0.15, f'auto 0 VU, stream ×{gain}: mean {mean:.1f} VU, in the red {red:.0%} (ref {d["ref"]:.1f} dBFS)')
+    await pg.evaluate("window.__streamGain = 1")
+    await pg.evaluate("import('/theme/js/settings.js').then(S => S.setSetting('vuCal', -18))"); await pg.wait_for_timeout(300)
+    check((await pg.evaluate("import('/theme/js/vu.js').then(V => V._debug())"))['ref'] == -18, 'a fixed reference is used as it is')
     await pg.evaluate("import('/theme/js/settings.js').then(S => S.setSetting('vuMeters', false))"); await pg.wait_for_timeout(400)
     check(not await pg.evaluate("!!document.querySelector('.vu-box')") and await pg.evaluate("getComputedStyle(document.getElementById('viz')).display") != 'none', 'off again: the spectrum is back')
     check(not errs, f'no page errors {errs[:2]}')
@@ -902,7 +915,7 @@ async def test_level(browser, port):
         ph = await pg.evaluate("import('/theme/js/loudness.js').then(L => L.state.phase)")
         if ph in ('waiting', 'done', 'error'): break
     st = await pg.evaluate("import('/theme/js/loudness.js').then(L => ({ ...L.state }))")
-    check(st['phase'] == 'waiting', f"the playing album waits for playback to leave it ({st['phase']}, {st.get('error')})")
+    check(st['phase'] == 'done', f"done ({st['phase']}, {st.get('error')})")
     T = await pg.evaluate("window.__level.tags")
     g = lambda p, f: float(T.get(p.lower(), {}).get(f, 'nan').split()[0]) if f in T.get(p.lower(), {}) else None
     nd = ['D:\\Music\\Night Drive\\CD1\\01.flac', 'D:\\Music\\Night Drive\\CD1\\02 Interlude.flac', 'D:\\Music\\Night Drive\\CD2\\01.flac']
@@ -925,12 +938,13 @@ async def test_level(browser, port):
     check(len(cl) == 2 and all('Partial' in c for c in cl), f'old values are cleared before the new ones are written (no two album gains in a file) {cl}')
     pk = T.get(nd[0].lower(), {}).get('REPLAYGAIN_ALBUM_PEAK')
     check(pk is not None and 0.49 < float(pk) < 0.52, f'album peak = the loudest true peak of the album ({pk})')
+    op = T.get('d:\\music\\opusalb\\01.opus', {})
+    check(op.get('R128_ALBUM_GAIN') == str(round((float(op.get('REPLAYGAIN_ALBUM_GAIN', 'nan').split()[0]) - 5) * 256)), f'Opus also gets R128_ALBUM_GAIN (Q7.8, −23 LUFS reference) {op}')
     check(st['unwritable'] == 2, f"a format whose tags do not keep the values is counted, not retried ({st['unwritable']})")
     playing = await pg.evaluate("window.__level.playing")
-    check(not any(w.lower() == playing.lower() for w in W), 'the album that is playing is not written yet')
-    await pg.evaluate("window.__emit('playback:trackChanged', { absolutePath: 'D:\\\\Music\\\\Other\\\\x.flac', title: 'x', artist: 'y', album: 'z', duration: 100 })"); await pg.wait_for_timeout(2500)
-    W = await pg.evaluate("window.__level.writes.map(w => w.path)")
-    check(any(w.lower() == playing.lower() for w in W), 'once playback moves on, the album gets its values')
+    dec = await pg.evaluate("window.__level.decoded")
+    check(dec and dec[0].lower() == playing.lower(), f'the playing track is measured first {dec[:2]}')
+    check(any(w.lower() == playing.lower() for w in W), 'the playing album gets its values at once (its next tracks play levelled)')
     txt = await pg.inner_text('#lvlStatus')
     check('failed: 2' in txt, f'the status line counts what could not be written ({txt!r})')
     # off: foobar2000's settings come back

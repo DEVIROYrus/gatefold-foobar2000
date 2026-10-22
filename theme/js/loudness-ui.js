@@ -22,18 +22,20 @@ function statusHtml() {
   if (!settings.levelScan) return $t('Выравниваются треки с метками ReplayGain');
   const bar = (p) => `<span class="snd-bar"><i style="width:${Math.max(2, Math.min(100, p * 100)).toFixed(1)}%"></i></span>`;
   const bad = s.failed + s.unwritable;
-  const tail = bad ? ` · <span class="sp-bad" title="${esc($t('Эти файлы не удалось прочитать или записать: они звучат с предусилением для треков без меток'))}">${$t('не удалось: {0}', bad)}</span>` : '';
+  const nw = (s.nowrite || []).length ? ` · <span class="sp-bad" title="${esc($t('foobar2000 не сохраняет метки ReplayGain в файлах этого формата'))}">${$t('без меток: {0}', s.nowrite.map((x) => '.' + x).join(', '))}</span>` : '';
+  const tail = nw + (bad ? ` · <span class="sp-bad" title="${esc($t('Эти файлы не удалось прочитать или записать: они звучат с предусилением для треков без меток'))}">${$t('не удалось: {0}', bad)}</span>` : '');
   switch (s.phase) {
     case 'off': case 'idle': return $t('Подготовка…');
     case 'scanning': return $t('Ищу треки без меток ReplayGain…');
     case 'error': return `<span class="sp-bad">${s.error === 'LIBRARY' ? $t('Медиатека не настроена — добавьте папку с музыкой') : esc(s.error)}</span>`;
     case 'waiting': return $t('Альбом, который играет, получит метки, когда закончится') + tail;
-    case 'done': return (s.albums ? $t('Готово: выровнено альбомов — {0}', s.albumsDone.toLocaleString()) : $t('Готово: у всех треков есть метки')) + tail;
+    case 'done': return $t('Готово: у всех альбомов есть метки') + (s.albums ? ` · ${$t('выровнено сейчас: {0}', s.albumsDone.toLocaleString())}` : '') + tail;
     default: {
       const left = Math.max(0, s.secondsTotal - s.secondsDone);
       const eta = left && s.rate ? left / s.rate : 0;
       const etaTxt = eta > 5400 ? $t('≈ {0} ч', Math.round(eta / 3600)) : eta > 90 ? $t('≈ {0} мин', Math.round(eta / 60)) : '';
-      let t = $t('Анализ: {0} из {1} альбомов', s.albumsDone.toLocaleString(), s.albums.toLocaleString()) + (etaTxt ? ' · ' + etaTxt : '');
+      // only the albums that still lack ReplayGain values are counted: the rest of the library already has them
+      let t = `<span title="${esc($t('Альбомы, у которых уже есть метки ReplayGain, анализировать не нужно'))}">${$t('Анализ: {0} из {1} альбомов без меток', s.albumsDone.toLocaleString(), s.albums.toLocaleString())}</span>` + (etaTxt ? ' · ' + etaTxt : '');
       if (s.phase === 'paused') t += ' · ' + (s.why === 'battery' ? $t('пауза: батарея') : $t('пауза'));
       const cur = s.current && s.phase !== 'paused' ? `<br><span class="dim">${esc(s.current)}</span>` : '';
       return t + tail + cur + bar(s.secondsTotal ? s.secondsDone / s.secondsTotal : 0);
@@ -86,7 +88,7 @@ export function settingsSection({ section, group, actions, button, rerender }) {
 
   const busy = settings.levelScan && !['done', 'off', 'error'].includes(Loud.state.phase);
   const acts = settings.levelScan ? actions(
-    busy ? button(settings.levelPaused ? $t('Продолжить') : $t('Пауза'), () => { Loud.pause(!settings.levelPaused); setTimeout(rerender, 30); }) : null,
+    busy ? button(settings.levelPaused ? $t('Продолжить') : $t('Пауза\u0004action'), () => { Loud.pause(!settings.levelPaused); setTimeout(rerender, 30); }) : null,
     button($t('{0}Проверить медиатеку', icon('refresh')), () => { Loud.start(); Loud.rescan(); toast($t('Ищу треки без меток ReplayGain…')); }),
   ) : null;
 

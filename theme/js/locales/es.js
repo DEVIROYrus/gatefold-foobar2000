@@ -1000,9 +1000,6 @@ export default {
  "Подготовка…": "Preparando…",
  "Ищу треки без меток ReplayGain…": "Buscando pistas sin etiquetas ReplayGain…",
  "Альбом, который играет, получит метки, когда закончится": "El álbum que suena recibirá sus etiquetas cuando termine",
- "Готово: выровнено альбомов — {0}": "Hecho: álbumes nivelados — {0}",
- "Готово: у всех треков есть метки": "Hecho: todas las pistas tienen sus etiquetas",
- "Анализ: {0} из {1} альбомов": "Analizando: {0} de {1} álbumes",
  "Выравнивать громкость": "Nivelar el volumen",
  "foobar2000 не принял настройки ReplayGain": "foobar2000 no aceptó los ajustes de ReplayGain",
  "Громкость выравнивается. Треки без меток ReplayGain проанализируются в фоне": "La nivelación del volumen está activada. Las pistas sin etiquetas ReplayGain se analizan en segundo plano",
@@ -1041,5 +1038,12 @@ export default {
  "Диски": "Discos",
  "Громкость трека по EBU R128, из значения ReplayGain": "Sonoridad de la pista según EBU R128, a partir del valor ReplayGain",
  "Подробнее об альбоме (I)": "Detalles del álbum (I)",
- "Подробнее\u0004album": "Detalles"
+ "Подробнее\u0004album": "Detalles",
+ "Пауза\u0004action": "Pausa",
+ "foobar2000 не сохраняет метки ReplayGain в файлах этого формата": "foobar2000 no guarda etiquetas ReplayGain en archivos de este formato",
+ "без меток: {0}": "sin etiquetas: {0}",
+ "Альбомы, у которых уже есть метки ReplayGain, анализировать не нужно": "Los álbumes que ya tienen etiquetas ReplayGain no necesitan análisis",
+ "Анализ: {0} из {1} альбомов без меток": "Analizando: {0} de {1} álbumes sin etiquetas",
+ "Готово: у всех альбомов есть метки": "Hecho: todos los álbumes tienen sus etiquetas",
+ "выровнено сейчас: {0}": "nivelados ahora: {0}"
 };

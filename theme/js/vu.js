@@ -13,6 +13,7 @@
  */
 import * as Viz from './viz.js';
 import * as RG from './rg-now.js';
+import { $t, num } from './i18n.js';
 import { settings, onSettings } from './settings.js';
 import { onPalette } from './theme.js';
 import * as Canvas from './canvas.js';
@@ -144,21 +145,46 @@ function cap(c, w, h, lamps) {
 const ZETA = 0.81, OMEGA = 2 * Math.PI * 2.1;                // 99 % in ~300 ms, ~1.5 % overshoot
 /* What is played, not what is decoded: the stream comes before ReplayGain, so the gain foobar2000
    applies to this track is put back in (rg-now.js).
-   0 VU: a sine at a fixed level (−18 / −14 / −10 dBFS), or «Auto» — from the loudness of the album
-   that is playing (its ReplayGain value, after the gain): the needle then swings around −4 VU and
-   reaches the red on the loudest moments, on a modern master and a quiet 1970s record alike. */
+   0 VU: a sine at a fixed level (−18 / −14 / −10 dBFS), or «Auto»: the level of the album that is
+   playing, measured from the very signal the meter shows while it plays — a gated running mean
+   (silence and quiet passages do not pull it down), quick for the first seconds, then quick to
+   follow a louder stretch (≈ 4 s) and slow to follow a quieter one (≈ 20 s), so the album's own
+   quiet moments stay visible. It does not depend on tags or settings:
+   whatever reaches the meter, the needle swings around −6 VU and touches the red only on the
+   loudest moments, on a modern master and a quiet 1970s record alike. Before anything has been
+   measured it starts from the album's ReplayGain loudness, or from the previous album. */
+const AUTO_OFFSET = 6;
+const AR = { key: null, db: null, t: 0 };       // album, running level (dB, per-channel sine-peak scale), seconds measured
+function feed(r, dt) {
+  if (RG.now.album !== AR.key) {
+    AR.key = RG.now.album; AR.t = 0;
+    if (RG.now.lufs != null) AR.db = RG.now.lufs + RG.now.db;           // a head start from the tags (≈ the same scale)
+  }
+  const g = RG.now.gain, p = (r[0] * r[0] + r[1] * r[1]) * g * g;      // L² + R² = (rms·√2)² for a centred signal
+  if (!(p > 1e-6)) return;                                               // silence (below −60 dB)
+  const db = 10 * Math.log10(p);
+  if (AR.db != null && db < AR.db - 12) return;                          // relative gate: a quiet passage is not the album's level
+  AR.t += dt;
+  // quick at first; then a louder stretch is followed within seconds (no long run in the red), a
+  // quieter one only slowly (the album's quiet moments stay quiet on the dial)
+  const tau = AR.t < 6 ? 1.5 : db > AR.db + 3 ? 4 : 20;
+  AR.db = AR.db == null ? db : 10 * Math.log10(10 ** (AR.db / 10) + (p - 10 ** (AR.db / 10)) * Math.min(1, dt / tau));
+}
+let lastVu = [-60, -60];
+/** for the tests: the reference, the running album level and the last readings (VU dB) */
+export const _debug = () => ({ ref: ref(), level: AR.db, vu: lastVu.slice() });
 function ref() {
   const v = settings.vuCal;
   if (v !== 'auto' && Number.isFinite(+v)) return +v;
-  if (RG.now.lufs == null) return -10;                                   // no ReplayGain values: right for most modern masters
-  return Math.max(-26, Math.min(-4, RG.now.lufs + RG.now.db + 7));
+  const base = AR.db != null ? AR.db : RG.now.lufs != null ? RG.now.lufs + RG.now.db : -14;
+  return Math.max(-30, Math.min(-2, base + AUTO_OFFSET));
 }
 const toVu = (rms) => (rms > 1e-6 ? 20 * Math.log10(rms * RG.now.gain * Math.SQRT2) - ref() : -60);   // a sine's RMS × √2 = its peak
-function targets() {
+function targets(dt) {
   RG.follow();                                     // once, when a meter first shows
   if (!Viz.progressState.playing) return [0, 0];
   const r = Viz.channelRms();
-  if (r) return [frac(toVu(r[0])), frac(toVu(r[1]))];
+  if (r) { feed(r, dt); lastVu = [toVu(r[0]), toVu(r[1])]; return [frac(lastVu[0]), frac(lastVu[1])]; }
   // no live PCM (host FFT): follow the spectrum, the same on both sides
   const s = Viz.signals();
   if (!s.live) return [0, 0];
@@ -196,7 +222,13 @@ function frame(now) {
   const live = visible();
   if (!live.length || !settings.vuMeters || document.visibilityState === 'hidden') { last = 0; return; }
   const dt = Math.min(0.05, last ? (now - last) / 1000 : 0.016); last = now;
-  const tg = targets();
+  const tg = targets(dt);
+  // the reference on hover: what 0 VU stands for right now
+  if (now - (frame.titleAt || 0) > 1000) {
+    frame.titleAt = now;
+    const t = `${settings.vuCal === 'auto' ? $t('Авто') + ' · ' : ''}0 VU = ${num(ref(), { maximumFractionDigits: 1 }).replace(/^-/, '−')} dBFS`;
+    for (const x of live) if (x.box.title !== t) x.box.title = t;
+  }
   let moving = Viz.progressState.playing;
   for (const x of live) for (const m of x.m) {
     const r = m.cv.getBoundingClientRect(), d = DPR();
