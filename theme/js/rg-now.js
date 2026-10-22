@@ -12,10 +12,11 @@
  *
  *   now.gain   linear factor (1 when ReplayGain does nothing)
  *   now.lufs   loudness of the track / album before the gain, from its ReplayGain value (null if unknown)
+ *   now.album  which album is playing (album artist + album)
  */
 import { call, ok, on } from './bridge.js';
 
-export const now = { gain: 1, lufs: null, db: 0 };
+export const now = { gain: 1, lufs: null, db: 0, album: '' };
 let wired = false, seq = 0, cfg = null, order = 0;
 
 async function refresh() {
@@ -31,7 +32,7 @@ async function refresh() {
     rg = ok(r) && r.results && r.results[0] && r.results[0].success ? r.results[0] : null;
   }
   if (my !== seq) return;
-  Object.assign(now, compute(cfg, order, rg));
+  Object.assign(now, compute(cfg, order, rg), { album: t ? `${t.albumArtist || t.artist || ''}\u0001${t.album || ''}` : '' });
 }
 
 /** foobar2000's ReplayGain scale for one track's values */

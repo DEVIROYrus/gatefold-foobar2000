@@ -40,7 +40,7 @@ export const MODES = ['album', 'auto', 'track'];
 const SOURCE = { album: 'album', auto: 'auto', track: 'track' };
 const PREV = 'gatefold.level.prev';            // foobar2000's ReplayGain settings before levelling
 const FAIL = 'level.fail.v1';                  // track key → time of a failed measurement or write
-const NOWRITE = 'gatefold.level.nowrite';       // file extensions whose tags did not keep the values
+const NOWRITE = 'gatefold.level.nowrite.v2';  // (v2: Opus gets its R128_* tags too, so earlier verdicts are dropped)       // file extensions whose tags did not keep the values
 const RETRY = 30 * 864e5;
 
 export const events = new EventTarget();
@@ -258,7 +258,7 @@ let emitT = 0;
 const emitSoon = () => { if (!emitT) emitT = setTimeout(() => { emitT = 0; emit(); }, 250); };
 
 /* ---------------------------------------------------------------- the run */
-let running = false, alive = false, playingKey = '';
+let running = false, alive = false, playingKey = '', RUNQ = null;
 const deferred = new Map();      // album key → the job waiting for playback to leave the album
 
 export function start() {
@@ -288,7 +288,9 @@ async function run() {
     const tracks = (ok(r) && r.tracks || []).filter((t) => t.absolutePath && !/^[a-z]+:\/\//i.test(t.absolutePath) && (+t.duration || 0) >= 0);
     const { T, A } = await missing(tracks);
     const now = Date.now();
-    const groups = groupAlbums(tracks).filter((g) => g.tracks.some((t) => {
+    const all = groupAlbums(tracks);
+    state.libAlbums = all.length; state.nowrite = nowrite.slice();
+    const groups = all.filter((g) => g.tracks.some((t) => {
       const k = keyOf(t);
       return (T.has(k) || A.has(k)) && !(failed[k] && now - failed[k] < RETRY) && !nowrite.includes(extOf(t.absolutePath));
     }));
@@ -319,8 +321,9 @@ async function measureAll(groups, T, A, nowrite) {
   let writing = Promise.resolve();
   const deliver = (job) => {
     if (!job) return;
-    if (job.items.some((it) => it.key === playingKey)) { deferred.set(job.key, job); state.deferred = deferred.size; return; }
-    writing = writing.then(() => (running ? write(job, nowrite) : null)).then(() => flushDeferred(nowrite));
+    // written at once, the playing album too: its next tracks then play levelled (the one playing
+    // now gets its values in the middle of playback — foobar2000 applies them from its next start)
+    writing = writing.then(() => (running ? write(job, nowrite) : null));
   };
   const queue = [];
   for (const g of groups) {
@@ -334,9 +337,21 @@ async function measureAll(groups, T, A, nowrite) {
       continue;
     }
     const job = { g, results: new Array(g.tracks.length).fill(null), left: g.tracks.length };
-    g.tracks.forEach((t, i) => queue.push({ job, t, i }));
+    const items = g.tracks.map((t, i) => ({ job, t, i }));
+    items.sort((a, b) => (keyOf(b.t) === playingKey) - (keyOf(a.t) === playingKey));   // the playing track first
+    queue.push(...items);
   }
   let qi = 0;
+  // playback moved to an album that is still waiting: it goes to the front of the queue
+  RUNQ = {
+    bump(key) {
+      const rest = queue.slice(qi), mine = rest.filter((it) => it.job.g.tracks.some((t) => keyOf(t) === key));
+      if (!mine.length) return false;
+      mine.sort((a, b) => (keyOf(b.t) === key) - (keyOf(a.t) === key));
+      queue.splice(qi, rest.length, ...mine, ...rest.filter((it) => !mine.includes(it)));
+      return true;
+    },
+  };
   const lane = async (k) => {
     while (running && qi < queue.length) {
       while (running && await onBattery()) { setPhase('paused', 'battery'); await waitWake(60000); }
@@ -359,7 +374,17 @@ async function measureAll(groups, T, A, nowrite) {
     }
   };
   await Promise.all(Array.from({ length: LANES }, (_, k) => lane(k)));
+  RUNQ = null;
   await writing;
+}
+
+/* Opus keeps its loudness in R128_TRACK_GAIN / R128_ALBUM_GAIN (RFC 7845): Q7.8 dB relative to
+   −23 LUFS, i.e. the ReplayGain value − 5 dB. Written next to the REPLAYGAIN_* fields, the same values. */
+function r128(t, tags) {
+  if (extOf(t.absolutePath) !== 'opus') return;
+  const q = (v) => String(Math.round((parseFloat(v) - 5) * 256));
+  if (tags.REPLAYGAIN_TRACK_GAIN) tags.R128_TRACK_GAIN = q(tags.REPLAYGAIN_TRACK_GAIN);
+  if (tags.REPLAYGAIN_ALBUM_GAIN) tags.R128_ALBUM_GAIN = q(tags.REPLAYGAIN_ALBUM_GAIN);
 }
 
 /** the tags for a measured album → a write job, or null */
@@ -375,10 +400,11 @@ function albumTags({ g, results }, T, A) {
     const tags = {}, tg = gainOf(r.lufs), k = keyOf(t);
     if (tg != null) { tags.REPLAYGAIN_TRACK_GAIN = fmtGain(tg); tags.REPLAYGAIN_TRACK_PEAK = fmtPeak(r.truePeak); }
     if (al.gain != null) { tags.REPLAYGAIN_ALBUM_GAIN = fmtGain(g.single && tg != null ? tg : al.gain); tags.REPLAYGAIN_ALBUM_PEAK = fmtPeak(g.single ? r.truePeak : al.peak); }
+    r128(t, tags);
     if (Object.keys(tags).length) items.push({ path: pathOf(t), key: k, tags, had: !T.has(k) || !A.has(k) });
   });
   // a track that could not be measured still belongs to the album: the album values
-  g.tracks.forEach((t, i) => { if (!results[i] && al.gain != null && !failed[keyOf(t)]) items.push({ path: pathOf(t), key: keyOf(t), tags: { REPLAYGAIN_ALBUM_GAIN: fmtGain(al.gain), REPLAYGAIN_ALBUM_PEAK: fmtPeak(al.peak) } }); });
+  g.tracks.forEach((t, i) => { if (!results[i] && al.gain != null && !failed[keyOf(t)]) { const tags = { REPLAYGAIN_ALBUM_GAIN: fmtGain(al.gain), REPLAYGAIN_ALBUM_PEAK: fmtPeak(al.peak) }; r128(t, tags); items.push({ path: pathOf(t), key: keyOf(t), tags }); } });
   return items.length ? { key: g.key, items, album: al } : null;
 }
 
@@ -460,9 +486,12 @@ export function init() {
   on('playback:trackChanged', (d) => {
     const p = d && (d.absolutePath || d.path);
     playingKey = p ? (d.subsong > 0 ? `${p}|subsong:${d.subsong}` : p).toLowerCase() : '';
-    if (deferred.size) wakeUp();
+    if (!settings.level || !settings.levelScan || !playingKey) return;
+    if (RUNQ) { RUNQ.bump(playingKey); return; }
+    // between runs: a track without an album gain (newly added music) starts a new look at once
+    if (alive) call('replaygain.get', { paths: [p] }).then((r) => { const x = ok(r) && r.results && r.results[0]; if (x && x.success && x.albumGainRaw == null) wakeUp(); });
   });
-  on('playback:stopped', () => { playingKey = ''; if (deferred.size) wakeUp(); });
+  on('playback:stopped', () => { playingKey = ''; });
   // ReplayGain switched off in foobar2000's own preferences: levelling is off too
   on('audio:replaygainModeChanged', (d) => {
     if (!settings.level) return;
