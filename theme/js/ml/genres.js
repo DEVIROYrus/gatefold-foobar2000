@@ -167,4 +167,17 @@ export function describe(t, rec, n = 2, { neighbours = true } = {}) {
 }
 function dedupe(list) { const seen = new Set(); return list.filter((x) => { const k = nk(x.name); if (seen.has(k)) return false; seen.add(k); return true; }); }
 export const known = (artist) => !!(D.a[aKey(artist)] || {}).g?.length;
+/** an artist's MusicBrainz genres: genre → 0…1 (by votes), or null when MusicBrainz has none (yet) */
+export function artistGenres(artist) {
+  const a = D.a[aKey(artist)];
+  if (!a || !a.g || !a.g.length) return null;
+  const mx = a.g[0][1] || 1;
+  return new Map(a.g.map(([n, c]) => [nk(n), c / mx]));
+}
+/** the artist's MusicBrainz id, when it has been looked up */
+export const artistMbid = (artist) => (D.a[aKey(artist)] || {}).id || '';
+/** genre names the way artistGenres() keys them; your own tags without the words that say nothing */
+export const genreKey = nk;
+export const specificTags = (tag) => tagGenres(tag).map(nk);
+export const whenLoaded = () => load();
 export const ready = () => loaded;

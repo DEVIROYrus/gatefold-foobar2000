@@ -93,7 +93,7 @@ Gatefold has **no telemetry** and no accounts. The only network requests it make
 |---|---|---|
 | Cover art | iTunes Search API, Deezer API, MusicBrainz / Cover Art Archive | Albums without art (automatic search can be turned off) |
 | Artist photos | Deezer, MusicBrainz / Wikidata | The Artists screen (can be turned off) |
-| «More like this» radio | Deezer (related artists, by name) | Only when you start a radio |
+| «More like this» radio | Deezer (related artists and their best-known songs, by name), MusicBrainz (the artist's id), ListenBrainz (artists listened to together, by that id) | Only when you start a radio; answers are kept for two weeks |
 | Lyrics | LRCLIB | Tracks without lyrics in tags or files |
 | YouTube | youtube-nocookie.com player; Google API when you use your own key | Only on the YouTube screen |
 | Update check | api.github.com, github.com (release downloads) | Every 12 hours and when you press *Check now* (can be turned off) |

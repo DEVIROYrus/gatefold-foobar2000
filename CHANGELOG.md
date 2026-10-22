@@ -12,6 +12,15 @@ All notable changes are listed here. Versions follow [Semantic Versioning](https
 
 **Every tooltip in the interface language.** Since 1.1.0 the language file loads in the background, and the module that turns `title` into the theme's own tooltips could run first and keep the Russian text: the play button said «Воспроизведение / пауза (Пробел)» in an English interface, and so did many other buttons, in the main window and in the mini player. The tooltips now wait for the language, and the tests read every tooltip on every screen, with the language file arriving late on purpose.
 
+**A much more accurate radio.** «Radio» on Now Playing could start from the wrong song: the button kept the track that was playing when the cover last changed, so within one album it was always the first song played. And the radio let the neural sound analysis bring in artists on its own — a K-pop or J-rock song mixed like a Finnish rock song came on — and filled 25 tracks at any cost. Now:
+
+- **The radio is the track's**: it starts from the song playing when you press the button, is named after it («Radio: Still Standing — The Rasmus») and is steered by its sound.
+- **Who comes on is decided by people first:** Deezer's related artists (and the ones several of them agree on), **ListenBrainz** (artists listened to in the same sessions), and **your own playlists** — each can only add, and sources that agree count more. Then by the content: **MusicBrainz genres** of every artist (rare shared genres weigh most), the sound as a **percentile of your library**, and the **Discogs styles** the network hears, compared as distributions. An artist only the sound points to must match on everything, and never against the genre.
+- **What is played of an artist:** the song closest in sound to the seed, weighed with how well known it is (the artist's top tracks on Deezer) and how often you play it. A track is only chosen once it has been listened to. **Remixes, live versions, demos, karaoke, intros and interludes stay out** (unless the seed is one), and the same song on another album does not come twice.
+- **Order:** the first tracks come from the closest artists, then the circle widens; the seed's artist returns about every sixth track; at most three tracks of an artist in 25; artists whose songs keep sounding off, or that you skip, fade out — and so does music that sounds like what you skipped. When nothing fitting is left, the radio says so and stops instead of playing anything.
+- **«Why is this track on the radio?»** in a radio track's menu names the reasons.
+- Answers from the services are kept for two weeks, so a radio of the same artist starts at once.
+
 **Escape closes an open menu in the YouTube view** instead of also leaving the view.
 
 ## [1.2.0] — volume levelling, album details

@@ -1059,5 +1059,15 @@ export default {
  "Обычные": "Normal",
  "Крупные": "Large",
  "Очень крупные": "Extra large",
- "Субтитры появятся, когда начнётся видео": "Subtitles become available once the video starts"
+ "Субтитры появятся, когда начнётся видео": "Subtitles become available once the video starts",
+ "Почему этот трек в радио?": "Why is this track on the radio?",
+ "Похожей музыки в медиатеке больше нет — радио на этом остановится": "Nothing else in your library fits — the radio stops here",
+ "исполнитель, с которого началось радио": "the artist the radio started from",
+ "похожий исполнитель на Deezer": "a related artist on Deezer",
+ "его называют похожим несколько похожих исполнителей": "several related artists point to it",
+ "его слушают вместе с исполнителем радио (ListenBrainz)": "listened to together with the radio's artist (ListenBrainz)",
+ "стоит рядом в ваших плейлистах": "next to it in your playlists",
+ "звучит похоже": "sounds alike",
+ "один из самых известных треков исполнителя": "one of the artist's best-known songs",
+ "общие жанры: {0}": "shared genres: {0}"
 };

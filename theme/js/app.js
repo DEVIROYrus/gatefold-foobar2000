@@ -425,8 +425,10 @@ function renderNpActions() {
   if (t.album) btn($t('{0}Альбом', icon('grid')), openNpAlbum).id = 'npAlbumBtn';
   function openNpAlbum() { openTrackAlbum(t); }
   if (!app.art.available && t.album) btn($t('{0}Найти обложку', icon('image')), () => router.go('covers', { manual: CF.jobFromTrack(t) }), 'primary');
-  if (t.artist) btn($t('{0}Радио', icon('sparkle')), () => Radio.start(t));
-  if (settings.soundAI) btn($t('{0}Похожие', icon('queue')), () => SoundUI.similar(t));
+  // the track playing when the button is pressed: these buttons are drawn when the cover changes,
+  // so within one album `t` would still be the first track that played (the radio then started from it)
+  if (t.artist) btn($t('{0}Радио', icon('sparkle')), () => app.track && Radio.start(app.track));
+  if (settings.soundAI) btn($t('{0}Похожие', icon('queue')), () => app.track && SoundUI.similar(app.track));
   btn(`${icon('more')}`, () => call('menu.showNativePopup', { mode: 'nowPlaying' }));
 }
 
@@ -817,6 +819,7 @@ Lib.shared.onPlayAlbum = () => { if (router.current !== 'now') toast($t('Вос�
   Welcome.init();
   Radio.init({ getAllAlbums: Lib.getAllAlbums });
   Lib.shared.radioFor = (t) => Radio.start(t);
+  Lib.shared.radioWhy = (t) => Radio.why(t);
   Lib.shared.radioActive = () => Radio.active();
   Lib.shared.radioBan = (name) => Radio.ban(name);
   Lib.shared.similarFor = (t) => SoundUI.similar(t);

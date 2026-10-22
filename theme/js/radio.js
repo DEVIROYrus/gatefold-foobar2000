@@ -1,21 +1,20 @@
 /*
  * Gatefold · radio.js — «More like this»: an endless radio made only of your own files.
  *
- * Who: similar artists from Deezer's public «related artists» (no key; the service the artist
- * photos already use), one step further too — the related artists of the closest related ones —
- * and only those present in the library count. Genre neighbours fill in when that finds little,
- * but a genre almost every artist has («Metal», «Rock») says nothing and is ignored; rare, specific
- * genres weigh most.
- * How it sounds: tags put sad gothic doom and frantic mathcore under the same word, so the tracks
- * are chosen by how they sound. With «Sound analysis (AI)» on (ml/sound.js), every track has a
- * neural-network embedding and mood estimates: artists that *sound* like the seed join the
- * candidates even when no service relates them, and of each artist the track closest to the
- * seed's sound is played (all analysed tracks are compared, not a sample). Without it, a few
- * candidate tracks are measured on the spot (vibe.js: loudness, dynamics, brightness, attack, key).
- * Artists whose tracks keep sounding different fade out of the rotation, and so do artists whose
- * tracks you skip in the first 30 seconds; no artist gets more than 4 of any 25 tracks.
- * The first track plays at once; the rest is found while it plays and appended, and the playlist
- * is topped up whenever playback gets near its end.
+ * Started from a track (Now Playing, a playlist row) the radio is that track's — named after it,
+ * steered by its sound — and from an artist it is the artist's. This module gathers the facts;
+ * radio-core.js decides (see there for how). The facts:
+ *   people     Deezer's related artists (and the ones several of them agree on), ListenBrainz's
+ *              artists listened to in the same sessions (by MusicBrainz id), your own playlists;
+ *   genres     MusicBrainz genres of every artist (ml/genres.js looks them up in the background),
+ *              or your own genre tags when it has none;
+ *   sound      with «Sound analysis (AI)»: the distance of every analysed track to the seed, read as
+ *              a percentile of your whole library, and the Discogs styles the network hears;
+ *              without it, a few tracks of each artist are measured on the spot (vibe.js);
+ *   tracks     an artist's best-known songs (its top tracks on Deezer) and your play counts.
+ * Answers from the services are kept for two weeks, so the next radio of the artist starts at once.
+ * The seed plays at once; the rest is found while it plays and appended, and the playlist is topped
+ * up whenever playback gets near its end.
  */
 import { call, ok, on, esc, log } from './bridge.js';
 import { router, toast } from './ui.js';
@@ -23,14 +22,17 @@ import { getJSON } from './coverfetch.js';
 import { norm, cleanArtist, similarity, isVarious } from './match.js';
 import * as Vibe from './vibe.js';
 import * as Sound from './ml/sound.js';
+import * as Genres from './ml/genres.js';
+import * as IDB from './idb.js';
+import * as Core from './radio-core.js';
+import { NAME as LIKED } from './likes.js';
 import { $t } from './i18n.js';
 
 let deps = null;                              // { getAllAlbums }
-const R = { guid: '', seed: null, pool: null, played: new Set(), recentArtists: [], recentAlbums: [], busy: false, filling: false,
-  target: null, seedVibe: null, dists: [], penalty: new Map(), now: null, gen: 0,
-  seedSound: null, sTarget: null, sd: [] };
-const CAP = 4, CAP_WINDOW = 25;
+const R = { guid: '', gen: 0, busy: false, filling: 0, planner: null, ctx: null, now: null, skipRecs: [] };
 const PREFIX = () => $t('Радио: ');
+const WEB_KEY = 'radio.web.v1', TOP_KEY = 'radio.top.v1', WEB_TTL = 14 * 864e5;
+const LB = 'https://labs.api.listenbrainz.org/similar-artists/json?algorithm=session_based_days_7500_session_300_contribution_5_threshold_10_limit_100_filter_True_skip_30&artist_mbids=';
 
 export function init(d) {
   deps = d;
@@ -41,222 +43,332 @@ const yearOf = (a) => +((String(a.year || a.date || '').match(/\d{4}/) || [0])[0
 const artistKey = (s) => norm(cleanArtist(s));
 const enc = encodeURIComponent;
 const handleOf = (t) => t.handle || (t.subsong ? `${t.absolutePath}|subsong:${t.subsong}` : t.absolutePath);
-const splitGenres = (g) => String(g || '').split(/\s*[;/,|]\s*/).map((x) => x.trim().toLowerCase()).filter(Boolean);
+const sample = (arr, n) => { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a.slice(0, n); };
+const within = (p, ms, dflt = null) => Promise.race([p.catch((e) => { log('radio', e); return dflt; }), new Promise((r) => setTimeout(() => r(dflt), ms))]);
+const recArtist = (r) => (r.aa && !isVarious(r.aa) ? r.aa : r.ar);
 
-/** library artists: key → { name, albums[], genres:Set, years[] } */
+/* ---------------------------------------------------------------- the library */
+/** artists: key → { key, name, albums[], tags: Set, years[] } — from the albums, and from the analysed
+ *  tracks (an artist you have only on compilations is still an artist of the library) */
 async function libraryArtists() {
   const albums = await deps.getAllAlbums();
   const m = new Map();
+  const get = (name) => {
+    const k = artistKey(name); if (!k) return null;
+    let x = m.get(k);
+    if (!x) m.set(k, (x = { key: k, name, albums: [], tags: new Set(), years: [] }));
+    return x;
+  };
   for (const a of albums) {
     const name = a.albumArtist || a.artist;
     if (!name || isVarious(name)) continue;
-    const k = artistKey(name);
-    if (!k) continue;
-    let x = m.get(k);
-    if (!x) m.set(k, (x = { key: k, name, albums: [], genres: new Set(), years: [] }));
+    const x = get(name); if (!x) continue;
     x.albums.push(a);
-    for (const g of splitGenres(a.genre)) x.genres.add(g);
+    for (const g of Genres.specificTags(a.genre)) x.tags.add(g);
     if (yearOf(a)) x.years.push(yearOf(a));
   }
+  if (Sound.ready()) for (const r of Sound.all()) { const n = recArtist(r); if (n && !isVarious(n)) get(n); }
   return m;
 }
+const tracksCache = new Map();
+async function queryTracks(name) {
+  const k = artistKey(name);
+  if (tracksCache.has(k)) return tracksCache.get(k);
+  const q = `"album artist" IS "${name.replace(/"/g, '')}" OR artist IS "${name.replace(/"/g, '')}"`;
+  const r = await call('library.query', { query: q, limit: 500, fields: ['handle', 'absolutePath', 'subsong', 'title', 'artist', 'albumArtist', 'album', 'duration'] });
+  const list = ok(r) ? (r.tracks || []).filter((t) => (t.duration || 0) > 45) : [];
+  tracksCache.set(k, list);
+  setTimeout(() => tracksCache.delete(k), 10 * 60000);
+  return list;
+}
 
-/* ---------------------------------------------------------------- who */
+/* ---------------------------------------------------------------- people: Deezer, ListenBrainz, your playlists */
+let webCache = null;
+const webStore = async () => (webCache ||= (await IDB.kvGet(WEB_KEY, null)) || {});
+async function remembered(kind, key, fetcher) {
+  const c = await webStore(), id = kind + ':' + key, hit = c[id];
+  if (hit && Date.now() - hit.at < WEB_TTL) return hit.v;
+  const v = await fetcher();
+  if (v != null) { c[id] = { at: Date.now(), v }; IDB.kvSet(WEB_KEY, c); }
+  return v;
+}
+
 async function deezerArtist(name) {
   const s = await getJSON(`https://api.deezer.com/search/artist?q=${enc(cleanArtist(name))}&limit=8`);
+  if (!s) return null;
   return ((s && s.data) || []).map((d) => ({ id: d.id, fans: d.nb_fan || 0, sim: similarity(cleanArtist(name), d.name) }))
-    .filter((d) => d.sim >= 0.86).sort((a, b) => b.sim - a.sim || b.fans - a.fans)[0] || null;
+    .filter((d) => d.sim >= 0.86).sort((a, b) => b.sim - a.sim || b.fans - a.fans)[0] || { id: 0 };
 }
 async function deezerRelated(id) {
   const r = await getJSON(`https://api.deezer.com/artist/${id}/related?limit=40`);
-  return ((r && r.data) || []).map((d) => ({ id: d.id, name: d.name }));
+  return r ? ((r && r.data) || []).map((d) => ({ id: d.id, name: d.name })) : null;
 }
-
-async function buildPool(seedName) {
-  const lib = await libraryArtists();
-  const seed = lib.get(artistKey(seedName)) || { key: artistKey(seedName), name: seedName, albums: [], genres: new Set(), years: [] };
-  const pool = new Map();
-  const add = (x, w, why) => { if (!x || !x.albums.length || x.key === seed.key) return; const p = pool.get(x.key); if (!p || p.w < w) pool.set(x.key, { x, w, why }); };
-  let first = [];
-  try {
+/** related artists, and theirs (only the ones several of them point to: one path alone drifts away) */
+async function deezerFacts(seedName, lib) {
+  const v = await remembered('dz', artistKey(seedName), async () => {
     const d = await deezerArtist(seedName);
-    if (d) {
-      first = await deezerRelated(d.id);
-      first.forEach((r, i) => add(lib.get(artistKey(r.name)), 1 - 0.5 * i / Math.max(10, first.length), 'related'));
-      // one step further: the related artists of the closest related ones (same scene, often the ones you own)
-      // …but only artists that several of them point to: one path alone drifts away
-      // (Anathema → Dream Theater → a guitar virtuoso's comic song)
-      const hop = await Promise.all(first.slice(0, 10).map((r) => deezerRelated(r.id).catch(() => [])));
-      const support = new Map();
-      hop.forEach((list, j) => list.forEach((r, i) => {
-        const x = lib.get(artistKey(r.name)); if (!x) return;
-        const s = support.get(x.key) || { x, n: 0, w: 0 };
-        s.n++; s.w = Math.max(s.w, (1 - 0.5 * i / Math.max(10, list.length)) * (1 - 0.04 * j));
-        support.set(x.key, s);
-      }));
-      for (const s of support.values()) if (s.n >= 2) add(s.x, (0.2 + 0.08 * Math.min(4, s.n)) * s.w, 'related2');
-    }
-  } catch (e) { log('radio related', e); }
-  const relatedHits = [...pool.values()].length;
-  // genre neighbours, weighted by how specific the shared genres are (IDF); common ones ignored
-  if (seed.genres.size && relatedHits < 8) {
-    const df = new Map(); for (const x of lib.values()) for (const g of x.genres) df.set(g, (df.get(g) || 0) + 1);
-    const N = Math.max(1, lib.size);
-    const idf = (g) => { const d = df.get(g) || 1; return d / N > 0.3 ? 0 : Math.log(N / d); };
-    const seedIdf = [...seed.genres].reduce((s, g) => s + idf(g), 0);
-    const sy = seed.years.length ? seed.years.reduce((s, y) => s + y, 0) / seed.years.length : 0;
-    if (seedIdf > 0) for (const x of lib.values()) {
-      if (pool.has(x.key) || x.key === seed.key) continue;
-      const shared = [...x.genres].filter((g) => seed.genres.has(g)).reduce((s, g) => s + idf(g), 0);
-      if (!shared) continue;
-      const xy = x.years.length ? x.years.reduce((s, y) => s + y, 0) / x.years.length : 0;
-      const era = sy && xy ? Math.max(0.2, 1 - Math.abs(sy - xy) / 25) : 0.6;
-      add(x, 0.35 * (shared / seedIdf) * era, 'genre');
-    }
-  }
-  const list = [...pool.values()].sort((a, b) => b.w - a.w).slice(0, 50);
-  if (seed.albums.length) list.push({ x: seed, w: list.length ? 0.45 : 1, why: 'seed' });
-  return { seed, pool: list, relatedHits, lib };
+    if (!d) return null;                                     // offline: try again next time
+    if (!d.id) return { id: 0, first: [], hop: [] };
+    const first = await deezerRelated(d.id);
+    if (!first) return null;
+    const hop = await Promise.all(first.slice(0, 10).map((r) => deezerRelated(r.id).then((x) => x || []).catch(() => [])));
+    return { id: d.id, first, hop };
+  });
+  if (!v) return null;
+  const d1 = new Map(), d2 = new Map(), ids = new Map();
+  ids.set(artistKey(seedName), v.id);
+  v.first.forEach((r, i) => { const k = artistKey(r.name); ids.set(k, r.id); if (lib.has(k)) d1.set(k, Math.max(d1.get(k) || 0, 1 - 0.5 * i / Math.max(10, v.first.length))); });
+  const support = new Map();
+  v.hop.forEach((list, j) => list.forEach((r, i) => {
+    const k = artistKey(r.name); if (!ids.has(k)) ids.set(k, r.id);
+    if (!lib.has(k)) return;
+    const s = support.get(k) || { n: 0, w: 0 };
+    s.n++; s.w = Math.max(s.w, (1 - 0.5 * i / Math.max(10, list.length)) * (1 - 0.04 * j));
+    support.set(k, s);
+  }));
+  for (const [k, s] of support) if (s.n >= 2) d2.set(k, Math.min(0.9, (0.25 + 0.15 * Math.min(4, s.n)) * s.w));
+  return { d1, d2, ids };
 }
 
-/* artists of the library that *sound* like the seed (nearest analysed tracks, grouped by artist) */
-function soundNeighbours(P, T) {
-  const near = Sound.nearest(T, 400, (r) => artistKey(r.aa || r.ar) !== P.seed.key);
+async function mbid(name) {
+  await Genres.whenLoaded();
+  const known = Genres.artistMbid(name);
+  if (known) return known;
+  return remembered('mb', artistKey(name), async () => {
+    const j = await getJSON(`https://musicbrainz.org/ws/2/artist/?query=${enc(`artist:"${cleanArtist(name).replace(/["\\]/g, ' ')}"`)}&fmt=json&limit=5`);
+    if (!j) return null;
+    const c = (j.artists || []).filter((x) => similarity(cleanArtist(name), x.name) >= 0.9).sort((a, b) => (b.score || 0) - (a.score || 0))[0];
+    return c ? c.id : '';
+  });
+}
+/** ListenBrainz: the artists listened to in the same sessions as the seed (its own data, open, no key) */
+async function listenBrainzFacts(seedName, lib) {
+  const id = await mbid(seedName);
+  if (!id) return null;
+  const list = await remembered('lb', id, async () => {
+    const j = await getJSON(LB + id);
+    return Array.isArray(j) ? j.slice(0, 100).map((x) => [x.name, x.score]) : null;
+  });
+  if (!list || !list.length) return null;
+  const mx = list[0][1] || 1, m = new Map();
+  for (const [name, score] of list) { const k = artistKey(name); if (lib.has(k)) m.set(k, Math.max(m.get(k) || 0, 0.9 * (score / mx) ** 1.5)); }
+  return m;
+}
+
+/** your playlists: artists that share them with the seed (big mixed playlists count less) */
+async function playlistFacts(seedKey, lib) {
+  const all = await call('playlist.getAll');
+  if (!ok(all)) return null;
+  const like = new RegExp('^' + $t('Похоже на «{0}»').replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace('\\{0\\}', '.+') + '$');
+  const lists = (all.playlists || []).filter((p) => !p.isAutoplaylist && p.trackCount >= 3 && p.trackCount <= 1500
+    && !/^(Радио|Radio): /.test(p.name) && !p.name.startsWith(PREFIX()) && p.name !== LIKED && !like.test(p.name)).slice(0, 60);
+  const n = new Map(), co = new Map(); let nSeed = 0;
+  for (const p of lists) {
+    const r = await call('playlist.getTracks', { playlistGuid: p.guid, start: 0, count: p.trackCount, fields: ['artist', 'albumArtist'] });
+    if (!ok(r)) continue;
+    const set = new Set();
+    for (const t of r.tracks || []) { for (const a of [t.albumArtist && !isVarious(t.albumArtist) ? t.albumArtist : '', t.artist]) { const k = a && artistKey(a); if (k && lib.has(k)) set.add(k); } }
+    if (set.size < 2 || set.size > 300) continue;          // one artist says nothing; a library dump neither
+    const w = 1 / Math.log2(2 + set.size);
+    for (const k of set) n.set(k, (n.get(k) || 0) + w);
+    if (set.has(seedKey)) { nSeed += w; for (const k of set) co.set(k, (co.get(k) || 0) + w); }
+  }
+  if (!nSeed) return null;
+  const m = new Map();
+  for (const [k, c] of co) if (k !== seedKey) m.set(k, Core.clamp01(c / Math.sqrt(nSeed * n.get(k)) * 1.2));
+  return m;
+}
+
+/* ---------------------------------------------------------------- sound: the whole library against the seed */
+function soundFacts(T, seedKey, lib) {
+  const all = Sound.all();
+  if (!all.length) return null;
+  const ds = new Float32Array(all.length);
   const by = new Map();
-  for (const { r, d } of near) {
-    const x = P.lib.get(artistKey(r.aa || r.ar)) || P.lib.get(artistKey(r.ar));
-    if (!x || x.key === P.seed.key) continue;
-    const a = by.get(x.key) || { x, ds: [] };
-    if (a.ds.length < 3) a.ds.push(d);
-    by.set(x.key, a);
+  all.forEach((r, i) => {
+    const d = Sound.distance(T, r); ds[i] = d;
+    const k = artistKey(recArtist(r)); if (!k) return;
+    const l = by.get(k); if (l) l.push({ r, d }); else by.set(k, [{ r, d }]);
+  });
+  const Q = Core.quantiles(ds);
+  // how wide «close» is: in a library of one style everything is near, so the seed artist's own tracks
+  // set the scale (twice where its typical track lies), between the closest 30 % and 70 % of the library
+  const own = (by.get(seedKey) || []).map((x) => Q(x.d)).filter((q) => q > 0.002).sort((a, b) => a - b);
+  const scale = Math.min(0.7, Math.max(0.3, own.length >= 3 ? 2 * own[own.length >> 1] : 0.35));
+  // styles: the seed's (its own, with a little of its artist's) against each artist's average
+  const sum = (list) => { const n = list[0].r.st.length, m = new Float32Array(n); for (const { r } of list) for (let i = 0; i < n; i++) m[i] += r.st[i] / 255; return m; };
+  const seedList = (by.get(seedKey) || []).filter((x) => x.r.st);
+  let seedSt = T.st || null;
+  if (seedList.length) { const am = sum(seedList); seedSt = seedSt ? seedSt.map((v, i) => 0.7 * v + 0.3 * am[i] / seedList.length) : am; }
+  const art = new Map(), bcs = [];
+  for (const [k, list] of by) {
+    list.sort((a, b) => a.d - b.d);
+    const best = list.slice(0, 3);
+    const q = best.reduce((s, x) => s + Q(x.d), 0) / best.length + (3 - best.length) * 0.02;
+    const withSt = list.filter((x) => x.r.st);
+    const bc = seedSt && withSt.length ? Core.styleBC(seedSt, sum(withSt)) : null;
+    if (bc != null && k !== seedKey) bcs.push(bc);
+    art.set(k, { sound: Core.clamp01(1 - q / (0.75 * scale)), bc });
   }
-  const scored = [...by.values()].map((a) => ({ x: a.x, s: a.ds.reduce((s, d) => s + d, 0) / a.ds.length + (3 - a.ds.length) * 0.05 })).sort((a, b) => a.s - b.s).slice(0, 30);
-  if (!scored.length) return 0;
-  const lo = scored[0].s, hi = scored[scored.length - 1].s;
-  let n = 0;
-  for (const { x, s } of scored) {
-    const w = 0.25 + 0.55 * (hi > lo ? (hi - s) / (hi - lo) : 1);
-    const p = P.pool.find((q) => q.x.key === x.key);
-    if (p) { if (p.why !== 'seed') { p.w = Math.max(p.w, w) + 0.2 * Math.min(p.w, w); p.why += '+sound'; } }
-    else { P.pool.push({ x, w, why: 'sound' }); n++; }
-  }
-  return n;
+  // a style match is judged against the rest of your library: the median artist is 0, the closest are 1
+  bcs.sort((a, b) => a - b);
+  const med = bcs.length ? bcs[bcs.length >> 1] : 0, top = bcs.length ? bcs[Math.floor(bcs.length * 0.97)] : 1;
+  for (const v of art.values()) v.style = v.bc == null ? null : Core.clamp01((v.bc - med) / Math.max(1e-3, top - med));
+  return { Q, by, art, scale, sim: (d) => Core.clamp01(1 - Q(d) / scale) };
 }
 
-/* ---------------------------------------------------------------- what */
-const pickWeighted = (list) => { const total = list.reduce((s, p) => s + p.w, 0); let r = Math.random() * total; for (const p of list) { r -= p.w; if (r <= 0) return p; } return list[list.length - 1]; };
-const trackCache = new Map();
-async function tracksOf(x) {
-  if (trackCache.has(x.key)) return trackCache.get(x.key);
-  const q = `"album artist" IS "${x.name.replace(/"/g, '')}" OR artist IS "${x.name.replace(/"/g, '')}"`;
-  const r = await call('library.query', { query: q, limit: 400, fields: ['handle', 'absolutePath', 'subsong', 'title', 'artist', 'albumArtist', 'album', 'duration'] });
-  const list = ok(r) ? (r.tracks || []).filter((t) => (t.duration || 0) > 45) : [];
-  trackCache.set(x.key, list);
-  return list;
-}
-const sample = (arr, n) => { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a.slice(0, n); };
-/** the distance a candidate may have: the better half of what has been heard so far, never stricter than 0.22 */
-function threshold() {
-  if (R.dists.length < 6) return 0.55;
-  const s = [...R.dists].sort((a, b) => a - b);
-  return Math.max(0.2, s[Math.floor(s.length * 0.35)]);
-}
-const blend = (a, b, k) => (a && b ? a.map((v, i) => v * (1 - k) + b[i] * k) : a || b);
+/* ---------------------------------------------------------------- the facts, together */
+async function gather(seedName, seedTrack, gen) {
+  const lib = await libraryArtists();
+  const seedKey = artistKey(seedName);
+  if (!lib.has(seedKey)) lib.set(seedKey, { key: seedKey, name: seedName, albums: [], tags: new Set(), years: [] });
+  const seedA = lib.get(seedKey);
+  const ctx = { lib, seedKey, seedName, seedTrack, T: null, sound: null, seedVibe: null, ids: new Map(), tracks: new Map(), pool: [] };
 
-async function pickOne(gen) {
-  let bestAll = null;
-  for (let attempt = 0; attempt < 10; attempt++) {
-    if (gen !== R.gen) return null;
-    // variety: never the artist that just played; the one before it only rarely; at most 4 of any 25 tracks
-    const last = R.recentArtists[R.recentArtists.length - 1], prev = R.recentArtists[R.recentArtists.length - 2];
-    const recent = R.recentArtists.slice(-CAP_WINDOW);
-    // (with the neural analysis only: the rough on-the-spot measurement is not sure enough to push artists out)
-    // a small library: when every artist that sounds right has had its share, one more of theirs beats
-    // a track that sounds wrong — after five misses the cap gives way («never twice in a row» does not)
-    const capped = (k) => !!R.sTarget && attempt < 5 && recent.filter((x) => x === k).length >= CAP;
-    const pl = R.pool.pool.map((p) => ({ p, w: p.w * (R.penalty.get(p.x.key) || 1) * (p.x.key === last || capped(p.x.key) ? 0 : p.x.key === prev ? 0.35 : 1) })).filter((c) => c.w > 0.01);
-    if (!pl.length) { if (attempt < 5) { attempt = 4; continue; } return bestAll; }   // everyone that fits is capped → let the cap give way
-    const p = pickWeighted(pl).p;
-    const fresh = (await tracksOf(p.x)).filter((t) => !R.played.has(handleOf(t)));
-    if (!fresh.length) { p.w *= 0.2; continue; }
-    // prefer albums not heard lately; an artist with one or two albums may repeat one, just not back to back
-    const lastAlbum = R.recentAlbums[R.recentAlbums.length - 1];
-    let tracks = fresh.filter((t) => !R.recentAlbums.slice(-6).includes(t.album));
-    if (!tracks.length) tracks = fresh.filter((t) => t.album !== lastAlbum);
-    if (!tracks.length) { p.w *= 0.5; continue; }
-    if (R.sTarget) {
-      const best = await bySound(tracks, p, gen);
-      if (best === 'none') { /* nothing of this artist analysed: measured the old way below */ }
-      else {
-        if (!best) { p.w *= 0.5; continue; }
-        if (!bestAll || best.d < bestAll.d) bestAll = best;
-        if (best.d <= sThreshold()) break;
-        p.w *= 0.5;
-        continue;
-      }
-    }
-    const options = sample(tracks, R.target ? 3 : 1);
-    if (!R.target) return { t: options[0], p };
-    let best = null;
-    for (const t of options) {
-      const v = await Vibe.of(t);
-      const d = v ? Vibe.distance(R.target, v) : 0.6;
-      if (v) R.dists.push(d);
-      if (!best || d < best.d) best = { t, d, v, p };
-    }
-    if (R.dists.length > 200) R.dists.splice(0, R.dists.length - 200);
-    if (!bestAll || best.d < bestAll.d) bestAll = best;
-    if (best.d <= threshold()) break;
-    p.w *= 0.5;                                               // this artist sounds different from the seed
+  // the sound to steer by: the seed track; for an artist radio, the average of its analysed tracks
+  if (Sound.ready()) {
+    let rec = seedTrack ? Sound.get(seedTrack) || await Sound.analyzeNow(seedTrack, 15000) : null;
+    if (rec) { ctx.T = Sound.target(rec); ctx.T.st = rec.st ? Float32Array.from(rec.st, (v) => v / 255) : null; }
+    else for (const r of Sound.all()) if (artistKey(recArtist(r)) === seedKey) ctx.T = ctx.T ? Sound.blend(ctx.T, r, 0.3) : Sound.target(r);
   }
-  if (bestAll && bestAll.v) R.target = blend(R.seedVibe, bestAll.v, 0.1);    // barely follow the music: the seed's feel stays the goal
-  if (bestAll && bestAll.rec && R.seedSound) R.sTarget = Sound.blend(R.seedSound, bestAll.rec, 0.1);
-  return bestAll;
-}
-function sThreshold() {
-  if (R.sd.length < 6) return 0.7;
-  const s = [...R.sd].sort((a, b) => a - b);
-  return Math.max(0.3, s[Math.floor(s.length * 0.35)]);
-}
-/** of an artist's tracks, the one that sounds closest to the target (by the neural analysis);
- *  'none' when none of them has been analysed and analysing two of them now did not work */
-async function bySound(tracks, p, gen) {
-  let known = tracks.map((t) => ({ t, rec: Sound.get(t) })).filter((x) => x.rec);
-  if (!known.length) {
-    const recs = await Promise.all(sample(tracks, 2).map((t) => Sound.analyzeNow(t, 12000)));
-    if (gen !== R.gen) return null;
-    known = tracks.map((t) => ({ t, rec: Sound.get(t) })).filter((x) => x.rec);
-    if (!known.length && !recs.some(Boolean)) return 'none';
+  if (gen !== R.gen) return null;
+  const [dz, lb, pl] = await Promise.all([
+    within(deezerFacts(seedName, lib), 20000),
+    within(listenBrainzFacts(seedName, lib), 20000),
+    within(playlistFacts(seedKey, lib), 10000),
+  ]);
+  if (gen !== R.gen) return null;
+  if (ctx.T) ctx.sound = soundFacts(ctx.T, seedKey, lib);
+  if (!ctx.sound) ctx.T = null;
+  if (!ctx.T && seedTrack) ctx.seedVibe = await Vibe.of(seedTrack);
+  if (dz) ctx.ids = dz.ids;
+
+  // genres: MusicBrainz's, else your specific tags; a genre counts by how rare it is in your library
+  await Genres.whenLoaded();
+  const tagged = new Set();
+  const gOf = (a) => { const mb = Genres.artistGenres(a.name); if (mb) return mb; if (!a.tags.size) return null; tagged.add(a.key); return new Map([...a.tags].map((g) => [g, 1])); };
+  const G = new Map(); const df = new Map();
+  for (const a of lib.values()) { const g = gOf(a); if (!g) continue; G.set(a.key, g); for (const k of g.keys()) df.set(k, (df.get(k) || 0) + 1); }
+  const N = Math.max(1, G.size);
+  const idf = (g) => Math.log(1 + N / (df.get(g) || 1));
+  const gSeed = G.get(seedKey) || null;
+  const seedYear = seedA.years.length ? seedA.years.reduce((s, y) => s + y, 0) / seedA.years.length : 0;
+
+  const pool = [];
+  for (const a of lib.values()) {
+    if (a.key === seedKey) continue;
+    const snd = ctx.sound && ctx.sound.art.get(a.key);
+    const year = a.years.length ? a.years.reduce((s, y) => s + y, 0) / a.years.length : 0;
+    const g = G.get(a.key) || null;
+    const f = {
+      deezer: dz && dz.d1.get(a.key), deezer2: dz && dz.d2.get(a.key), lb: lb && lb.get(a.key), pl: pl && pl.get(a.key),
+      genre: Core.genreSim(gSeed, g, idf), genreTags: tagged.has(a.key) || tagged.has(seedKey), sound: snd ? snd.sound : null, style: snd ? snd.style : null, era: Core.eraSim(seedYear, year),
+    };
+    const { s, C, K } = Core.artistScore(f);
+    if (s < 0.1) continue;
+    const why = [];
+    if (f.deezer) why.push('deezer'); else if (f.deezer2) why.push('deezer2');
+    if (f.lb) why.push('lb');
+    if (f.pl && f.pl >= 0.15) why.push('pl');
+    if (f.genre != null && f.genre >= 0.35 && gSeed && g) {
+      const shared = [...g.keys()].filter((x) => gSeed.has(x)).sort((x, y) => idf(y) * gSeed.get(y) - idf(x) * gSeed.get(x)).slice(0, 2);
+      if (shared.length) why.push('genre:' + shared.join(', '));
+    }
+    pool.push({ key: a.key, name: a.name, s, C, K, f, why });
   }
-  Sound.prioritize(tracks, 25);                               // the rest of this artist, soon
-  const scored = known.map((x) => ({ ...x, d: Sound.distance(R.sTarget, x.rec) })).sort((a, b) => a.d - b.d);
-  for (const x of scored.slice(0, 3)) R.sd.push(x.d);
-  if (R.sd.length > 200) R.sd.splice(0, R.sd.length - 200);
-  // not always the single closest: a little randomness among the closest three keeps the radio alive
-  const top = scored.slice(0, 3), lo = top[0].d;
-  const pick = pickWeighted(top.map((x) => ({ ...x, w: Math.exp(-(x.d - lo) / 0.04) })));
-  return { t: pick.t, d: pick.d, rec: pick.rec, p };
+  pool.sort((a, b) => b.s - a.s);
+  ctx.pool = pool.slice(0, 60);
+  log('radio pool', seedName, ctx.pool.slice(0, 20).map((p) => `${p.name} ${p.s.toFixed(2)} [${Object.entries(p.f).filter(([, v]) => v != null).map(([k, v]) => k + ' ' + (+v).toFixed(2)).join(', ')}]`));
+  return ctx;
 }
-function take(x) {
-  R.played.add(handleOf(x.t)); R.recentArtists.push(x.p.x.key); R.recentAlbums.push(x.t.album);
-  if (R.recentArtists.length > CAP_WINDOW) R.recentArtists.shift();
-  if (R.recentAlbums.length > 20) R.recentAlbums.shift();
+
+/* ---------------------------------------------------------------- an artist's tracks, with what we know of them */
+let topStore = null;
+async function topTracks(ctx, key, name) {
+  topStore ||= (await IDB.kvGet(TOP_KEY, null)) || {};
+  const hit = topStore[key];
+  if (hit && Date.now() - hit.at < WEB_TTL * 2) return hit.v;
+  let id = ctx.ids.get(key);
+  if (id == null) { const d = await deezerArtist(name); if (!d) return null; id = d.id; }
+  if (!id) { topStore[key] = { at: Date.now(), v: [] }; return []; }
+  const j = await getJSON(`https://api.deezer.com/artist/${id}/top?limit=50`);
+  if (!j) return null;
+  const v = ((j && j.data) || []).map((x) => Core.songKey(x.title_short || x.title)).filter(Boolean);
+  topStore[key] = { at: Date.now(), v };
+  IDB.kvSet(TOP_KEY, topStore);
+  return v;
 }
-/** find `n` tracks and append them, a few at a time, while the music plays */
+async function plays(list) {
+  const paths = list.map((x) => x.h).slice(0, 500);
+  if (!paths.length) return;
+  const r = await call('titleformat.evalFieldsBatch', { paths, fields: { pc: '[%play_count%]' } });
+  const rows = ok(r) ? r.results || [] : [];
+  const pc = rows.map((x) => +((x && x.pc) || 0) || 0);
+  const mx = Math.max(0, ...pc);
+  if (!mx) return;
+  pc.forEach((v, i) => { list[i].plays = Math.log1p(v) / Math.log1p(mx); });
+}
+function tracksFor(ctx, key) {
+  if (ctx.tracks.has(key)) return ctx.tracks.get(key);
+  const p = (async () => {
+    const a = ctx.lib.get(key);
+    const list = [], seen = new Set();
+    const add = (x) => { const k = String(x.h).toLowerCase(); if (!x.h || seen.has(k)) return; seen.add(k); list.push(x); };
+    for (const { r, d } of (ctx.sound && ctx.sound.by.get(key)) || []) add({ h: Sound.handleOfRec(r), title: r.ti, album: r.al, duration: r.du, rec: r, d });
+    if (a) for (const t of await queryTracks(a.name)) add({ h: handleOf(t), title: t.title, album: t.album, duration: t.duration, t });
+    for (const x of list) { x.sim = null; x.pop = null; x.plays = null; }
+    if (ctx.T) {
+      // not analysed yet: to the front of the analysis queue (the planner has the best of them analysed at once)
+      const rest = list.filter((x) => !x.rec && x.t);
+      if (rest.length) Sound.prioritize(rest.map((x) => x.t), 22);
+      // how close it sounds, as a share of your library (see soundFacts for the scale)
+      for (const x of list) if (x.rec) x.sim = ctx.sound.sim(x.d);
+    }
+    const [top] = await Promise.all([within(topTracks(ctx, key, a ? a.name : key), 8000), within(plays(list), 5000)]);
+    if (top && top.length) for (const x of list) {
+      const sk = Core.songKey(x.title);
+      const i = top.findIndex((t) => t === sk || (sk.length > 3 && similarity(t, sk) >= 0.9));
+      x.pop = i < 0 ? 0 : 1 - 0.7 * i / top.length;
+    }
+    return list;
+  })();
+  ctx.tracks.set(key, p);
+  return p;
+}
+
+/** how close a track not known yet sounds: analysed now (sound analysis), or measured on the spot (vibe.js) */
+async function measure(ctx, x) {
+  const t = x.t || { absolutePath: x.h };
+  if (ctx.T) {
+    const r = Sound.get(t) || await Sound.analyzeNow(t, 12000);
+    if (!r) return null;
+    x.rec = r; x.d = Sound.distance(ctx.T, r);
+    return ctx.sound.sim(x.d);
+  }
+  if (!ctx.seedVibe) return null;
+  const v = await Vibe.of(t);
+  if (!v) return null;
+  const d = Vibe.distance(ctx.seedVibe, v);
+  (ctx.vd ||= []).push(d);
+  return Core.clamp01(1 - d / 0.5);
+}
+
+/* ---------------------------------------------------------------- filling the playlist */
 async function fill(n) {
-  if (R.filling) return;
-  R.filling = true;
   const gen = R.gen;
+  if (R.filling === gen || !R.planner) return;
+  R.filling = gen;
   try {
     let buf = [];
     for (let i = 0; i < n; i++) {
-      const x = await pickOne(gen);
-      if (!x || gen !== R.gen) break;
-      take(x); buf.push(handleOf(x.t));
+      const x = await R.planner.next();
+      if (gen !== R.gen) return;
+      if (!x) { if (!R.ended) { R.ended = true; toast($t('Похожей музыки в медиатеке больше нет — радио на этом остановится'), { ms: 4000 }); } break; }
+      buf.push(x.t.h);
       if (buf.length >= (i < 4 ? 1 : 4)) { await call('playlist.addHandles', { playlistGuid: R.guid, handles: buf }); buf = []; }
     }
     if (buf.length && gen === R.gen) await call('playlist.addHandles', { playlistGuid: R.guid, handles: buf });
-  } catch (e) { log('radio fill', e); } finally { R.filling = false; }
+  } catch (e) { log('radio fill', e); } finally { if (R.filling === gen) R.filling = 0; }
 }
 
 async function radioPlaylist(name) {
@@ -273,46 +385,37 @@ async function radioPlaylist(name) {
 
 /** start a radio from a track ({ title, artist, albumArtist, handle/path… }) or an artist name */
 export async function start(seed) {
-  if (!deps || R.busy) return;
-  const seedName = typeof seed === 'string' ? seed : seed.artist || seed.albumArtist;
+  if (!deps || R.busy || !seed) return;
+  const seedTrack = typeof seed === 'object' && handleOf(seed) ? seed : null;
+  const seedName = cleanArtist(typeof seed === 'string' ? seed : seed.artist || seed.albumArtist || '');
   if (!seedName) return;
   R.busy = true;
   const gen = ++R.gen;
-  toast($t('Собираю радио «{0}»…', esc(cleanArtist(seedName))), { ms: 2500 });
+  const label = seedTrack && seedTrack.title ? `${seedTrack.title} — ${seedName}` : seedName;
+  toast($t('Собираю радио «{0}»…', esc(label)), { ms: 2500 });
   try {
-    const poolP = buildPool(seedName);
-    // the feel to follow: the seed track itself, or a few tracks of the seed artist
-    let seedTrack = typeof seed === 'object' && handleOf(seed) ? seed : null;
-    R.pool = await poolP;
-    if (!seedTrack && R.pool.seed.albums.length) seedTrack = sample(await tracksOf(R.pool.seed), 1)[0] || null;
-    R.played = new Set(); R.recentArtists = []; R.recentAlbums = []; R.dists = []; R.penalty = new Map(); R.sd = [];
-    R.seedSound = null; R.sTarget = null; R.seedVibe = null;
-    const soundOn = Sound.ready();
-    if (!R.pool.pool.length && !soundOn) { toast($t('Похожей музыки не нашлось')); return; }
-    const name = PREFIX() + cleanArtist(seedName);
-    const guid = await radioPlaylist(name);
+    R.planner = null; R.ctx = null; R.now = null; R.skipRecs = []; R.ended = false;
+    const guid = await radioPlaylist(PREFIX() + label);
     if (!guid) { toast($t('Не удалось создать плейлист радио')); return; }
-    R.guid = guid; R.seed = seedName;
-    R.now = null;
+    R.guid = guid;
     if (seedTrack) {                                            // the seed plays at once; the rest is found meanwhile
-      take({ t: seedTrack, p: { x: { key: artistKey(seedName) } } });
       await call('playlist.addHandles', { playlistGuid: guid, handles: [handleOf(seedTrack)] });
       await call('playlist.setActive', { playlistGuid: guid });
       await call('playlist.playTrack', { playlistGuid: guid, index: 0 });
       router.go('playlist', guid);
     }
-    // the sound to follow (neural analysis): the seed track, or the average of the seed artist's analysed tracks
-    if (soundOn) {
-      if (typeof seed === 'object' && seedTrack) R.seedSound = Sound.target(await Sound.analyzeNow(seedTrack, 15000));
-      else for (const t of await tracksOf(R.pool.seed)) { const r = Sound.get(t); if (r) R.seedSound = R.seedSound ? Sound.blend(R.seedSound, r, 0.3) : Sound.target(r); }
-      if (!R.seedSound && seedTrack) R.seedSound = Sound.target(await Sound.analyzeNow(seedTrack, 15000));
-      if (R.seedSound) { R.sTarget = R.seedSound; R.pool.soundHits = soundNeighbours(R.pool, R.seedSound); }
-      warm(R.pool, gen);
-    }
-    if (!R.pool.pool.length) { toast($t('Похожей музыки не нашлось')); R.guid = ''; return; }
-    if (seedTrack && !R.seedSound) R.seedVibe = await Vibe.of(seedTrack);
-    R.target = R.seedVibe;
-    // (no second toast: «Collecting radio…» said it; the playlist appears and fills by itself)
+    const ctx = await gather(seedName, seedTrack, gen);
+    if (!ctx || gen !== R.gen) return;
+    R.ctx = ctx;
+    if (!ctx.pool.length) { toast($t('Похожей музыки не нашлось')); return; }
+    const core = (t) => ({ h: handleOf(t), title: t.title, album: t.album, duration: t.duration });
+    R.planner = new Core.Planner({
+      pool: ctx.pool, seed: { key: ctx.seedKey, name: seedName, track: seedTrack ? core(seedTrack) : null },
+      tracksOf: (k) => tracksFor(ctx, k),
+      measure: (t) => measure(ctx, t),
+      near: ctx.T ? (rec) => R.skipRecs.reduce((m, s) => Math.max(m, Core.clamp01((0.45 - Sound.distance(s, rec)) / 0.3)), 0) : null,
+    });
+    if (ctx.T) warm(ctx, gen);
     if (!seedTrack) {
       await fill(1);
       await call('playlist.setActive', { playlistGuid: guid });
@@ -324,26 +427,31 @@ export async function start(seed) {
 }
 
 /* the candidates' tracks go to the front of the analysis queue (a few artists at a time, in the background) */
-async function warm(P, gen) {
-  for (const p of [...P.pool].sort((a, b) => b.w - a.w).slice(0, 16)) {
+async function warm(ctx, gen) {
+  for (const p of ctx.pool.slice(0, 16)) {
     if (gen !== R.gen) return;
-    Sound.prioritize(await tracksOf(p.x), 22);
+    const a = ctx.lib.get(p.key); if (!a) continue;
+    Sound.prioritize(await queryTracks(a.name), 22);
     await new Promise((r) => setTimeout(r, 400));
   }
 }
 
-/* a radio track skipped in its first 30 seconds: its artist comes up less */
+/* a radio track skipped in its first 30 seconds: its artist comes up less, and so does its sound */
 function noteSkip(d) {
   const now = performance.now();
   const prev = R.now;
-  R.now = d ? { key: artistKey(d.artist || d.albumArtist || ''), t0: now } : null;
-  if (!R.guid || !prev || !prev.key) return;
-  if (now - prev.t0 < 30000) R.penalty.set(prev.key, (R.penalty.get(prev.key) || 1) * 0.4);
+  R.now = d ? { key: artistKey(d.artist || d.albumArtist || ''), t0: now, t: d } : null;
+  if (!R.guid || !R.planner || !prev || !prev.key) return;
+  if (now - prev.t0 < 30000) {
+    R.planner.skip(prev.key);
+    const r = prev.t && Sound.get(prev.t);
+    if (r) R.skipRecs.push(Sound.target(r));
+  }
 }
 
 /* near the end of the radio playlist → add the next batch */
 async function topUp() {
-  if (!R.guid || R.busy || R.filling) return;
+  if (!R.guid || R.busy || R.filling || !R.planner) return;
   const pi = await call('playback.getCurrentTrackIndex');
   if (!ok(pi) || pi.found === false || pi.playlistGuid !== R.guid) { if (ok(pi) && pi.found !== false && pi.playlistGuid !== R.guid) R.now = null; return; }
   const c = await call('playlist.getTrackCount', { playlistGuid: R.guid });
@@ -353,11 +461,23 @@ async function topUp() {
 }
 export const active = () => R.guid;
 
+/** why a track is on the radio, in words ('' when it is not one of the radio's) */
+export function why(t) {
+  if (!R.planner || !t) return '';
+  const w = R.planner.why.get(String(handleOf(t)).toLowerCase());
+  if (!w) return '';
+  const L = {
+    seed: $t('исполнитель, с которого началось радио'), deezer: $t('похожий исполнитель на Deezer'), deezer2: $t('его называют похожим несколько похожих исполнителей'),
+    lb: $t('его слушают вместе с исполнителем радио (ListenBrainz)'), pl: $t('стоит рядом в ваших плейлистах'), sound: $t('звучит похоже'), hit: $t('один из самых известных треков исполнителя'),
+  };
+  return w.map((x) => (x.startsWith('genre:') ? $t('общие жанры: {0}', x.slice(6)) : L[x] || '')).filter(Boolean).join(' · ');
+}
+
 /** «not this»: the artist leaves this radio, and its tracks not yet played leave the playlist */
 export async function ban(name) {
   if (!R.guid || !name) return;
   const k = artistKey(name);
-  R.penalty.set(k, 0);
+  if (R.planner) R.planner.ban(k);
   const pi = await call('playback.getCurrentTrackIndex');
   const from = ok(pi) && pi.found !== false && pi.playlistGuid === R.guid ? pi.index + 1 : 0;
   const c = await call('playlist.getTrackCount', { playlistGuid: R.guid });
@@ -370,3 +490,4 @@ export async function ban(name) {
   toast($t('{0} больше не попадёт в это радио', esc(cleanArtist(name))));
   topUp();
 }
+export const _debug = () => R;
