@@ -1,0 +1,28 @@
+name: Chromium for the tests
+description: >
+  Python, Playwright and its Chromium with every system package `playwright install --with-deps chromium`
+  installs (libraries and fonts) — from caches, so a run does not wait on pip, Playwright's CDN or apt.
+inputs:
+  requirements:
+    description: pip requirements file (pins the Playwright version)
+    default: tests/requirements.txt
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with: { python-version: '3.12', cache: pip, cache-dependency-path: '${{ inputs.requirements }}' }
+    - shell: bash
+      run: pip install -q -r '${{ inputs.requirements }}'
+    - id: v
+      shell: bash
+      run: |
+        echo "pw=$(python -c 'import importlib.metadata as m; print(m.version("playwright"))')" >> "$GITHUB_OUTPUT"
+        echo "img=${ImageOS:-linux}-${ImageVersion:-0}" >> "$GITHUB_OUTPUT"
+    # the browser build Playwright pins: downloaded once per Playwright version
+    - uses: actions/cache@v4
+      with: { path: ~/.cache/ms-playwright, key: 'pw-browsers-${{ runner.os }}-${{ steps.v.outputs.pw }}' }
+    # the .deb files of system packages the runner image lacks: fetched once per image version
+    - uses: actions/cache@v4
+      with: { path: ~/.cache/pw-debs, key: 'pw-debs-${{ steps.v.outputs.img }}-${{ steps.v.outputs.pw }}' }
+    - shell: bash
+      run: bash '${{ github.action_path }}/install.sh'

@@ -11,3 +11,4 @@ tests/.ml-fake/
 installer/.dl-cache/
 .showcase-dl/
 .panels-build/
+.e2e-logs/

@@ -2,59 +2,69 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore: ['**/*.md', 'docs/**']     # text only: nothing to test
   pull_request:
+  workflow_dispatch:
+# a newer push to the same pull request makes its older run pointless; every push to main is tested
+concurrency:
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 permissions:
   contents: read
 
 jobs:
   deps:
     uses: ./.github/workflows/deps-fetch.yml
-  theme:
-    name: Theme — ${{ matrix.part }}
+  # static checks once (syntax, version, translations, loudness and radio reference checks)
+  checks:
+    name: Checks — syntax, translations, reference values
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    permissions: { contents: write }   # the test output goes to a ci-log-<part> branch (below)
-    # the end-to-end tests in parallel parts (one job took ~25 min); ONLY= picks tests by name
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { part: 'screens, settings, updates', id: screens, only: 'language,playlists,youtube,youtube_captions,settings,updates,tooltips,canvas_volume,fb2k_prefs,welcome' }
-          - { part: 'editing, windows, smart playlists, radio', id: editing, only: 'playlist_editing,windows,vu,smart_color_radio,lyrics_sync,level,album_details,columns' }
-          - { part: 'sound analysis', id: sound, only: 'sound_ai,sound_offer,similar_albums' }
-          - { part: 'layout', id: layout, only: 'layout' }
-          - { part: 'stability', id: stability, only: 'stability' }
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: '22' }
+        with: { node-version: '22', cache: npm }
       - run: npm ci
-      - name: Syntax, version, translations
-        run: node tools/check.mjs
-      - uses: actions/setup-python@v5
-        with: { python-version: '3.12' }
-      - name: Playwright
-        run: |
-          pip install playwright==1.56.0 onnx==1.17.0 numpy
-          python -m playwright install --with-deps chromium
+      - run: node tools/check.mjs
+      - name: Plan of the end-to-end parts
+        run: E2E_PLAN=8 python3 tests/e2e.py
+
+  theme:
+    name: Theme — part ${{ matrix.shard }}/8
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions: { contents: write }   # the test output goes to a ci-log-part-<n> branch (below)
+    # every end-to-end test runs on every push, split into eight parts of about the same length
+    # (tests/e2e.py: DURATIONS, longest first into the shortest part); a new test joins a part by itself
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: npm }
+      - run: npm ci                    # onnxruntime-web for the stand-in sound-analysis models
+      - uses: ./.github/actions/chromium
       - name: End-to-end (headless Chromium, mocked foobar2000 bridge)
-        env: { ONLY: '${{ matrix.only }}', PYTHONUNBUFFERED: '1' }
+        timeout-minutes: 12
+        env: { SHARD: '${{ matrix.shard }}/8', PYTHONUNBUFFERED: '1' }
         run: |
           set -o pipefail
           python tests/e2e.py 2>&1 | tee e2e.log
       - name: Remove an old failure log
         if: success() && github.event_name == 'push'
-        run: git push "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" --delete ci-log-${{ matrix.id }} 2>/dev/null || true
-      # when a part fails, its output goes to the branch ci-log-<part> (readable with plain git)
+        run: git push "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" --delete ci-log-part-${{ matrix.shard }} 2>/dev/null || true
+      # when a part fails, its output goes to the branch ci-log-part-<n> (readable with plain git)
       - name: Publish the output
         if: failure() && github.event_name == 'push'
         run: |
           mkdir -p /tmp/log && cp e2e.log /tmp/log/ 2>/dev/null || echo "no output" > /tmp/log/e2e.log
           echo "${{ job.status }} ${GITHUB_SHA} $(date -u +%FT%TZ)" > /tmp/log/STATUS
-          cd /tmp/log && git init -q -b ci-log-${{ matrix.id }}
+          cd /tmp/log && git init -q -b ci-log-part-${{ matrix.shard }}
           git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A && git commit -qm "e2e ${{ matrix.id }} ${GITHUB_SHA::7}"
-          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ci-log-${{ matrix.id }}
+          git add -A && git commit -qm "e2e part ${{ matrix.shard }} ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ci-log-part-${{ matrix.shard }}
 
   installer:
     name: Installer — builds
