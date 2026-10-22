@@ -153,7 +153,8 @@ export function factsHtml(list) {
 
 /* ---------------------------------------------------------------- the detailed track list */
 /** the columns this album has values for → { cols: CSS grid template, head: html, cell(t, x): html } */
-export function columns(a, tracks, ext) {
+/** `extra`: your own columns (columns.js), put before the heart's gap and the time */
+export function columns(a, tracks, ext, extra = []) {
   const albumArtist = (a.albumArtist || a.artist || '').toLowerCase();
   const showArtist = tracks.some((t) => String(t.artist || '').toLowerCase() !== albumArtist);
   const has = (f) => ext.some((x) => x[f] != null);
@@ -166,6 +167,7 @@ export function columns(a, tracks, ext) {
   if (has('tg')) C.push({ w: '58px', head: 'LUFS', title: $t('Громкость трека по EBU R128, из значения ReplayGain'), cls: 'c-x num', cell: (t, x) => (x.tg != null ? fmtLufs(lufsOf(x.tg)) : '') });
   if (has('dr')) C.push({ w: '42px', head: 'DR', title: $t('Динамический диапазон (foo_dr_meter)'), cls: 'c-x num', cell: (t, x) => (x.dr != null ? Math.round(x.dr) : '') });
   if (has('plays')) C.push({ w: '44px', head: '▶', title: $t('Прослушивания'), cls: 'c-x num', cell: (t, x) => (x.plays ? num(x.plays) : '') });
+  C.push(...extra);
   C.push({ w: '34px', head: '', cls: 'c-gap', cell: () => '' });            // the heart button sits here
   C.push({ w: '58px', head: $t('Время'), cls: 'c-dur num', cell: (t) => fmtTime(t.duration) });
   return {
