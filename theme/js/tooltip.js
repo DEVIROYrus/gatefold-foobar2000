@@ -9,6 +9,10 @@
  * Icon-only buttons keep an accessible name: the title becomes their aria-label when they have none.
  * In the collapsed sidebar the items are bare icons, so their own labels become tooltips there.
  */
+// the page is in the interface language before any title is taken over (i18n.js loads the
+// language with a top-level await, so a module that does not import it could run first)
+import './i18n-boot.js';
+
 const DELAY = 450, QUICK = 60, GAP = 8, EDGE = 8;
 let tip = null, cur = null, showT = 0, lastHide = 0;
 

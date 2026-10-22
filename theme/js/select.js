@@ -7,6 +7,7 @@
  * the theme's own menu; the <select> stays in the page, hidden, as the single source of truth:
  * code keeps reading and setting `.value` and listening for `change` as before.
  */
+import './i18n-boot.js';          // labels are read from options already in the interface language
 import { popupMenu } from './ui.js';
 
 const CHEV = '<svg class="sel-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';

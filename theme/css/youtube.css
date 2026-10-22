@@ -63,6 +63,21 @@
 .yt-vol .range { width: 100px; }
 .yt-gap { flex: 1; }
 .yt-rate span { min-width: 2.2em; text-align: left; }
+/* subtitles: one pill — the left part switches them on and off, the arrow opens the language list */
+.yt-ccg { display: inline-flex; align-items: stretch; }
+.yt-ccg .yt-cc { gap: 6px; padding-inline: 9px; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.yt-ccg .yt-ccm { padding-inline: 5px; border-top-left-radius: 0; border-bottom-left-radius: 0; margin-left: -1px; }
+.yt-ccg .yt-ccm svg { width: 14px; height: 14px; transition: transform 160ms; }
+.yt-ccg .yt-ccm.wait svg { animation: yt-ccwait .9s linear infinite; }
+@keyframes yt-ccwait { 50% { opacity: .3; } }
+/* the language as a small tag on the corner: the button keeps its width, so the row never re-wraps when they go on */
+.yt-cc { position: relative; }
+.yt-cc span { position: absolute; top: -6px; right: -3px; z-index: 1; pointer-events: none; font-size: 8.5px; font-weight: 800; letter-spacing: .04em; line-height: 1;
+  padding: 2px 3px 1.5px; border-radius: 4px; background: var(--ya, var(--accent)); color: #fff; box-shadow: 0 1px 4px rgb(0 0 0 / .35); }
+.yt-cc span:empty { display: none; }
+.yt-cc.on, .yt-cc.on + .yt-ccm { color: var(--yai); border-color: color-mix(in oklab, var(--ya) 45%, transparent); background: color-mix(in oklab, var(--ya) 12%, transparent); }
+.yt-cc.none { color: var(--text-3); }
+.yt-cc.none svg { opacity: .6; }
 .yt-auto.on { color: var(--yai); border-color: color-mix(in oklab, var(--ya) 45%, transparent); background: color-mix(in oklab, var(--ya) 12%, transparent); }
 
 /* ---------- side: queue / results / history */

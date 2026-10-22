@@ -1045,5 +1045,19 @@ export default {
  "Альбомы, у которых уже есть метки ReplayGain, анализировать не нужно": "Alben, die schon ReplayGain-Tags haben, müssen nicht analysiert werden",
  "Анализ: {0} из {1} альбомов без меток": "Analyse: {0} von {1} Alben ohne Tags",
  "Готово: у всех альбомов есть метки": "Fertig: Jedes Album hat seine Tags",
- "выровнено сейчас: {0}": "jetzt angeglichen: {0}"
+ "выровнено сейчас: {0}": "jetzt angeglichen: {0}",
+ "Язык и размер субтитров": "Untertitelsprache und -größe",
+ "{0} (автоматические)": "{0} (automatisch erstellt)",
+ "Субтитры включены": "Untertitel an",
+ "Субтитры выключены": "Untertitel aus",
+ "У этого видео нет субтитров": "Dieses Video hat keine Untertitel",
+ "Субтитры: {0}": "Untertitel: {0}",
+ "Без субтитров": "Aus",
+ "Автоперевод: {0}": "Automatisch übersetzen: {0}",
+ "Размер субтитров": "Untertitelgröße",
+ "Мелкие": "Klein",
+ "Обычные": "Normal",
+ "Крупные": "Groß",
+ "Очень крупные": "Sehr groß",
+ "Субтитры появятся, когда начнётся видео": "Untertitel sind verfügbar, sobald das Video läuft"
 };

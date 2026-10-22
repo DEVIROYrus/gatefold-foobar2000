@@ -87,7 +87,7 @@ export const num = (n, opts) => new Intl.NumberFormat(locale, opts).format(n);
 /* Static markup (index.html, canvas.html) is written in Russian; in other languages its text nodes and
    title / placeholder / aria-label / alt attributes are swapped once at start-up. Only nodes
    whose text exactly matches a source string change, so music data is never touched. */
-const ATTRS = ['title', 'placeholder', 'aria-label', 'alt'];
+const ATTRS = ['title', 'data-tip', 'placeholder', 'aria-label', 'alt'];
 export function translateDom(root = document.body) {
   document.documentElement.lang = lang;
   if (!DICT || !root) return;

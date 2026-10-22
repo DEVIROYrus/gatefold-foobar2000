@@ -25,6 +25,9 @@ DATA = ['Слепое пятно', 'Тихий Час', 'Неизвестный 
 SCAN = """(() => { const out = new Set(); const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   for (let n = w.nextNode(); n; n = w.nextNode()) { const v = n.nodeValue.trim(); if (/[А-Яа-яЁё]/.test(v) && n.parentElement && n.parentElement.offsetParent !== null) out.add(v.slice(0, 100)); }
   for (const el of document.querySelectorAll('[title],[placeholder],[aria-label]')) for (const a of ['title','placeholder','aria-label']) { const v = el.getAttribute(a); if (v && /[А-Яа-яЁё]/.test(v) && el.offsetParent !== null) out.add('@' + a + ': ' + v.slice(0, 100)); }
+  // tooltip.js moves every title into data-tip (and an icon button's aria-label): those are read
+  // whether or not the element is on screen right now — the player bar, menus and hidden panels all show them later
+  for (const el of document.querySelectorAll('[data-tip],button[aria-label]')) for (const a of ['data-tip','aria-label']) { const v = el.getAttribute(a); if (v && /[А-Яа-яЁё]/.test(v)) out.add('@' + a + ': ' + v.slice(0, 100)); }
   return [...out]; })()"""
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -68,9 +71,17 @@ async def nav(pg, v, wait=1100):
     await pg.evaluate(f"document.querySelector('.nav-item[data-view={v}]').click()")
     await pg.wait_for_timeout(wait)
 
+async def slow_locales(ctx):
+    # the language file arrives late (a cold disk, a busy machine): modules that run before it is
+    # in must not take the Russian markup as it is (issue #2: the play button's tooltip stayed Russian)
+    async def late(route):
+        await asyncio.sleep(0.6); await route.continue_()
+    await ctx.route('**/js/locales/*.js', late)
+
 async def test_language(browser, port, lang):
     print(f'· every screen, language={lang}')
-    ctx, pg, errs = await page(browser, port, {'language': lang})
+    ctx, pg, errs = await page(browser, port, {'language': lang}, setup=slow_locales)
+    await pg.wait_for_timeout(700)
     leftovers = {}
     for v in VIEWS:
         await nav(pg, v)
@@ -86,6 +97,19 @@ async def test_language(browser, port, lang):
         check(not leftovers, f'{lang}: no Russian interface text on screen {list(leftovers.items())[:5]}')
         check(await pg.evaluate("document.documentElement.lang") == lang, f'{lang}: <html lang="{lang}">')
     await ctx.close()
+    if lang == 'ru': return
+    # the mini player and the Canvas window are pages of their own
+    for pagefile in ('mini.html', 'canvas.html'):
+        ctx = await browser.new_context(viewport={'width': 900, 'height': 560}); await slow_locales(ctx)
+        pg = await ctx.new_page(); perrs = []
+        pg.on('pageerror', lambda e: perrs.append(str(e)))
+        await pg.add_init_script("localStorage.setItem('aurora.settings.v1', JSON.stringify({language: %s}));" % json.dumps(lang) + MOCK)
+        await pg.goto(f'http://127.0.0.1:{port}/theme/{pagefile}'); await pg.wait_for_timeout(2200)
+        await pg.mouse.move(450, 280); await pg.wait_for_timeout(300)
+        left = [s for s in await pg.evaluate(SCAN) if not any(d in s for d in DATA)]
+        check(not left, f'{lang} {pagefile}: no Russian interface text {left[:5]}')
+        check(not perrs, f'{lang} {pagefile}: no page errors {perrs[:2]}')
+        await ctx.close()
 
 async def test_playlists(browser, port):
     print('· playlist views and likes')
@@ -116,6 +140,78 @@ async def test_youtube(browser, port):
             check('off' in (await pg.evaluate("document.querySelector('#view-youtube .yt-note')?.innerText || ''")).lower(), 'search off: explains how to turn it on')
         check(not errs, f'{mode}: no page errors {errs[:2]}')
         await ctx.close()
+
+async def test_youtube_captions(browser, port):
+    print('· YouTube subtitles: off by default, C, language, translation, size, next video')
+    ctx, pg, errs = await page(browser, port, {'language': 'en'})
+    await nav(pg, 'youtube', 800)
+    async def watch(vid):
+        await pg.fill('#view-youtube .yt-search input', f'https://www.youtube.com/watch?v={vid}'); await pg.press('#view-youtube .yt-search input', 'Enter')
+        await pg.evaluate("document.activeElement.blur()"); await pg.wait_for_timeout(1500)
+    shown = lambda: pg.evaluate("window.__yt.shown")
+    btn = lambda: pg.evaluate("(() => { const b = document.querySelector('#view-youtube .yt-cc'); return { on: b.classList.contains('on'), none: b.classList.contains('none'), pressed: b.getAttribute('aria-pressed'), label: b.querySelector('span').textContent, tip: b.dataset.tip || b.title }; })()")
+    async def menu():
+        await pg.click('#view-youtube .yt-ccm'); await pg.wait_for_timeout(900)
+        return await pg.evaluate("[...document.querySelectorAll('#layer .menu .mi')].map(m => (m.querySelector('.chk').textContent ? '✓' : '') + m.textContent.replace(/[✓›]/g, '').trim())")
+    async def pick(label):
+        await pg.click(f"#layer .menu .mi:has-text({json.dumps(label)})"); await pg.wait_for_timeout(500)
+
+    await watch('vidAAAAAAA1')
+    b = await btn()
+    check(await shown() == '', f'off by default, even when YouTube turns captions on by itself ({await shown()!r})')
+    check(not b['on'] and b['pressed'] == 'false' and 'Subtitles off' in b['tip'], f'the button shows they are off {b}')
+
+    await pg.keyboard.press('c'); await pg.wait_for_timeout(1200)
+    b = await btn()
+    check(await shown() == 'en', f'C turns them on, in the interface language ({await shown()!r})')
+    check(b['on'] and b['label'] == 'EN' and b['pressed'] == 'true' and 'English' in b['tip'], f'the button shows the language {b}')
+    check('Subtitles: English' in await pg.evaluate("document.body.innerText"), 'a toast says which subtitles are on')
+
+    items = await menu()
+    check(items[:4] == ['Off', '✓English', 'German', 'Russian (auto-generated)'] and 'Auto-translate: English' in items and 'Subtitle size' in items, f'the menu lists the tracks, the current one ticked {items}')
+    await pick('German')
+    check(await shown() == 'de' and (await btn())['label'] == 'DE', f'a track from the menu ({await shown()!r})')
+    check(await pg.evaluate("JSON.parse(localStorage.getItem('aurora.yt.ccLang'))") == 'de', 'the language is remembered')
+
+    await menu(); await pg.hover("#layer .menu .mi:has-text('Subtitle size')"); await pg.wait_for_timeout(300)
+    await pick('Large')
+    check(await pg.evaluate("window.__yt.fs") == 1, 'subtitle size')
+
+    await menu(); await pick('Auto-translate: English')
+    check(await shown() == 'de>en' and (await btn())['label'] == 'EN', f'YouTube translates into the interface language ({await shown()!r})')
+    await menu(); await pick('Auto-translate: English')
+    check(await shown() == 'de', f'translation off again ({await shown()!r})')
+
+    await watch('vidBBBBBBB2'); await pg.wait_for_timeout(600)
+    check(await shown() == 'de' and await pg.evaluate("window.__yt.fs") == 1, f'the next video: the same language and size ({await shown()!r})')
+
+    await watch('noccCCCCCC3'); await pg.wait_for_timeout(3500)
+    b = await btn()
+    check(b['none'] and not b['on'] and 'no subtitles' in b['tip'], f'a video without subtitles says so {b}')
+    items = await menu()
+    check('This video has no subtitles' in items, f'… and so does the menu {items}')
+    await pg.keyboard.press('Escape'); await pg.wait_for_timeout(200)
+
+    await watch('vidDDDDDDD4'); await pg.wait_for_timeout(600)
+    check(await shown() == 'de', f'subtitles return with the next video that has them ({await shown()!r})')
+    await pg.keyboard.press('c'); await pg.wait_for_timeout(500)
+    check(await shown() == '' and await pg.evaluate("JSON.parse(localStorage.getItem('aurora.yt.cc'))") is False, 'C turns them off and that is remembered')
+    await watch('vidEEEEEEE5'); await pg.wait_for_timeout(600)
+    check(await shown() == '', f'still off on the next video, though YouTube turns them on ({await shown()!r})')
+
+    items = await menu()
+    check(items[0] == '✓Off' and 'German' in items, f'switched off, the menu still lists the tracks {items}')
+    await pg.keyboard.press('Escape'); await pg.wait_for_timeout(800)
+    check(await shown() == '', f'looking at the list does not switch them on ({await shown()!r})')
+
+    await pg.evaluate("document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'с', code: 'KeyC', bubbles: true }))"); await pg.wait_for_timeout(1200)   # Russian layout: the same key
+    check(await shown() == 'de', f'С on the Russian layout ({await shown()!r})')
+
+    await pg.evaluate("document.querySelector('#view-youtube [data-a=full]').click()"); await pg.wait_for_timeout(600)
+    r = await pg.evaluate("(() => { const b = document.querySelector('.yt-fsbar .yt-cc'); if (!b) return null; const x = b.getBoundingClientRect(); return [x.width, x.height, x.right <= innerWidth]; })()")
+    check(r and r[0] > 20 and r[2], f'the button is in the fullscreen controls {r}')
+    check(not errs, f'no page errors {errs[:2]}')
+    await ctx.close()
 
 async def test_settings(browser, port):
     print('· settings: search, language switch')
@@ -1024,7 +1120,7 @@ async def main():
         run = lambda name: not only or any(o in name for o in only.split(','))
         for lang in ('ru', 'en', 'de', 'es', 'zh'):
             if run('language'): await timed(f'language {lang}', test_language(browser, port, lang))
-        for name, fn in [('playlists', test_playlists), ('youtube', test_youtube), ('settings', test_settings), ('updates', test_updates),
+        for name, fn in [('playlists', test_playlists), ('youtube', test_youtube), ('youtube_captions', test_youtube_captions), ('settings', test_settings), ('updates', test_updates),
                          ('tooltips', test_tooltips), ('canvas_volume', test_canvas_volume), ('fb2k_prefs', test_fb2k_prefs), ('welcome', test_welcome),
                          ('playlist_editing', test_playlist_editing), ('windows', test_windows), ('vu', test_vu), ('smart_color_radio', test_smart_color_radio),
                          ('lyrics_sync', test_lyrics_sync), ('album_details', test_album_details), ('level', test_level), ('sound_offer', test_sound_offer), ('similar_albums', test_similar_albums), ('sound_ai', test_sound_ai), ('layout', test_layout), ('stability', test_stability)]:
