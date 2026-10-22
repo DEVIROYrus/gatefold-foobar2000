@@ -2,7 +2,7 @@
 
 All notable changes are listed here. Versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.2.0] — volume levelling, album details
 
 **Volume levelling** — Settings → Volume levelling: one switch, and every album plays as loud as the next while keeping its own quiet and loud moments. A quiet interlude stays quiet: by default the gain is the album's, measured over the whole album at once, never the track's own.
 
