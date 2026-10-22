@@ -111,9 +111,14 @@ export const eraSim = (y1, y2) => (y1 && y2 ? clamp01(1 - Math.abs(y1 - y2) / 22
 export function artistScore(f) {
   // the services count fully; your playlists only a little (a playlist of favourites mixes everything:
   // sharing one with the seed says little about sounding like it)
-  const dz = Math.max(f.deezer || 0, 0.6 * (f.deezer2 || 0));
-  const C = noisyOr(dz, f.lb, 0.45 * (f.pl || 0));
-  const ext = (dz > 0.05 ? 1 : 0) + ((f.lb || 0) > 0.05 ? 1 : 0);       // independent outside sources that agree
+  // related-of-related and co-listening favour the famous: their weight shrinks with fame (f.fame)
+  const fame = f.fame == null ? 1 : f.fame;
+  const lb = (f.lb || 0) * fame;
+  const dz = Math.max(f.deezer || 0, 0.6 * (f.deezer2 || 0) * fame);
+  const C = noisyOr(dz, lb, 0.45 * (f.pl || 0));
+  // independent outside sources that agree: Deezer's own related list and ListenBrainz (not the
+  // related-of-related, which is popularity again)
+  const ext = ((f.deezer || 0) > 0.05 ? 1 : 0) + (lb > 0.05 ? 1 : 0);
   // genres voted on MusicBrainz are a strong fact; a file's own genre tag (genreTags) a weak one
   const strongGenre = f.genre != null && !f.genreTags;
   const parts = [[f.genre, f.genreTags ? 0.2 : 0.45], [f.sound, 0.35], [f.style, 0.2]].filter(([v]) => v != null);
@@ -158,7 +163,7 @@ export class Planner {
     this.cap = cap || (pool.length >= 14 ? 2 : 3); this.win = window; this.seedEvery = seedEvery; this.anchor = anchor; this.anchorTop = anchorTop;
     this.played = new Set(); this.songs = new Set(); this.hist = []; this.albums = []; this.n = 0; this.turn = 0;
     this.relaxed = false; this.why = new Map();
-    if (this.seedTrack) this.mark(this.seedTrack, this.seed ? this.seed.key : '');
+    if (this.seedTrack) this.place(this.seedTrack, this.seed ? this.seed.key : '');      // its album counts too
   }
   mark(t, key) {
     this.played.add(String(t.h).toLowerCase());

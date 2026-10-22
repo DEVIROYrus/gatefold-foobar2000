@@ -199,6 +199,8 @@ for (const lf of fs.readdirSync(locDir).filter((x) => x.endsWith('.js'))) {
   want('Deezer and ListenBrainz both relate it: in, though held back by the genres', S({ deezer: 0.9, lb: 0.6, genre: 0.08, sound: 0.4, style: 0.3 }) > 0.1 && S({ deezer: 0.9, lb: 0.6, genre: 0.08, sound: 0.4, style: 0.3 }) < S({ deezer: 0.9, lb: 0.6, genre: 0.5, sound: 0.4, style: 0.3 }) * 0.6);
   want('your playlists and the genres agree: in', S({ pl: 0.8, genre: 0.5, sound: 0.5, style: 0.5 }) > 0.1);
   want('playlists weigh less than the services', S({ pl: 0.9, genre: 0.5, sound: 0.5, style: 0.5 }) < S({ deezer: 0.9, genre: 0.5, sound: 0.5, style: 0.5 }) * 0.7);
+  want('related-of-related and ListenBrainz alone do not override the genres (Iron Maiden on a HIM radio)', S({ deezer2: 0.8, lb: 0.6, genre: 0.05, sound: 0.4, style: 0.3 }) === 0);
+  want('the famous count less as evidence', S({ lb: 0.6, genre: 0.3, sound: 0.5, style: 0.5, fame: 0.4 }) < S({ lb: 0.6, genre: 0.3, sound: 0.5, style: 0.5 }) * 0.8);
   want('an artist on every radio is held back', S({ deezer: 0.5, genre: 0.3, sound: 0.5, style: 0.5, hub: 0.6 }) < S({ deezer: 0.5, genre: 0.3, sound: 0.5, style: 0.5 }));
   // a skipped artist comes up less
   for (const b of bad) fail('radio: ' + b);

@@ -101,22 +101,23 @@ async function deezerArtist(name) {
 }
 async function deezerRelated(id) {
   const r = await getJSON(`https://api.deezer.com/artist/${id}/related?limit=40`);
-  return r ? ((r && r.data) || []).map((d) => ({ id: d.id, name: d.name })) : null;
+  return r ? ((r && r.data) || []).map((d) => ({ id: d.id, name: d.name, fans: d.nb_fan || 0 })) : null;
 }
 /** related artists, and theirs (only the ones several of them point to: one path alone drifts away) */
 async function deezerFacts(seedName, lib) {
-  const v = await remembered('dz', artistKey(seedName), async () => {
+  const v = await remembered('dz2', artistKey(seedName), async () => {
     const d = await deezerArtist(seedName);
     if (!d) return null;                                     // offline: try again next time
-    if (!d.id) return { id: 0, first: [], hop: [] };
+    if (!d.id) return { id: 0, fans: 0, first: [], hop: [] };
     const first = await deezerRelated(d.id);
     if (!first) return null;
     const hop = await Promise.all(first.slice(0, 10).map((r) => deezerRelated(r.id).then((x) => x || []).catch(() => [])));
-    return { id: d.id, first, hop };
+    return { id: d.id, fans: d.fans || 0, first, hop };
   });
   if (!v) return null;
-  const d1 = new Map(), d2 = new Map(), ids = new Map();
+  const d1 = new Map(), d2 = new Map(), ids = new Map(), fans = new Map();
   ids.set(artistKey(seedName), v.id);
+  for (const r of [...v.first, ...v.hop.flat()]) if (r.fans) fans.set(artistKey(r.name), r.fans);
   v.first.forEach((r, i) => { const k = artistKey(r.name); ids.set(k, r.id); if (lib.has(k)) d1.set(k, Math.max(d1.get(k) || 0, 1 - 0.5 * i / Math.max(10, v.first.length))); });
   const support = new Map();
   v.hop.forEach((list, j) => list.forEach((r, i) => {
@@ -127,7 +128,7 @@ async function deezerFacts(seedName, lib) {
     support.set(k, s);
   }));
   for (const [k, s] of support) if (s.n >= 2) d2.set(k, Math.min(0.9, (0.25 + 0.15 * Math.min(4, s.n)) * s.w));
-  return { d1, d2, ids };
+  return { d1, d2, ids, fans, seedFans: v.fans || 0 };
 }
 
 async function mbid(name) {
@@ -267,11 +268,12 @@ function noteHubs(ctx) {
   for (const p of ctx.pool.slice(0, 30)) { const l = (H.hits[p.key] || []).filter((x) => live.has(x) && x !== ctx.seedKey); l.push(ctx.seedKey); H.hits[p.key] = l; }
   IDB.kvSet(HUB_KEY, H);
 }
-const hubFactor = (ctx, key, genre) => {
+const hubFactor = (ctx, key, f) => {
   const H = ctx.hubs, total = H.seeds.filter((x) => x !== ctx.seedKey).length;
   const hits = (H.hits[key] || []).filter((x) => x !== ctx.seedKey && H.seeds.includes(x)).length;
-  if (total < 5 || hits / total < 0.5 || (genre != null && genre >= 0.4)) return null;
-  return 0.6;
+  // not when Deezer names it directly as related, or the genres clearly agree
+  if (total < 3 || hits / total < 0.5 || (f.deezer || 0) >= 0.4 || (f.genre != null && f.genre >= 0.5)) return null;
+  return 0.55;
 };
 
 /** every library artist scored against the seed; the ones that are on the radio at all, best first */
@@ -298,7 +300,11 @@ function scorePool(ctx) {
       deezer: dz && dz.d1.get(a.key), deezer2: dz && dz.d2.get(a.key), lb: lb && lb.get(a.key), pl: pl && pl.get(a.key),
       genre: Core.genreSim(gSeed, g, idf), genreTags: tagged.has(a.key) || tagged.has(seedKey), sound: snd ? snd.sound : null, style: snd ? snd.style : null, era: Core.eraSim(seedYear, year),
     };
-    f.hub = hubFactor(ctx, a.key, f.genre);
+    // the famous are «similar» to everybody (in co-listening and in related-of-related lists): that
+    // evidence counts less the more famous the artist is than the seed
+    const fc = dz && dz.fans.get(a.key), fs = dz && dz.seedFans;
+    f.fame = fc && fs ? Core.clamp01(1 - 0.25 * Math.log10(Math.max(1, fc / fs))) : null;
+    f.hub = hubFactor(ctx, a.key, f);
     const { s, C, K } = Core.artistScore(f);
     if (s < 0.1) continue;
     const why = [];
