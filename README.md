@@ -53,7 +53,7 @@ Covers and titles belong to their authors and are shown under these licences. Th
 - **Canvas** — full-screen Now playing, also on a second monitor; a **mini player** above other windows; taskbar buttons and progress; an optional tray icon.
 - **«More like this» radio** without sound analysis too: artists related to the seed that you actually have.
 - **Liked** — a heart in the player and on every row, kept in an ordinary foobar2000 playlist.
-- **YouTube** — paste a link, or search with your own YouTube Data API key.
+- **YouTube** — paste a link, or search with your own YouTube Data API key. Subtitles on or off with one button, in the language you pick.
 - **English, Russian, German, Spanish and Chinese (Simplified)**, picked from Windows or set in Settings.
 - **Fun mode** (hidden — click the “Gatefold” title ten times): three interface styles and 45 achievements.
 
@@ -135,7 +135,7 @@ Free code signing provided by [SignPath.io](https://about.signpath.io/), certifi
 
 In a playlist: Shift/Ctrl+click select · Ctrl+A all · Delete remove · Ctrl+Z / Ctrl+Y undo / redo · Alt+↑/↓ move · Enter play · Esc clear the selection.
 
-On the YouTube screen: Space/K play/pause · J/L ±10 s · F full screen · T theatre mode · Q quality · N/P next/previous · `/` search.
+On the YouTube screen: Space/K play/pause · J/L ±10 s · F full screen · T theatre mode · Q quality · C subtitles · N/P next/previous · `/` search.
 
 ## Troubleshooting
 

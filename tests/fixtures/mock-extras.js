@@ -86,7 +86,7 @@
       target.replaceWith(f); this.f = f; this.o = o; this.t = 0; this.d = 245; this.st = -1; this.vid = o.videoId; this.vol = 100; this.rate = 1; window.__yt = this;
       setTimeout(() => { o.events.onReady && o.events.onReady({ target: this }); if (this.vid) this._play((o.playerVars || {}).start || 0); }, 60);
     }
-    _play(s) { this.t = s; this.st = 1; this.f.textContent = '▶ ' + this.vid; this.o.events.onStateChange({ data: 1 }); clearInterval(this.iv); this.iv = setInterval(() => { if (this.st === 1) this.t += 0.25; }, 250); }
+    _play(s) { this._autoCC(); this.t = s; this.st = 1; this.f.textContent = '▶ ' + this.vid; this.o.events.onStateChange({ data: 1 }); clearInterval(this.iv); this.iv = setInterval(() => { if (this.st === 1) this.t += 0.25; }, 250); }
     loadVideoById(o) { this.vid = o.videoId; this._play(o.startSeconds || 0); }
     cuePlaylist() { this.pl = ['plv00000001', 'plv00000002', 'plv00000003']; setTimeout(() => this.o.events.onStateChange({ data: 5 }), 40); }
     getPlaylist() { return this.pl || []; }
@@ -102,6 +102,22 @@
     getPlaybackQuality() { return this.q || 'hd720'; } setPlaybackQuality(q) { this.q = q; }
     getIframe() { return this.f; }
     getVideoData() { return { video_id: this.vid, title: '', author: '' }; }
+    // the «captions» module: two real tracks and a generated one (none for an id with «nocc»); like
+    // YouTube, the player turns captions on by itself a moment after a video starts (an owner's default)
+    _tracks() { return /nocc/i.test(this.vid) ? [] : [{ languageCode: 'en', languageName: 'English', kind: '', vss_id: '.en', is_translateable: true }, { languageCode: 'de', languageName: 'German', kind: '', vss_id: '.de', is_translateable: true }, { languageCode: 'ru', languageName: 'Russian (auto-generated)', kind: 'asr', vss_id: 'a.ru', is_translateable: true }]; }
+    _api() { setTimeout(() => this.o.events.onApiChange && this.o.events.onApiChange({ target: this }), 0); }
+    _autoCC() { clearTimeout(this.autoT); if (!/nocc/i.test(this.vid)) this.autoT = setTimeout(() => { if (this.cc !== 'on') { this.cc = 'on'; this.ccTrack = this._tracks()[0]; this._api(); } }, 500); }
+    loadModule(m) { if (m !== 'captions') return; if (this.cc === 'on') return; this.cc = 'loading'; clearTimeout(this.ccT); this.ccT = setTimeout(() => { this.cc = 'on'; if (!this.ccTrack || !this.ccTrack.languageCode) this.ccTrack = this._tracks()[0] || {}; this._api(); }, 300); }
+    unloadModule(m) { if (m !== 'captions') return; clearTimeout(this.ccT); clearTimeout(this.autoT); this.cc = ''; this.ccTrack = {}; this._api(); }
+    getOption(m, k) {
+      if (m !== 'captions' || this.cc !== 'on') return undefined;
+      if (k === 'tracklist') return this._tracks();
+      if (k === 'track') return this.ccTrack || {};
+      if (k === 'translationLanguages') return [{ languageCode: 'en', languageName: 'English' }, { languageCode: 'de', languageName: 'German' }, { languageCode: 'ru', languageName: 'Russian' }];
+      if (k === 'fontSize') return this.fs || 0;
+    }
+    setOption(m, k, v) { if (m !== 'captions') return; if (k === 'track') { this.ccTrack = v; (window.__ytcc = window.__ytcc || []).push(JSON.parse(JSON.stringify(v))); } if (k === 'fontSize') this.fs = v; }
+    get shown() { return this.cc === 'on' && this.ccTrack && this.ccTrack.languageCode ? this.ccTrack.languageCode + (this.ccTrack.translationLanguage ? '>' + this.ccTrack.translationLanguage.languageCode : '') : ''; }
   }
   window.YT = { Player: FakePlayer };
 })();

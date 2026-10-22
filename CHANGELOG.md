@@ -2,6 +2,18 @@
 
 All notable changes are listed here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+**YouTube subtitles: a button to switch them.** YouTube turned captions on by itself for many videos (an owner's default, a language other than yours), and there was no way to hide them. Now the CC button in the player switches them on and off (or the C key), and the choice is kept for every following video — off by default.
+
+- **The arrow next to it lists the video's tracks**, YouTube's generated ones marked as such, the current one ticked. The language you pick is remembered and chosen first on later videos; otherwise the interface language, then YouTube's own pick.
+- **Auto-translate** into the interface language (YouTube's translation) when a video has no track in it, and **four subtitle sizes**.
+- The button shows the language on a small tag, says when a video has no subtitles at all, and is part of the fullscreen controls. The player itself now speaks the interface language (track names, YouTube's own labels).
+
+**Every tooltip in the interface language.** Since 1.1.0 the language file loads in the background, and the module that turns `title` into the theme's own tooltips could run first and keep the Russian text: the play button said «Воспроизведение / пауза (Пробел)» in an English interface, and so did many other buttons, in the main window and in the mini player. The tooltips now wait for the language, and the tests read every tooltip on every screen, with the language file arriving late on purpose.
+
+**Escape closes an open menu in the YouTube view** instead of also leaving the view.
+
 ## [1.2.0] — volume levelling, album details
 
 **Volume levelling** — Settings → Volume levelling: one switch, and every album plays as loud as the next while keeping its own quiet and loud moments. A quiet interlude stays quiet: by default the gain is the album's, measured over the whole album at once, never the track's own.
