@@ -662,13 +662,18 @@ async def test_smart_color_radio(browser, port):
     if os.environ.get('SHOTS'): await pg.screenshot(path=os.environ['SHOTS'] + '/colorwall.png')
     # radio: similar artists, then the ones that also sound alike
     await nav(pg, 'now', 900)
+    # the next track of the same album plays: the radio is that track's (the button was drawn for the first one)
+    nxt = await pg.evaluate("(async () => { const i = (await fb2k.invoke('playback.getCurrentTrackIndex')).index; const a = window.__track(i), b = window.__track(i + 1); window.__emit('playback:trackChanged', b); return a.album === b.album ? b : null; })()")
+    await pg.wait_for_timeout(900)
     await pg.click("#npActions .btn:has-text('Radio')"); await pg.wait_for_timeout(3000)
     toast = await pg.evaluate("[...document.querySelectorAll('.toast')].map(t => t.innerText).join(' | ')")
     for _ in range(20):
         await pg.wait_for_timeout(1000)
         if len((await pg.evaluate("window.__more.radio") or {}).get('handles', [])) >= 15: break
     r = await pg.evaluate("window.__more.radio")
-    check(r and r['name'] == 'Radio: Lumen Arcade' and len(r['handles']) >= 15, f'radio builds a playlist from the library ({r and len(r["handles"])} tracks)')
+    check(nxt and r and r['handles'][0] == nxt['absolutePath'], f'the radio starts from the track playing now, not the first one played from the album ({nxt and nxt["title"]})')
+    check(r and nxt and r['name'] == f"Radio: {nxt['title']} — Lumen Arcade", f'and is named after it ({r and r["name"]})')
+    check(r and len(r['handles']) >= 15, f'radio builds a playlist from the library ({r and len(r["handles"])} tracks)')
     arts = await pg.evaluate("(() => { const all = window.__edit.rows || []; return window.__more.radio.handles.map(h => (all.find(t => t.absolutePath === h) || {}).albumArtist); })()")
     harsh = sum(1 for a in arts if a in ('Blue Hours', 'Fern Assembly'))
     check(arts and arts[0] == 'Lumen Arcade', 'it starts with the seed track')
@@ -764,7 +769,10 @@ async def test_sound_ai(browser, port):
     await nav(pg, 'now', 900)
     await pg.click("#npActions .btn:has-text('Radio')"); await pg.wait_for_timeout(2500)
     toast = await pg.evaluate("[...document.querySelectorAll('.toast')].map(t => t.innerText).join(' | ')")
-    await pg.wait_for_timeout(5000)
+    for _ in range(25):
+        await pg.wait_for_timeout(1000)
+        if len((await pg.evaluate("window.__more.radio") or {}).get('handles', [])) >= 15: break
+    print('    radio:', await pg.evaluate("(async () => { const R = (await import('/theme/js/radio.js'))._debug(); return R.planner ? R.planner.pool.map(p => p.name + ' ' + p.s.toFixed(2) + ' fit ' + p.fit.toFixed(2) + (p.dead ? ' dead' : '')).join(' | ') : 'no planner'; })()"))
     r = await pg.evaluate("window.__more.radio")
     arts = await pg.evaluate("(() => { const all = window.__edit.rows || []; return window.__more.radio.handles.map(h => (all.find(t => t.absolutePath === h) || {}).albumArtist); })()")
     harsh = sum(1 for a in arts if a in ('Blue Hours', 'Fern Assembly'))

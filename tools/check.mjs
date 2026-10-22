@@ -109,4 +109,89 @@ for (const lf of fs.readdirSync(locDir).filter((x) => x.endsWith('.js'))) {
   if (!bad.length) console.log(`✓ loudness meter: ${cases.length} reference checks`);
 }
 
+// 5. the radio's decisions (radio-core.js) on a library like the one that went wrong: a Finnish rock
+//    seed; related artists that sound a little different; and artists that sound *closer* but are
+//    another music altogether (K-pop, J-rock, thrash) — only the content points to those
+{
+  const RC = await import('file://' + path.join(THEME, 'js', 'radio-core.js'));
+  const bad = [];
+  const want = (name, cond, info = '') => { if (!cond) bad.push(name + (info ? ' — ' + info : '')); };
+  // versions and fillers
+  const ok = (title, album = 'Album', du = 220, seed = null) => RC.songCheck({ title, album, duration: du }, seed).ok;
+  want('a remix stays out', !ok("Crush 'Em [Jock mix] [bonus track]"));
+  want('a remaster is the song', ok('Still Standing (Remastered 2023)'));
+  want('a radio edit is the song', ok('In the Shadows - Radio Edit'));
+  want('a bonus track is a song', ok('Livin\' in a World Without You [bonus track]'));
+  want('live stays out…', !ok('In the Shadows (Live)'));
+  want('…unless the seed is live', ok('In the Shadows (Live)', 'Album', 220, { title: 'Guilty (Live)', album: 'Live 2003' }));
+  want('a live album stays out', !ok('Guilty', 'Live at Wacken'));
+  want('intros and interludes stay out', !ok('Intro') && !ok('Interlude', 'Album', 200) && !ok('Night (Interlude)'));
+  want('short pieces stay out', !ok('Song', 'Album', 60));
+  want('the same song on another album is spotted', RC.songKey('Still Standing (Remastered)') === RC.songKey('Still Standing'));
+  want('genre similarity: shared rare genres count', RC.genreSim(new Map([['gothic rock', 1], ['alternative rock', 0.8]]), new Map([['gothic rock', 1], ['love metal', 0.6]])) > 0.4);
+  want('genre similarity: nothing shared = 0', RC.genreSim(new Map([['gothic rock', 1]]), new Map([['k-pop', 1]])) === 0);
+
+  // the library
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+  const A = {
+    'him':            { deezer: 1, lb: 0.8, genre: 0.55, sound: 0.45, style: 0.6, era: 0.9 },
+    'sunrise avenue': { deezer: 0.95, genre: 0.6, sound: 0.55, style: 0.55, era: 0.9 },
+    'poets of the fall': { deezer: 0.9, lb: 0.6, genre: 0.5, sound: 0.5, style: 0.5 },
+    'negative':       { deezer: 0.85, genre: 0.6, sound: 0.5, style: 0.5 },
+    'lordi':          { deezer: 0.8, genre: 0.3, sound: 0.3, style: 0.3 },
+    'apocalyptica':   { deezer: 0.75, genre: 0.3, sound: 0.2, style: 0.25 },
+    'nightwish':      { deezer2: 0.5, lb: 0.5, genre: 0.25, sound: 0.2, style: 0.3 },
+    'evanescence':    { lb: 0.7, genre: 0.45, sound: 0.55, style: 0.5 },
+    'linkin park':    { lb: 0.6, genre: 0.35, sound: 0.6, style: 0.45 },
+    '30 seconds to mars': { lb: 0.55, pl: 0.4, genre: 0.4, sound: 0.6, style: 0.5 },
+    // close in sound, another music: only the content points to them
+    'kiss of life':   { genre: 0.02, sound: 0.95, style: 0.4 },
+    'gacharic spin':  { genre: 0.15, sound: 0.85, style: 0.5 },
+    'maximum the hormone': { genre: 0.1, sound: 0.7, style: 0.3 },
+    'megadeth':       { genre: 0.05, sound: 0.3, style: 0.2 },
+    'bumblefoot':     { genre: 0.1, sound: 0.4, style: 0.2 },
+    'kartsy':         { sound: 0.75, style: 0.35 },
+    'avantasia':      { deezer2: 0.3, genre: 0.12, sound: 0.15, style: 0.2 },
+    'pure reason revolution': { genre: 0.1, sound: 0.4, style: 0.3 },
+  };
+  for (let i = 0; i < 40; i++) A['filler ' + i] = { genre: rnd() * 0.3, sound: rnd() * 0.6, style: rnd() * 0.5 };
+  const TRAPS = ['kiss of life', 'gacharic spin', 'maximum the hormone', 'megadeth', 'bumblefoot', 'kartsy', 'pure reason revolution'];
+  const pool = Object.entries(A).map(([key, f]) => ({ key, name: key, ...RC.artistScore(f), why: [] })).filter((p) => p.s >= 0.1).sort((a, b) => b.s - a.s);
+  want('artists only the sound points to, against the genre, are not on the radio', !pool.some((p) => ['kiss of life', 'gacharic spin', 'megadeth', 'maximum the hormone'].includes(p.key)), pool.map((p) => p.key).join(', '));
+  const titles = ['Song', 'Ballad', 'Anthem', 'Night', 'Fire', 'Shadow', 'Rain', 'Heart', 'Run (Remix)', 'Intro', 'Live Wire (Live)', 'Echo'];
+  const tracksOf = (key) => {
+    const f = A[key] || { sound: 0.5 };
+    return titles.map((t, i) => ({ h: key + '/' + i, title: key === 'the rasmus' ? t + ' R' : t + ' ' + key, album: key + (i < 6 ? ' I' : ' II'), duration: 200 + i,
+      sim: RC.clamp01((f.sound ?? 0.5) + (rnd() - 0.5) * 0.4), pop: i < 4 ? 1 - i * 0.2 : 0, plays: null }));
+  };
+  let traps = 0, total = 0, firsts = new Set();
+  const top8 = new Set(pool.slice(0, 8).map((p) => p.key));
+  for (let run = 0; run < 20; run++) {
+    const P = new RC.Planner({ pool, seed: { key: 'the rasmus', track: { h: 'seed', title: 'Still Standing', album: 'Rise', duration: 200 } }, tracksOf, rnd });
+    const out = [];
+    for (let i = 0; i < 24; i++) { const x = await P.next(); if (!x) break; out.push(x); }
+    total += out.length;
+    traps += out.filter((x) => TRAPS.includes(x.key)).length;
+    const keys = ['the rasmus', ...out.map((x) => x.key)];
+    want(`run ${run}: never the same artist twice in a row`, keys.every((k, i) => !i || k !== keys[i - 1]));
+    const cnt = {}; for (const k of keys) cnt[k] = (cnt[k] || 0) + 1;
+    want(`run ${run}: at most 3 tracks of an artist (the seed's ~1 in 6)`, Object.entries(cnt).every(([k, n]) => n <= (k === 'the rasmus' ? 5 : 3)), JSON.stringify(cnt));
+    want(`run ${run}: the seed's artist comes back`, (cnt['the rasmus'] || 0) >= 3);
+    want(`run ${run}: no remix, live version or intro`, out.every((x) => !/Remix|Live|Intro/.test(x.t.title)));
+    want(`run ${run}: the first tracks come from the closest artists`, out.slice(0, 6).every((x) => top8.has(x.key) || x.key === 'the rasmus'), out.slice(0, 6).map((x) => x.key).join(', '));
+    want(`run ${run}: 24 tracks`, out.length === 24, String(out.length));
+  }
+  want('tracks of artists that only sound alike stay rare', traps / total <= 0.02, `${traps} of ${total}`);
+  // a library with little that fits: the radio stops instead of filling up with anything
+  const small = { 'him': A['him'], 'negative': A['negative'], 'kiss of life': A['kiss of life'], 'gacharic spin': A['gacharic spin'], 'megadeth': A['megadeth'] };
+  const sp = Object.entries(small).map(([key, f]) => ({ key, name: key, ...RC.artistScore(f), why: [] })).filter((p) => p.s >= 0.1);
+  const P2 = new RC.Planner({ pool: sp, seed: { key: 'the rasmus', track: { h: 'seed', title: 'Still Standing', album: 'Rise', duration: 200 } }, tracksOf: (k) => tracksOf(k).slice(0, 4), rnd });
+  const out2 = []; for (let i = 0; i < 24; i++) { const x = await P2.next(); if (!x) break; out2.push(x); }
+  want('little that fits: the radio stops rather than playing what does not', out2.length < 24 && !out2.some((x) => TRAPS.includes(x.key)), out2.map((x) => x.key).join(', '));
+  // a skipped artist comes up less
+  for (const b of bad) fail('radio: ' + b);
+  if (!bad.length) console.log(`✓ radio: versions, scores and 20 simulated radios (${traps} of ${total} tracks from sound-alike strangers)`);
+}
+
 process.exit(failed ? 1 : 0);

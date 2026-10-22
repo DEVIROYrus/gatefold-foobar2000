@@ -58,7 +58,7 @@ export function getStats() {
 }
 
 // ------------------------------------------------------------------ network
-const GAP = { 'itunes.apple.com': 3200, 'api.deezer.com': 250, 'musicbrainz.org': 1100, 'coverartarchive.org': 350, 'www.wikidata.org': 300, 'commons.wikimedia.org': 300, 'lrclib.net': 150 };
+const GAP = { 'itunes.apple.com': 3200, 'api.deezer.com': 250, 'musicbrainz.org': 1100, 'coverartarchive.org': 350, 'www.wikidata.org': 300, 'commons.wikimedia.org': 300, 'lrclib.net': 150, 'labs.api.listenbrainz.org': 500 };
 const lastHit = {};
 async function throttle(url) {
   let host = ''; try { host = new URL(url).host; } catch {}

@@ -629,7 +629,10 @@ plList.addEventListener('contextmenu', async (e) => {
   const tr0 = trackAt(t);
   const radio = shared.radioFor && tr0 ? [{ id: 'radio', label: $t('Радио «Похожее на это»') }] : [];
   if (shared.similarFor && tr0 && settings.soundAI) radio.push({ id: 'similar', label: $t('Похожие треки по звучанию') });
-  if (shared.radioActive && shared.radioActive() === PL.guid && tr0 && (tr0.artist || tr0.albumArtist)) radio.push({ id: 'radioban', label: $t('Не то — больше не ставить {0}', tr0.albumArtist || tr0.artist) });
+  if (shared.radioActive && shared.radioActive() === PL.guid && tr0 && (tr0.artist || tr0.albumArtist)) {
+    if (shared.radioWhy && shared.radioWhy(tr0)) radio.push({ id: 'radiowhy', label: $t('Почему этот трек в радио?') });
+    radio.push({ id: 'radioban', label: $t('Не то — больше не ставить {0}', tr0.albumArtist || tr0.artist) });
+  }
   const id = await popupMenu([
     { id: 'play', label: $t('Воспроизвести') },
     { id: 'queue', label: n > 1 ? $t('Добавить в очередь ({0})', n) : $t('Добавить в очередь') },
@@ -646,6 +649,7 @@ plList.addEventListener('contextmenu', async (e) => {
   else if (id === 'del') removeSelected();
   else if (id === 'radio') shared.radioFor(trackAt(t));
   else if (id === 'radioban') shared.radioBan(tr0.albumArtist || tr0.artist);
+  else if (id === 'radiowhy') toast(`<b>${esc(tr0.title || '')}</b> — ${esc(shared.radioWhy(tr0))}`, { ms: 7000 });
   else if (id === 'similar') shared.similarFor(trackAt(t));
   else if (id === 'new' || id.startsWith('pl:')) pickTarget(id);
   else if (id === 'native') {
