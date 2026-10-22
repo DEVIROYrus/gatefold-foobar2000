@@ -601,7 +601,8 @@ function setPbMeta(t) {
   if (t.album) parts.push(`<span class="lnk" data-go="album" title="${$t('Открыть альбом')}">${esc(t.album)}</span>`);
   $('pbArtist').innerHTML = parts.join('<span class="sep">—</span>');
 }
-export async function openTrackAlbum(t) {
+/** the album page of a track's album; `focus` (a track handle) marks that song there */
+export async function openTrackAlbum(t, focus = '') {
   if (!t || !t.album) return;
   const r = await call('library.getAlbums', { query: t.album, limit: 60 });
   const rows = (ok(r) && r.albums) || [];
@@ -609,7 +610,7 @@ export async function openTrackAlbum(t) {
   const row = rows.find((a) => a.name === t.album && (a.albumArtist === t.albumArtist || a.artist === t.albumArtist))
     || rows.find((a) => a.name === t.album && (lc(a.albumArtist) === lc(t.artist) || lc(a.artist) === lc(t.artist)))
     || rows.find((a) => a.name === t.album);
-  if (row) router.go('album', row); else Lib.openSearch(t.album);
+  if (row) { if (focus) Lib.focusNextAlbumTrack(focus); router.go('album', row); } else Lib.openSearch(t.album);
 }
 document.querySelector('.pb-meta').addEventListener('click', (e) => {
   const l = e.target.closest('.lnk'); const t = app.track; if (!l || !t) return;
@@ -820,6 +821,7 @@ Lib.shared.onPlayAlbum = () => { if (router.current !== 'now') toast($t('Вос�
   Radio.init({ getAllAlbums: Lib.getAllAlbums });
   Lib.shared.radioFor = (t) => Radio.start(t);
   Lib.shared.radioWhy = (t) => Radio.why(t);
+  Lib.shared.openTrackAlbum = (t, focus) => openTrackAlbum(t, focus);
   Lib.shared.radioActive = () => Radio.active();
   Lib.shared.radioBan = (name) => Radio.ban(name);
   Lib.shared.similarFor = (t) => SoundUI.similar(t);

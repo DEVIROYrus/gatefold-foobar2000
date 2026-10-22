@@ -19,6 +19,7 @@ import { settingsSection as updatesSection } from './update-ui.js';
 import { fb2kGroups } from './fb2kprefs.js';
 import * as SoundUI from './ml/sound-ui.js';
 import * as LoudUI from './loudness-ui.js';
+import * as Cx from './columns.js';
 const CF_pl = (n) => plural(n, 'файл', 'файла', 'файлов');
 
 // ---------------------------------------------------------------- control builders
@@ -189,6 +190,10 @@ export function renderSettings() {
     group('',
       seg('plViewDefault', $t('Вид по умолчанию'), '' /* «Авто» — по альбомам, если плейлист из альбомов; иначе с обложками */, [['auto', $t('Авто')], ['albums', $t('Альбомы')], ['covers', $t('С обложками')], ['grid', $t('Плитки')], ['compact', $t('Компактно')]]),
       h(`<div class="row"><div class="lbl"><b>${$t('Свой вид у плейлистов')}</b></div></div>`)),
+    // your own columns: any tag or title formatting, in playlists and on album pages (columns.js)
+    group($t('Колонки'),
+      h(`<div class="row st-note"><div class="lbl"><small class="dim">${$t('Любой тег или шаблон title formatting foobar2000 — как свои колонки в Default UI. Колонки видны в списочных видах плейлистов и на странице альбома; правый щелчок по заголовку списка включает и выключает их.')}</small></div></div>`),
+      Cx.editor()),
   );
   const pr = secs[secs.length - 1].el.querySelector('.st-group .row:last-child');
   pr.append(button($t('Сбросить'), () => { Lib.resetPlaylistViews(); toast($t('Вид плейлистов сброшен')); }));

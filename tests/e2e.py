@@ -213,6 +213,64 @@ async def test_youtube_captions(browser, port):
     check(not errs, f'no page errors {errs[:2]}')
     await ctx.close()
 
+async def test_columns(browser, port):
+    print('· your own columns (title formatting) and links in the lists')
+    cols = [{'id': 'g', 'name': 'Genre', 'tf': '%genre%', 'w': 'm', 'align': 'auto', 'pl': True, 'al': True},
+            {'id': 'y', 'name': 'Year', 'tf': '$year(%date%)', 'w': 's', 'align': 'auto', 'pl': True, 'al': True}]
+    ctx, pg, errs = await page(browser, port, {'language': 'en', 'trackColumns': cols})
+    await pg.evaluate("(() => { window.__plays = []; const o = fb2k.invoke.bind(fb2k); fb2k.invoke = (m, p) => { if (m === 'playlist.playTrack') window.__plays.push(p); return o(m, p); }; })()")
+    await nav(pg, 'playlist', 1500)
+    await pg.evaluate("document.querySelector('#plModes [data-m=compact]').click()"); await pg.wait_for_timeout(1200)
+    head = await pg.evaluate("[...document.querySelectorAll('#view-playlist .pl-lh > div')].map(d => d.textContent)")
+    check(head[-3:] == ['Genre', 'Year', ''] or ('Genre' in head and 'Year' in head), f'the columns are in the playlist header {head}')
+    row = await pg.evaluate("[...document.querySelector('#plList .vrow[data-t=\"0\"]').querySelectorAll('.c-cx')].map(c => [c.textContent, c.classList.contains('r')])")
+    check(row == [['Synthwave', False], ['2021', True]], f'values from foobar2000, numbers on the right {row}')
+    aligned = await pg.evaluate("(() => { const h = [...document.querySelectorAll('#view-playlist .pl-lh .h-cx')].map(e => Math.round(e.getBoundingClientRect().left)); const c = [...document.querySelector('#plList .vrow[data-t=\"0\"]').querySelectorAll('.c-cx')].map(e => Math.round(e.getBoundingClientRect().left)); return [h, c]; })()")
+    check(aligned[0] == aligned[1] and len(aligned[0]) == 2, f'header and cells line up {aligned}')
+    for m in ('albums', 'covers'):
+        await pg.evaluate(f"document.querySelector('#plModes [data-m={m}]').click()"); await pg.wait_for_timeout(1000)
+        v = await pg.evaluate("[...document.querySelectorAll('#plList .vrow .c-cx')].slice(0, 2).map(c => c.textContent)")
+        check(v == ['Synthwave', '2021'], f'and in the «{m}» view {v}')
+    # the header's menu switches a column off for playlists only
+    await pg.click('#view-playlist .pl-lh', button='right'); await pg.wait_for_timeout(300)
+    await pg.click("#layer .menu .mi:has-text('Year')"); await pg.wait_for_timeout(700)
+    head = await pg.evaluate("[...document.querySelectorAll('#view-playlist .pl-lh .h-cx')].map(d => d.textContent)")
+    check(head == ['Genre'], f'right click on the header: a column off {head}')
+    saved = await pg.evaluate("JSON.parse(localStorage.getItem('aurora.settings.v1')).trackColumns.map(c => [c.name, c.pl, c.al])")
+    check(saved == [['Genre', True, True], ['Year', False, True]], f'remembered, for playlists only {saved}')
+    # links: the artist, the album, the song (marked on its album page); a double click still plays
+    await pg.evaluate("document.querySelector('#plModes [data-m=compact]').click()"); await pg.wait_for_timeout(900)
+    await pg.click("#plList .vrow[data-t='3'] .c-artist .lnk"); await pg.wait_for_timeout(1000)
+    check(await pg.evaluate("document.querySelector('.view.active')?.id") == 'view-artist', 'the artist is a link')
+    await nav(pg, 'playlist', 1200)
+    await pg.click("#plList .vrow[data-t='3'] .c-album .lnk"); await pg.wait_for_timeout(1500)
+    check(await pg.evaluate("document.querySelector('.view.active')?.id") == 'view-album', 'the album is a link')
+    yr = await pg.evaluate("[...document.querySelectorAll('#albumList .vrow')][0] && [...document.querySelectorAll('#albumList .vrow')][0].querySelectorAll('.c-cx').length")
+    check(yr == 2, f'the album page shows both columns (Year is off for playlists only) ({yr})')
+    await nav(pg, 'playlist', 1200)
+    title = await pg.evaluate("document.querySelector(\"#plList .vrow[data-t='3'] .c-title\").textContent")
+    await pg.click("#plList .vrow[data-t='3'] .c-title .lnk"); await pg.wait_for_timeout(1600)
+    marked = await pg.evaluate("[...document.querySelectorAll('#albumList .vrow.sel')].map(r => r.querySelector('.c-title').textContent)")
+    check(await pg.evaluate("document.querySelector('.view.active')?.id") == 'view-album' and marked == [title], f'the song opens its album with the song marked ({title} → {marked})')
+    await nav(pg, 'playlist', 1200)
+    await pg.dblclick("#plList .vrow[data-t='5'] .c-title .lnk"); await pg.wait_for_timeout(900)
+    check(await pg.evaluate("document.querySelector('.view.active')?.id") == 'view-playlist' and await pg.evaluate("window.__plays.some(p => p.index === 5)"), 'a double click on the title plays it and stays')
+    # the editor: a preset, its preview, a broken pattern does not break the others
+    await nav(pg, 'settings', 900)
+    await pg.evaluate("document.getElementById('cxEditor').scrollIntoView()")
+    await pg.click('#cxEditor .cx-add'); await pg.wait_for_timeout(300)
+    await pg.click("#layer .menu .mi:has-text('Composer')"); await pg.wait_for_timeout(900)
+    pv = await pg.evaluate("[...document.querySelectorAll('#cxEditor .cx-item')].map(i => [i.querySelector('.cx-name').value, i.querySelector('.cx-pv').textContent])")
+    check(pv[-1] == ['Composer', 'J. Doe'], f'a ready-made column, previewed on the playing track {pv}')
+    await pg.fill('#cxEditor .cx-item:last-child .cx-tf', '$if2(%genre%'); await pg.wait_for_timeout(1000)
+    bad = await pg.evaluate("document.querySelector('#cxEditor .cx-item:last-child .cx-pv').textContent")
+    check('Error' in bad, f'a pattern that does not compile says so ({bad})')
+    await nav(pg, 'playlist', 1500)
+    v = await pg.evaluate("[...document.querySelector('#plList .vrow[data-t=\"0\"]').querySelectorAll('.c-cx')].map(c => c.textContent)")
+    check(v[:1] == ['Synthwave'], f'the other columns still show {v}')
+    check(not errs, f'no page errors {errs[:2]}')
+    await ctx.close()
+
 async def test_settings(browser, port):
     print('· settings: search, language switch')
     ctx, pg, errs = await page(browser, port, {'language': 'ru'})
@@ -1128,7 +1186,7 @@ async def main():
         run = lambda name: not only or any(o in name for o in only.split(','))
         for lang in ('ru', 'en', 'de', 'es', 'zh'):
             if run('language'): await timed(f'language {lang}', test_language(browser, port, lang))
-        for name, fn in [('playlists', test_playlists), ('youtube', test_youtube), ('youtube_captions', test_youtube_captions), ('settings', test_settings), ('updates', test_updates),
+        for name, fn in [('playlists', test_playlists), ('youtube', test_youtube), ('youtube_captions', test_youtube_captions), ('columns', test_columns), ('settings', test_settings), ('updates', test_updates),
                          ('tooltips', test_tooltips), ('canvas_volume', test_canvas_volume), ('fb2k_prefs', test_fb2k_prefs), ('welcome', test_welcome),
                          ('playlist_editing', test_playlist_editing), ('windows', test_windows), ('vu', test_vu), ('smart_color_radio', test_smart_color_radio),
                          ('lyrics_sync', test_lyrics_sync), ('album_details', test_album_details), ('level', test_level), ('sound_offer', test_sound_offer), ('similar_albums', test_similar_albums), ('sound_ai', test_sound_ai), ('layout', test_layout), ('stability', test_stability)]:

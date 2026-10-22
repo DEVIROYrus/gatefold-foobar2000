@@ -25,11 +25,14 @@ import * as SoundUI from './ml/sound-ui.js';
 import * as Sound from './ml/sound.js';
 import * as Loud from './loudness.js';
 import * as AD from './album-details.js';
+import * as Cx from './columns.js';
 const ownRg = () => performance.now() < Loud.writingUntil;   // Gatefold's own ReplayGain tag writes change nothing shown
 const dpr = () => Math.min(2, window.devicePixelRatio || 1);
 /** A track as the host's context-menu/handle APIs want it: path, or path|subsong:N. */
 const trackHandle = (t) => t.handle || ((t.subsong ? `${t.absolutePath || t.path}|subsong:${t.subsong}` : (t.absolutePath || t.path)));
 /* ---- hearts on track rows */
+/* a text that leads somewhere: the song (its album page, the song marked), the artist, the album */
+const lnk = (go, text) => (text ? `<span class="lnk" data-go="${go}">${esc(text)}</span>` : '');
 const LIKE_BTN = `<button class="row-like" tabindex="-1" aria-label="${$t('Нравится')}" title="${$t('В понравившиеся')}"><svg><use href="#i-heart"/></svg></button>`;
 const likeAttr = (t) => { const k = String(trackHandle(t) || '').toLowerCase(); return ` data-h="${esc(k)}"${Likes.has({ handle: k }) ? ' data-liked="1"' : ''}`; };
 function likeRow(el) {
@@ -133,7 +136,7 @@ CF.events.addEventListener('change', debounce(() => {
 }, 400));
 
 // ============================================================ playlist view
-const PL = { guid: '', index: -1, name: '', total: 0, pages: new Map(), loading: new Set(), runs: [], allRuns: [], kind: null, ref: null, top: null, n: 0, height: 0, nodes: new Map(), sel: -1, selSet: new Set(), anchor: -1, locked: false, token: 0, mode: 'albums', rowH: 36, cols: 1, tw: 160, th: 220 };
+const PL = { guid: '', index: -1, name: '', total: 0, pages: new Map(), loading: new Set(), runs: [], allRuns: [], kind: null, ref: null, top: null, n: 0, height: 0, nodes: new Map(), sel: -1, selSet: new Set(), anchor: -1, locked: false, token: 0, mode: 'albums', rowH: 36, cols: 1, tw: 160, th: 220, cx: [], cxv: new Map() };
 let ROW = 36, HEAD = 72, ROWC = 56;
 const PAGE = 150, TGAP = 18, TMIN = 158;
 /* row heights follow the text size (13…20 px), the same formula as the CSS variables set in app.js */
@@ -206,7 +209,7 @@ export async function openPlaylist(guid) {
   const same = pl.guid === PL.guid, keepTop = plScroller.scrollTop;
   const keepSel = same ? new Set([...PL.selSet].filter((t) => t < pl.trackCount)) : new Set();
   Object.assign(PL, { guid: pl.guid, index: pl.index, name: pl.name, total: pl.trackCount, pages: new Map(), loading: new Set(), nodes: new Map(),
-    sel: same && PL.sel < pl.trackCount ? PL.sel : -1, selSet: keepSel, anchor: same ? PL.anchor : -1, locked: !!(pl.isAutoplaylist || pl.isLocked) });
+    sel: same && PL.sel < pl.trackCount ? PL.sel : -1, selSet: keepSel, anchor: same ? PL.anchor : -1, locked: !!(pl.isAutoplaylist || pl.isLocked), cxv: new Map() });
   plList.innerHTML = '';
   updateSelBar();
   $('plTitle').textContent = pl.name;
@@ -282,6 +285,9 @@ export async function shufflePlay(guid, total) {
 
 function buildLayout() {
   const total = PL.total, mode = PL.mode;
+  const cx = mode === 'grid' ? [] : Cx.forView('pl');
+  if (JSON.stringify(cx) !== JSON.stringify(PL.cx)) { PL.cx = cx; PL.cxv = new Map(); for (const p of PL.pages.keys()) loadCx(p, PL.token); }
+  paintPlHead();
   for (const el of PL.nodes.values()) el.remove();
   PL.nodes.clear();
   plList.dataset.mode = mode;
@@ -342,11 +348,36 @@ function loadPage(p) {
     if (token !== PL.token || !ok(r)) return;
     PL.pages.set(p, r.tracks || []);
     schedulePl();
+    loadCx(p, token);
   });
   pageWait.set(p, pr);
   return pr;
 }
 const trackAt = (t) => { const pg = PL.pages.get(Math.floor(t / PAGE)); return pg ? pg[t % PAGE] : null; };
+/* your own columns (columns.js): their values come a page at a time, after the page's tracks */
+function loadCx(p, token) {
+  const cols = PL.cx, pg = PL.pages.get(p);
+  if (!cols.length || !pg || PL.cxv.has(p)) return;
+  PL.cxv.set(p, null);
+  Cx.values(pg.map((t) => trackHandle(t)), cols).then((v) => { if (token !== PL.token || cols !== PL.cx) return; PL.cxv.set(p, v); schedulePl(); });
+}
+document.querySelector('#view-playlist .pl-lh').addEventListener('click', (e) => { const b = e.target.closest('.lh-cfg'); if (b) { const r = b.getBoundingClientRect(); Cx.headerMenu('pl', r.right - 220, r.bottom + 4); } });
+document.querySelector('#view-playlist .pl-lh').addEventListener('contextmenu', (e) => { e.preventDefault(); Cx.headerMenu('pl', e.clientX, e.clientY); });
+Cx.events.addEventListener('change', () => {
+  if (PL.kind) { const keep = plScroller.scrollTop; buildLayout(); for (const el of PL.nodes.values()) el.remove(); PL.nodes.clear(); plScroller.scrollTop = keep; renderPlaylist(); }
+  if (ALB.tracks) { ALB.cx = null; renderAlbumRows(); }
+});
+const cxAt = (t) => { const v = PL.cxv.get(Math.floor(t / PAGE)); return v ? v[t % PAGE] : null; };
+/* the list header and the grid of the rows: the base columns, your own, a gap for the heart, the time */
+function paintPlHead() {
+  const head = document.querySelector('#view-playlist .pl-lh');
+  const cv = PL.mode === 'covers', cols = PL.cx;
+  const base = cv ? `<div>#</div><div>${$t('Название')}</div><div class="h-album">${$t('Альбом')}</div>`
+    : `<div>#</div><div>${$t('Название')}</div><div class="h-artist">${$t('Исполнитель')}</div><div class="h-album">${$t('Альбом')}</div>`;
+  head.innerHTML = base + (cols.length ? Cx.headHtml(cols) + '<div class="h-gap"></div>' : '') + `<div>${$t('Время')}</div><button class="lh-cfg icon-btn" title="${$t('Колонки')}" aria-label="${$t('Колонки')}">${icon('more')}</button>`;
+  const grid = cols.length ? (cv ? `44px minmax(0, 2fr) minmax(0, 1fr) ${Cx.gridOf(cols)} 30px 64px` : `44px minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr) ${Cx.gridOf(cols)} 30px 64px`) : '';
+  for (const el of [head, plList]) { el.classList.toggle('cols', !!grid); if (grid) el.style.setProperty('--cols', grid); else el.style.removeProperty('--cols'); }
+}
 
 let plRaf = 0;
 function schedulePl() { if (!plRaf) plRaf = requestAnimationFrame(() => { plRaf = 0; renderPlaylist(); }); }
@@ -384,8 +415,9 @@ function renderPlaylist() {
       if (first && !el.dataset.ok) {
         el.dataset.ok = '1';
         const [art, alb] = String(run.key).split(' | ');
-        el.querySelector('.h-album').textContent = alb || first.album || $t('Без альбома');
-        el.querySelector('.h-meta').textContent = [art || first.albumArtist || first.artist, (String(first.date || '').match(/\d{4}/) || [''])[0], `${run.count} ${plural(run.count, 'трек', 'трека', 'треков')}`].filter(Boolean).join(' · ');
+        el.querySelector('.h-album').innerHTML = alb || first.album ? lnk('album', alb || first.album) : esc($t('Без альбома'));
+        el.querySelector('.h-meta').innerHTML = [lnk('artist', art || first.albumArtist || first.artist || ''), (String(first.date || '').match(/\d{4}/) || [''])[0], `${run.count} ${plural(run.count, 'трек', 'трека', 'треков')}`].filter(Boolean).join(' · ');
+        el.dataset.t = run.start;
         el.dataset.path = first.absolutePath;
       }
       if (el.dataset.path && !el.dataset.cov) headerPaths.push([el, el.dataset.path]);
@@ -407,8 +439,8 @@ function renderPlaylist() {
           tile.dataset.filled = '1';
           const ph = placeholder(tr.album || tr.title, tr.albumArtist || tr.artist);
           const p0 = tile.querySelector('.ph'); if (p0) { p0.style.background = ph.bg; p0.textContent = ph.ini; }
-          tile.querySelector('.tt').textContent = tr.title || (tr.absolutePath || '').split('\\').pop();
-          tile.querySelector('.ta').textContent = tr.artist || '';
+          tile.querySelector('.tt').innerHTML = lnk('track', tr.title || (tr.absolutePath || '').split('\\').pop());
+          tile.querySelector('.ta').innerHTML = lnk('artist', tr.artist || '');
           tile.title = [tr.title, tr.artist, tr.album].filter(Boolean).join(' — ');
           tile.dataset.h = String(trackHandle(tr) || '').toLowerCase(); likeRow(tile);
           if (tr.absolutePath) coverJobs.push([tile, tr.absolutePath, Math.min(600, Math.round(PL.tw * dpr() / 50) * 50)]);
@@ -424,9 +456,10 @@ function renderPlaylist() {
       const cv = PL.mode === 'covers';
       if (!tr) loadPage(Math.floor(t / PAGE));
       if (!el) {
+        const cx = PL.cx.length ? Cx.emptyCells(PL.cx) + '<div class="c-gap"></div>' : '';
         el = cv
-          ? h('<div class="vrow wc"><div class="c-n num"></div><div class="c-title"><div class="c-cov"><img alt=""></div><div class="c-tt"><b></b><span></span></div></div><div class="c-album"></div><div class="c-dur num"></div>' + LIKE_BTN + '</div>')
-          : h('<div class="vrow"><div class="c-n num"></div><div class="c-title"></div><div class="c-artist"></div><div class="c-album"></div><div class="c-dur num"></div>' + LIKE_BTN + '</div>');
+          ? h('<div class="vrow wc"><div class="c-n num"></div><div class="c-title"><div class="c-cov"><img alt=""></div><div class="c-tt"><b></b><span></span></div></div><div class="c-album"></div>' + cx + '<div class="c-dur num"></div>' + LIKE_BTN + '</div>')
+          : h('<div class="vrow"><div class="c-n num"></div><div class="c-title"></div><div class="c-artist"></div><div class="c-album"></div>' + cx + '<div class="c-dur num"></div>' + LIKE_BTN + '</div>');
         el.dataset.t = t;
         plList.appendChild(el); PL.nodes.set(key, el);
       }
@@ -435,22 +468,23 @@ function renderPlaylist() {
         el.dataset.filled = '1';
         const c = el.children;
         const title = tr.title || (tr.absolutePath || '').split('\\').pop();
+        // title, artist and album are links: the song on its album page, the artist, the album
         if (cv) {
           const ph = placeholder(tr.album || title, tr.albumArtist || tr.artist);
           const box = el.querySelector('.c-cov'); box.style.background = ph.bg; box.dataset.ini = ph.ini;
-          el.querySelector('.c-tt b').textContent = title;
-          el.querySelector('.c-tt span').textContent = tr.artist || '';
-          c[2].textContent = tr.album || '';
-          c[3].textContent = tr.duration ? fmtTime(tr.duration) : '';
+          el.querySelector('.c-tt b').innerHTML = lnk('track', title);
+          el.querySelector('.c-tt > span').innerHTML = lnk('artist', tr.artist || '');
+          c[2].innerHTML = lnk('album', tr.album || '');
           if (tr.absolutePath) coverJobs.push([el, tr.absolutePath, Math.round(44 * dpr())]);
         } else {
-          c[1].textContent = title;
-          c[2].textContent = tr.artist;
-          c[3].textContent = tr.album;
-          c[4].textContent = tr.duration ? fmtTime(tr.duration) : '';
+          c[1].innerHTML = lnk('track', title);
+          c[2].innerHTML = lnk('artist', tr.artist || '');
+          c[3].innerHTML = lnk('album', tr.album || '');
         }
+        el.querySelector('.c-dur').textContent = tr.duration ? fmtTime(tr.duration) : '';
         el.dataset.h = String(trackHandle(tr) || '').toLowerCase(); likeRow(el);
       } else if (!tr) { (cv ? el.querySelector('.c-tt b') : el.children[1]).innerHTML = '<div class="skeleton" style="width:60%"></div>'; }
+      if (PL.cx.length && el.dataset.cxok !== '1') { const v = cxAt(t); if (v) { Cx.fill(el, v); el.dataset.cxok = '1'; } }
       const playing = PL.index === shared.playing.playlist && t === shared.playing.index;
       el.classList.toggle('playing', playing);
       el.classList.toggle('sel', PL.selSet.has(t));
@@ -602,8 +636,24 @@ function pickTarget(id) {
   addSelectionTo(guid, name);
 }
 
+/* links in the list: the artist and the album open at once; the song waits a moment, because the
+   first click of a double click (play) lands on the title too */
+let goT = 0;
+function follow(go, tr, name) {
+  if (!tr) return;
+  if (go === 'artist') router.go('artist', name || tr.artist || tr.albumArtist);
+  else if (go === 'album' && shared.openTrackAlbum) shared.openTrackAlbum(tr);
+  else if (go === 'track' && shared.openTrackAlbum) shared.openTrackAlbum(tr, trackHandle(tr));
+}
 plList.addEventListener('click', (e) => {
   if (dragJustEnded) return;
+  clearTimeout(goT);
+  const lk = e.target.closest('.lnk');
+  if (lk && !e.shiftKey && !e.ctrlKey && !e.metaKey && e.detail < 2) {
+    const host = lk.closest('[data-t]'), tr = host && trackAt(+host.dataset.t);
+    if (lk.dataset.go === 'track') goT = setTimeout(() => follow('track', tr), 280);
+    else { e.stopPropagation(); follow(lk.dataset.go, tr, lk.textContent); return; }
+  }
   if (heartClick(e, (r) => trackAt(+r.dataset.t))) return;
   const pb = e.target.closest('.vtile .play'); if (pb) { e.stopPropagation(); call('playlist.playTrack', { playlistGuid: PL.guid, index: +pb.closest('.vtile').dataset.t }); return; }
   const row = e.target.closest('.vrow, .vtile');
@@ -615,6 +665,7 @@ plList.addEventListener('click', (e) => {
   selChanged();
 });
 plList.addEventListener('dblclick', (e) => {
+  clearTimeout(goT);
   if (e.target.closest('.row-like, .play') || e.shiftKey || e.ctrlKey) return;
   const row = e.target.closest('.vrow, .vtile'); if (!row) return;
   call('playlist.playTrack', { playlistGuid: PL.guid, index: +row.dataset.t });
@@ -1193,7 +1244,7 @@ export async function openAlbum(a) {
   $('alDetails').onclick = toggleAlbumDetails;
   $('albumMore').onclick = toggleAlbumDetails;
   $('albumMore').onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleAlbumDetails(); } };
-  ALB.a = a; ALB.tracks = null; ALB.ext = null; ALB.token = token; ALB.loading = null; ALB.plainOnce = false;
+  ALB.a = a; ALB.tracks = null; ALB.ext = null; ALB.token = token; ALB.loading = null; ALB.plainOnce = false; ALB.cx = null; ALB.cxv = null;
   paintDetailsState();
   if (a.firstTrackAbsolutePath) {
     const get = await coversFor([a.firstTrackAbsolutePath], Math.round(220 * dpr()));
@@ -1211,7 +1262,7 @@ export async function openAlbum(a) {
   const list = $('albumList');
   ALB.tracks = tracks;
   renderAlbumRows();
-  list.onclick = (e) => heartClick(e, (r) => tracks[+r.dataset.i]);
+  list.onclick = (e) => { const lk = e.target.closest('.lnk[data-go=artist]'); if (lk && !e.shiftKey && !e.ctrlKey) { router.go('artist', lk.textContent); return; } heartClick(e, (r) => tracks[+r.dataset.i]); };
   list.ondblclick = (e) => { if (e.target.closest('.row-like')) return; const r = e.target.closest('.vrow'); if (r) playPaths(tracks.map((t) => t.handle || t.absolutePath), +r.dataset.i, a.name); };
   list.oncontextmenu = (e) => { const r = e.target.closest('.vrow'); if (!r) return; e.preventDefault(); const t = tracks[+r.dataset.i]; call('menu.showNativePopup', { mode: 'handles', handles: [trackHandle(t)] }); };
   $('albumScroller').scrollTop = 0;
@@ -1220,9 +1271,15 @@ export async function openAlbum(a) {
 
 /* ---------------------------------------------------------------- album details (album-details.js)
    Off by default; «Details», a click on the track count, or I. The choice is remembered. */
-const ALB = { a: null, tracks: null, ext: null, token: 0, loading: null, plainOnce: false };
+const ALB = { a: null, tracks: null, ext: null, token: 0, loading: null, plainOnce: false, cx: null, cxv: null, focus: '' };
+/** open the album page with this track marked (a song link in a playlist) */
+export function focusNextAlbumTrack(handle) { ALB.focus = String(handle || '').toLowerCase(); }
+const albumHeadEl = albumView.querySelector('.list-head');
+albumHeadEl.addEventListener('contextmenu', (e) => { e.preventDefault(); Cx.headerMenu('al', e.clientX, e.clientY); });
+albumHeadEl.addEventListener('click', (e) => { const b = e.target.closest('.lh-cfg'); if (b) { const r = b.getBoundingClientRect(); Cx.headerMenu('al', r.right - 220, r.bottom + 4); } });
 const albumHead = albumView.querySelector('.list-head');
-const HEAD0 = () => `<div>#</div><div>${$t('Название')}</div><div>${$t('Исполнитель')}</div><div class="h-album">${$t('Формат')}</div><div>${$t('Время')}</div>`;
+const CFG_BTN = () => `<button class="lh-cfg icon-btn" title="${$t('Колонки')}" aria-label="${$t('Колонки')}">${icon('more')}</button>`;
+const HEAD0 = (cx = []) => `<div>#</div><div>${$t('Название')}</div><div>${$t('Исполнитель')}</div><div class="h-album">${$t('Формат')}</div>${cx.length ? Cx.headHtml(cx) + '<div class="h-gap"></div>' : ''}<div>${$t('Время')}</div>${CFG_BTN()}`;
 export function toggleAlbumDetails() {
   setSetting('albumDetails', !settings.albumDetails);
   paintDetailsState();
@@ -1257,26 +1314,45 @@ function renderAlbumRows() {
   }
   ALB.plainOnce = false;
   const detailed = on && ALB.ext;
+  // your own columns (columns.js): drawn at once, their values filled in when foobar2000 has them
+  const cx = Cx.forView('al');
+  if (JSON.stringify(cx) !== JSON.stringify(ALB.cx)) {
+    ALB.cx = cx; ALB.cxv = null;
+    if (cx.length) { const token = ALB.token; Cx.values(tracks.map((t) => trackHandle(t)), cx).then((v) => { if (token !== ALB.token || ALB.cx !== cx) return; ALB.cxv = v; list.querySelectorAll('.vrow').forEach((r) => Cx.fill(r, v[+r.dataset.i])); }); }
+  }
+  const cxCells = (i) => (cx.length ? Cx.cellsHtml(cx, ALB.cxv && ALB.cxv[i]) : '');
+  const artistCell = (t) => (t.artist ? `<span class="lnk" data-go="artist">${esc(t.artist)}</span>` : '');
   list.style.height = tracks.length * ROW + 24 + 'px';
   let disc = -1;
   const multiDisc = new Set(tracks.map((t) => t.discNumber || 0)).size > 1;
   const discChip = (t) => (multiDisc && t.discNumber !== disc ? (disc = t.discNumber, `<span class="chip" style="margin-left:6px">CD${t.discNumber}</span>`) : '');
   if (detailed) {
-    const C = AD.columns(ALB.a, tracks, ALB.ext);
-    albumHead.innerHTML = C.head; albumHead.classList.add('cols'); albumHead.style.setProperty('--cols', C.cols);
+    const C = AD.columns(ALB.a, tracks, ALB.ext, cx.map((c, j) => ({ w: Cx.gridOf([c]), head: c.name || c.tf, title: c.tf, cls: Cx.cellClass(c), attr: ` data-cx="${j}"`, cell: (t, x, i) => esc((ALB.cxv && ALB.cxv[i] && ALB.cxv[i][j]) || '') })));
+    albumHead.innerHTML = C.head + CFG_BTN(); albumHead.classList.add('cols'); albumHead.style.setProperty('--cols', C.cols);
     list.classList.add('cols'); list.style.setProperty('--cols', C.cols);
     list.innerHTML = tracks.map((t, i) => {
       const x = ALB.ext[i];
-      const cells = C.cells.map((c) => `<div class="${c.cls}">${c.cls === 'c-title' ? c.cell(t, x, i) + discChip(t) : c.cell(t, x, i)}</div>`).join('');
+      const cells = C.cells.map((c) => `<div class="${c.cls}"${c.attr || ''}>${c.cls === 'c-title' ? c.cell(t, x, i) + discChip(t) : c.cls === 'c-artist' ? artistCell(t) : c.cell(t, x, i)}</div>`).join('');
       return `<div class="vrow" data-i="${i}"${likeAttr(t)} style="transform:translateY(${i * ROW}px)">${cells}${LIKE_BTN}</div>`;
     }).join('');
   } else {
-    albumHead.innerHTML = HEAD0(); albumHead.classList.remove('cols'); albumHead.style.removeProperty('--cols');
-    list.classList.remove('cols'); list.style.removeProperty('--cols');
-    list.innerHTML = tracks.map((t, i) => `<div class="vrow" data-i="${i}"${likeAttr(t)} style="transform:translateY(${i * ROW}px)"><div class="c-n num">${t.trackNumber || i + 1}</div><div class="c-title">${esc(t.title)}${discChip(t)}</div><div class="c-artist">${esc(t.artist)}</div><div class="c-album">${esc([t.codec, t.sampleRate ? (t.sampleRate / 1000).toFixed(1).replace('.0', '') + $t(' кГц') : ''].filter(Boolean).join(' · '))}</div><div class="c-dur num">${fmtTime(t.duration)}</div>${LIKE_BTN}</div>`).join('');
+    const grid = cx.length ? `44px minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr) ${Cx.gridOf(cx)} 30px 64px` : '';
+    albumHead.innerHTML = HEAD0(cx);
+    for (const el of [albumHead, list]) { el.classList.toggle('cols', !!grid); if (grid) el.style.setProperty('--cols', grid); else el.style.removeProperty('--cols'); }
+    list.innerHTML = tracks.map((t, i) => `<div class="vrow" data-i="${i}"${likeAttr(t)} style="transform:translateY(${i * ROW}px)"><div class="c-n num">${t.trackNumber || i + 1}</div><div class="c-title">${esc(t.title)}${discChip(t)}</div><div class="c-artist">${artistCell(t)}</div><div class="c-album">${esc([t.codec, t.sampleRate ? (t.sampleRate / 1000).toFixed(1).replace('.0', '') + $t(' кГц') : ''].filter(Boolean).join(' · '))}</div>${cx.length ? cxCells(i) + '<div class="c-gap"></div>' : ''}<div class="c-dur num">${fmtTime(t.duration)}</div>${LIKE_BTN}</div>`).join('');
   }
   list.dataset.album = String(ALB.token);
   list.querySelectorAll('.vrow').forEach(likeRow);
+  if (ALB.focus) {
+    // a song link: its row, marked and in view
+    const i = tracks.findIndex((t) => String(trackHandle(t)).toLowerCase() === ALB.focus);
+    ALB.focus = '';
+    const row = i >= 0 && list.querySelector(`.vrow[data-i="${i}"]`);
+    if (row) {
+      const sc = $('albumScroller');
+      requestAnimationFrame(() => { sc.scrollTop = Math.max(0, list.offsetTop + i * ROW - sc.clientHeight / 3); row.classList.add('sel', 'flash'); setTimeout(() => row.classList.remove('flash'), 1600); });
+    }
+  }
 }
 
 /* «Sounds like»: albums of other artists in the library that sound closest (ml/sound-ui.js) */

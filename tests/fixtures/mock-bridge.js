@@ -129,13 +129,27 @@
     },
     'library.getAlbumTracks': (p) => ok({ tracks: PL_TRACKS.filter((t) => t.album === p.album).map((t, i) => ({ ...t, index: i, sampleRate: 96000, channels: 2, bitrate: 2700 + ((i * 37) % 300), fileSize: Math.round(t.duration * 345000) })) }),
     // album details: rich values for most albums, none at all for the albums of Mirage Theory (a bare album)
-    'titleformat.evalFieldsBatch': (p) => ok({ total: p.paths.length, results: p.paths.map((path, i) => {
+    'titleformat.evalFieldsBatch': (p) => {
+      // your own columns (keys c0, c1…): a small title formatting — %field%, [optional], $year(), $if2(); unbalanced brackets do not compile
+      const cx = Object.entries(p.fields).filter(([k]) => /^c\d+$/.test(k));
+      if (cx.some(([, f]) => (f.match(/\(/g) || []).length !== (f.match(/\)/g) || []).length)) return Promise.resolve({ success: false, code: 'INVALID_PARAMS', error: 'pattern does not compile' });
+      if (cx.length) return ok({ total: p.paths.length, results: p.paths.map((path, i) => {
+        const t = PL_TRACKS.find((x) => x.absolutePath === String(path).split('|')[0]) || {};
+        const F = { title: t.title, artist: t.artist, album: t.album, 'album artist': t.albumArtist, genre: 'Synthwave', date: (t.date || '2020') + '-05-12', performer: t.artist + ' (live band)', composer: 'J. Doe', bitrate: '2834', play_count: String((i * 3) % 7), codec: t.codec || 'FLAC' };
+        const field = (n) => F[n.toLowerCase()];
+        const ev = (f) => f.replace(/\[([^\[\]]*)\]/g, (m, inner) => (/%([^%]+)%/.test(inner) && [...inner.matchAll(/%([^%]+)%/g)].some((x) => field(x[1]) == null) ? '' : ev(inner)))
+          .replace(/\$year\(([^()]*)\)/g, (m, a) => (ev(a).match(/\d{4}/) || [''])[0])
+          .replace(/\$if2\(([^(),]*),([^()]*)\)/g, (m, a, b) => ev(a) || ev(b))
+          .replace(/%([^%]+)%/g, (m, n) => field(n) ?? '?');
+        return { path, success: true, infoAvailable: true, ...Object.fromEntries(cx.map(([k, f]) => [k, ev(f)])) };
+      }) });
+      return ok({ total: p.paths.length, results: p.paths.map((path, i) => {
       const t = PL_TRACKS.find((x) => x.absolutePath === String(path).split('|')[0]) || {};
       if (/^M/.test(t.albumArtist || '')) return { path, success: true, infoAvailable: true, ...Object.fromEntries(Object.keys(p.fields).map((k) => [k, ''])) };
       const v = { bits: '24', prof: 'Lossless', enc: 'lossless', dr: String(8 + (i % 5)), adr: '10', tg: (-7.5 - (i % 4) * 0.8).toFixed(2) + ' dB', ag: '-8.20 dB', ap: '0.998',
         plays: String((i * 3) % 7), last: '2026-10-19 21:14:03', added: '2025-03-02 10:00:00', date: (t.date || '2020') + '-05-12', odate: '', label: 'Night Owl Records', cat: 'NOR-0' + (10 + i % 3), genre: 'Synthwave; Electronic' };
       return { path, success: true, infoAvailable: true, ...Object.fromEntries(Object.keys(p.fields).map((k) => [k, v[k] ?? ''])) };
-    }) }),
+    }) }); },
     'library.search': () => ok({ tracks: PL_TRACKS.slice(0, 30), total: 30 }),
     'queue.get': () => ok({ items: PL_TRACKS.slice(20, 23) }),
     'http.get': async (p) => {
