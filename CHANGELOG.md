@@ -2,6 +2,15 @@
 
 All notable changes are listed here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+**The radio keeps to the seed's music.** Real radios still let in about one stranger in five (anime and K-pop songs, prog bands, the same famous names on every radio), and played the seed's artist and single albums too often. Now:
+
+- **Your playlists count only a little**, and only when an artist sits next to the seed in two playlists or more; playlists of favourites from everywhere (over 120 artists) do not count at all. One mixed playlist used to make everything in it «related».
+- **The genres have the last word:** an artist the services relate but whose MusicBrainz genres contradict the seed's comes on only when Deezer and ListenBrainz both point to it, and then rarely. The genres of the leading candidates are fetched first, and the radio is scored again as they arrive.
+- **Artists that turn up on every radio whatever the seed** (remembered over your last radios) are held back unless the genres agree.
+- **More variety:** one song per album, at most two songs of an artist in 25 (three in a small library), the seed's artist about every eighth track. Release years count only while the genres are unknown (a retro band of the 2010s is an 80s band).
+
 ## [1.3.0] — your own columns, a much more accurate radio, YouTube subtitles
 
 **YouTube subtitles: a button to switch them.** YouTube turned captions on by itself for many videos (an owner's default, a language other than yours), and there was no way to hide them. Now the CC button in the player switches them on and off (or the C key), and the choice is kept for every following video — off by default.

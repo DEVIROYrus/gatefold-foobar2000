@@ -162,7 +162,7 @@ for (const lf of fs.readdirSync(locDir).filter((x) => x.endsWith('.js'))) {
   const titles = ['Song', 'Ballad', 'Anthem', 'Night', 'Fire', 'Shadow', 'Rain', 'Heart', 'Run (Remix)', 'Intro', 'Live Wire (Live)', 'Echo'];
   const tracksOf = (key) => {
     const f = A[key] || { sound: 0.5 };
-    return titles.map((t, i) => ({ h: key + '/' + i, title: key === 'the rasmus' ? t + ' R' : t + ' ' + key, album: key + (i < 6 ? ' I' : ' II'), duration: 200 + i,
+    return titles.map((t, i) => ({ h: key + '/' + i, title: key === 'the rasmus' ? t + ' R' : t + ' ' + key, album: key + ' ' + ['I', 'II', 'III', 'IV'][Math.floor(i / 3)], duration: 200 + i,
       sim: RC.clamp01((f.sound ?? 0.5) + (rnd() - 0.5) * 0.4), pop: i < 4 ? 1 - i * 0.2 : 0, plays: null }));
   };
   let traps = 0, total = 0, firsts = new Set();
@@ -176,7 +176,10 @@ for (const lf of fs.readdirSync(locDir).filter((x) => x.endsWith('.js'))) {
     const keys = ['the rasmus', ...out.map((x) => x.key)];
     want(`run ${run}: never the same artist twice in a row`, keys.every((k, i) => !i || k !== keys[i - 1]));
     const cnt = {}; for (const k of keys) cnt[k] = (cnt[k] || 0) + 1;
-    want(`run ${run}: at most 3 tracks of an artist (the seed's ~1 in 6)`, Object.entries(cnt).every(([k, n]) => n <= (k === 'the rasmus' ? 5 : 3)), JSON.stringify(cnt));
+    const cap = pool.length >= 14 ? 2 : 3;
+    want(`run ${run}: at most ${cap} tracks of an artist (the seed's ~1 in 8)`, Object.entries(cnt).every(([k, n]) => n <= (k === 'the rasmus' ? 4 : cap)), JSON.stringify(cnt));
+    const albs = out.filter((x) => x.key !== 'the rasmus').map((x) => x.key + '|' + x.t.album);
+    want(`run ${run}: one song per album`, new Set(albs).size === albs.length, albs.join(', '));
     want(`run ${run}: the seed's artist comes back`, (cnt['the rasmus'] || 0) >= 3);
     want(`run ${run}: no remix, live version or intro`, out.every((x) => !/Remix|Live|Intro/.test(x.t.title)));
     want(`run ${run}: the first tracks come from the closest artists`, out.slice(0, 6).every((x) => top8.has(x.key) || x.key === 'the rasmus'), out.slice(0, 6).map((x) => x.key).join(', '));
@@ -189,6 +192,14 @@ for (const lf of fs.readdirSync(locDir).filter((x) => x.endsWith('.js'))) {
   const P2 = new RC.Planner({ pool: sp, seed: { key: 'the rasmus', track: { h: 'seed', title: 'Still Standing', album: 'Rise', duration: 200 } }, tracksOf: (k) => tracksOf(k).slice(0, 4), rnd });
   const out2 = []; for (let i = 0; i < 24; i++) { const x = await P2.next(); if (!x) break; out2.push(x); }
   want('little that fits: the radio stops rather than playing what does not', out2.length < 24 && !out2.some((x) => TRAPS.includes(x.key)), out2.map((x) => x.key).join(', '));
+  // the cases of the real radios (a seed of one scene, a library of everything)
+  const S = (f) => RC.artistScore(f).s;
+  want('only your playlists relate it, and the genres say otherwise: out (K-ON in a rock radio)', S({ pl: 1, genre: 0.05, sound: 0.8, style: 0.4 }) === 0);
+  want('only ListenBrainz relates it, the genres say otherwise: out (Ozzy on a HIM radio)', S({ lb: 0.6, genre: 0.08, sound: 0.4, style: 0.3 }) === 0);
+  want('Deezer and ListenBrainz both relate it: in, though held back by the genres', S({ deezer: 0.9, lb: 0.6, genre: 0.08, sound: 0.4, style: 0.3 }) > 0.1 && S({ deezer: 0.9, lb: 0.6, genre: 0.08, sound: 0.4, style: 0.3 }) < S({ deezer: 0.9, lb: 0.6, genre: 0.5, sound: 0.4, style: 0.3 }) * 0.6);
+  want('your playlists and the genres agree: in', S({ pl: 0.8, genre: 0.5, sound: 0.5, style: 0.5 }) > 0.1);
+  want('playlists weigh less than the services', S({ pl: 0.9, genre: 0.5, sound: 0.5, style: 0.5 }) < S({ deezer: 0.9, genre: 0.5, sound: 0.5, style: 0.5 }) * 0.7);
+  want('an artist on every radio is held back', S({ deezer: 0.5, genre: 0.3, sound: 0.5, style: 0.5, hub: 0.6 }) < S({ deezer: 0.5, genre: 0.3, sound: 0.5, style: 0.5 }));
   // a skipped artist comes up less
   for (const b of bad) fail('radio: ' + b);
   if (!bad.length) console.log(`✓ radio: versions, scores and 20 simulated radios (${traps} of ${total} tracks from sound-alike strangers)`);
