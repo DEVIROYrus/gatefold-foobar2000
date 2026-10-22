@@ -9,7 +9,9 @@ All notable changes are listed here. Versions follow [Semantic Versioning](https
 - **Your playlists count only a little**, and only when an artist sits next to the seed in two playlists or more; playlists of favourites from everywhere (over 120 artists) do not count at all. One mixed playlist used to make everything in it «related».
 - **The genres have the last word:** an artist the services relate but whose MusicBrainz genres contradict the seed's comes on only when Deezer and ListenBrainz both point to it, and then rarely. The genres of the leading candidates are fetched first, and the radio is scored again as they arrive.
 - **Artists that turn up on every radio whatever the seed** (remembered over your last radios) are held back unless the genres agree.
-- **More variety:** one song per album, at most two songs of an artist in 25 (three in a small library), the seed's artist about every eighth track. Release years count only while the genres are unknown (a retro band of the 2010s is an 80s band).
+- **The famous count less as evidence:** related-of-related lists and co-listening favour the big names (Iron Maiden turns up next to almost anybody), so their weight shrinks with how much more famous an artist is than the seed (Deezer's fan counts), and they no longer count as a second, independent source that could override the genres. Only Deezer's own related list and ListenBrainz do.
+- An artist Deezer names directly as related is never held back as a «hub» (Bumblefoot on a Freak Kitchen radio).
+- **More variety:** one song per album (the seed's own album included), at most two songs of an artist in 25 (three in a small library), the seed's artist about every eighth track. Release years count only while the genres are unknown (a retro band of the 2010s is an 80s band).
 
 ## [1.3.0] — your own columns, a much more accurate radio, YouTube subtitles
 
