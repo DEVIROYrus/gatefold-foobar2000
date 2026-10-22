@@ -507,7 +507,9 @@ async def test_playlist_editing(browser, port):
     calls = lambda: pg.evaluate("window.__calls.map(c => c.join(' '))")
     first = await rows()
     row = lambda t: f"#plList .vrow[data-t='{t}']"
-    await pg.click(row(1)); await pg.click(row(3), modifiers=['Shift']); await pg.click(row(6), modifiers=['Control'])
+    # rows are selected by a click beside the links (the artist and the album are links now)
+    sel = lambda t: row(t) + ' .c-n'
+    await pg.click(sel(1)); await pg.click(sel(3), modifiers=['Shift']); await pg.click(sel(6), modifiers=['Control'])
     await pg.wait_for_timeout(300)
     check(await pg.evaluate("document.querySelectorAll('#plList .vrow.sel').length") == 4, 'click, Shift+click and Ctrl+click select four rows')
     check(await pg.evaluate("!document.querySelector('.pl-selbar').hidden"), 'the selection bar appears')
@@ -520,7 +522,7 @@ async def test_playlist_editing(browser, port):
     await pg.keyboard.press('Control+z'); await pg.wait_for_timeout(900)
     check((await rows())[:8] == first[:8], 'Ctrl+Z brings them back (foobar2000 undo)')
     # drag rows 0..1 below row 5
-    await pg.click(row(0)); await pg.click(row(1), modifiers=['Shift']); await pg.wait_for_timeout(200)
+    await pg.click(sel(0)); await pg.click(sel(1), modifiers=['Shift']); await pg.wait_for_timeout(200)
     b0 = await pg.locator(row(0)).bounding_box(); b5 = await pg.locator(row(5)).bounding_box()
     await pg.mouse.move(b0['x'] + 200, b0['y'] + b0['height'] / 2); await pg.mouse.down()
     await pg.mouse.move(b0['x'] + 200, b0['y'] + 30, steps=4)
@@ -1136,7 +1138,7 @@ async def test_album_details(browser, port):
     head = await pg.evaluate("[...document.querySelectorAll('#view-album .list-head > div')].map(d => d.textContent)")
     check('LUFS' in head and 'DR' in head and 'Artist' not in head, f'detailed columns; no artist column when every track is by the album artist {head}')
     geo = await pg.evaluate("""(() => {
-      const row = document.querySelector('#albumList .vrow'), cells = [...row.children].filter(c => c.tagName === 'DIV'), hd = [...document.querySelector('#view-album .list-head').children];
+      const row = document.querySelector('#albumList .vrow'), cells = [...row.children].filter(c => c.tagName === 'DIV'), hd = [...document.querySelectorAll('#view-album .list-head > div')];
       const card = document.getElementById('albumFacts').getBoundingClientRect(), hero = document.getElementById('albumHero').getBoundingClientRect(), cover = document.querySelector('#view-album .album-cover').getBoundingClientRect();
       const overlap = cells.some((c, i) => i && cells[i - 1].getBoundingClientRect().right > c.getBoundingClientRect().left + .5);
       const aligned = hd.every((h, i) => Math.abs(h.getBoundingClientRect().left - cells[i].getBoundingClientRect().left) < 2 || Math.abs(h.getBoundingClientRect().right - cells[i].getBoundingClientRect().right) < 2);

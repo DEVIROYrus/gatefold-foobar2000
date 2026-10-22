@@ -2,7 +2,7 @@
 
 All notable changes are listed here. Versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.3.0] — your own columns, a much more accurate radio, YouTube subtitles
 
 **YouTube subtitles: a button to switch them.** YouTube turned captions on by itself for many videos (an owner's default, a language other than yours), and there was no way to hide them. Now the CC button in the player switches them on and off (or the C key), and the choice is kept for every following video — off by default.
 
