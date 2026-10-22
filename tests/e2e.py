@@ -16,7 +16,6 @@ rollback); the theme's own tooltips; the Canvas volume control; Settings → foo
 from collections import Counter
 import asyncio, os, sys, threading, http.server, socketserver, functools, json, io, re, zipfile, hashlib
 from pathlib import Path
-from playwright.async_api import async_playwright
 
 ROOT = Path(__file__).resolve().parent.parent
 FIX = ROOT / 'tests' / 'fixtures'
@@ -1218,6 +1217,7 @@ def selected():
     return names
 
 async def main():
+    from playwright.async_api import async_playwright        # here: E2E_PLAN works without Playwright installed
     names = selected()
     print(f'tests: {", ".join(names)}  (≈{sum(DURATIONS.get(n, DEFAULT_S) for n in names)} s)', flush=True)
     httpd = serve(); port = httpd.server_address[1]
