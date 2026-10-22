@@ -2,8 +2,11 @@
 Gatefold end-to-end tests: the theme runs in headless Chromium against a mock of the
 foo_ui_webview2 bridge (tests/fixtures/mock-bridge.js + mock-extras.js) — no foobar2000 needed.
 
-  pip install playwright && python -m playwright install chromium
-  python tests/e2e.py            (CHROMIUM=/path/to/chrome to use a specific browser)
+  pip install -r tests/requirements.txt && python -m playwright install chromium
+  python tests/e2e.py              every test (CHROMIUM=/path/to/chrome to use a specific browser)
+  ONLY=columns,language python tests/e2e.py     some tests, by name («language» = every language)
+  SHARD=3/8 python tests/e2e.py    part 3 of 8 (CI runs the parts side by side; E2E_PLAN=8 shows them)
+  tools/test-all.sh                the static checks and every part at once, on all CPU cores
 
 Checks: every screen renders without page errors in Russian and English; the English interface
 contains no untranslated Russian text; playlist view modes; likes; YouTube search modes; the
@@ -786,7 +789,9 @@ async def test_sound_ai(browser, port):
     ctx, pg, errs = await page(browser, port, {'language': 'en', 'soundAI': True}, setup=setup, pre="localStorage.setItem('gatefold.ml.pace', '0'); Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8 })")
     await nav(pg, 'settings', 800)
     await pg.evaluate("document.querySelector('#st-sound').scrollIntoView()")
-    for _ in range(60):
+    # up to three minutes: on a busy machine (parts running side by side) the analysis takes longer; it
+    # stops waiting as soon as the status says Done
+    for _ in range(180):
         st = await pg.evaluate("document.getElementById('sndStatus')?.innerText || ''")
         if 'Done' in st: break
         await pg.wait_for_timeout(1000)
@@ -1177,26 +1182,68 @@ async def test_album_details(browser, port):
     check(not errs, f'no page errors {errs[:2]}')
     await ctx.close()
 
+# every test, in the order a full run takes them
+TESTS = [*((f'language_{l}', (lambda l: lambda b, p: test_language(b, p, l))(l)) for l in ('ru', 'en', 'de', 'es', 'zh')),
+         ('playlists', test_playlists), ('youtube', test_youtube), ('youtube_captions', test_youtube_captions), ('columns', test_columns), ('settings', test_settings), ('updates', test_updates),
+         ('tooltips', test_tooltips), ('canvas_volume', test_canvas_volume), ('fb2k_prefs', test_fb2k_prefs), ('welcome', test_welcome),
+         ('playlist_editing', test_playlist_editing), ('windows', test_windows), ('vu', test_vu), ('smart_color_radio', test_smart_color_radio),
+         ('lyrics_sync', test_lyrics_sync), ('album_details', test_album_details), ('level', test_level), ('sound_offer', test_sound_offer), ('similar_albums', test_similar_albums), ('sound_ai', test_sound_ai), ('layout', test_layout), ('stability', test_stability)]
+# seconds each test takes on a CI runner (from the « (N s)» lines of a run); only used to share the tests
+# out evenly between parallel parts — a test missing here counts as DEFAULT_S and still runs
+DURATIONS = {'language_ru': 13, 'language_en': 18, 'language_de': 18, 'language_es': 18, 'language_zh': 18, 'playlists': 10, 'youtube': 14,
+             'youtube_captions': 29, 'columns': 23, 'settings': 6, 'updates': 20, 'tooltips': 9, 'canvas_volume': 4, 'fb2k_prefs': 9, 'welcome': 24,
+             'playlist_editing': 14, 'windows': 13, 'vu': 32, 'smart_color_radio': 27, 'lyrics_sync': 11, 'album_details': 20, 'level': 7,
+             'sound_offer': 14, 'similar_albums': 3, 'sound_ai': 58, 'layout': 60, 'stability': 70}
+DEFAULT_S = 20
+
+def shards(n):
+    """the tests split into n parts of about the same length (longest first, each to the shortest part)"""
+    parts = [[] for _ in range(n)]; load = [0] * n
+    for name, _ in sorted(TESTS, key=lambda t: -DURATIONS.get(t[0], DEFAULT_S)):
+        i = load.index(min(load)); parts[i].append(name); load[i] += DURATIONS.get(name, DEFAULT_S)
+    return parts, load
+
+def selected():
+    """ONLY=a,b (exact names; «language» means every language) and/or SHARD=i/n (part i of n)"""
+    names = [n for n, _ in TESTS]
+    only = [o for o in os.environ.get('ONLY', '').split(',') if o]
+    if only:
+        unknown = [o for o in only if o != 'language' and o not in names]
+        if unknown: sys.exit(f'ONLY: no such test {unknown} (tests: {", ".join(names)})')
+        names = [n for n in names if n in only or ('language' in only and n.startswith('language_'))]
+    if os.environ.get('SHARD'):
+        i, n = (int(x) for x in os.environ['SHARD'].split('/'))
+        part = set(shards(n)[0][i - 1])
+        names = [x for x in names if x in part]
+    return names
+
 async def main():
+    names = selected()
+    print(f'tests: {", ".join(names)}  (≈{sum(DURATIONS.get(n, DEFAULT_S) for n in names)} s)', flush=True)
     httpd = serve(); port = httpd.server_address[1]
+    times = {}
     async with async_playwright() as p:
         kw = {'executable_path': os.environ['CHROMIUM']} if os.environ.get('CHROMIUM') else {}
         # nothing leaves the machine: in CI a click could otherwise download models, ask GitHub or
         # YouTube, and the run would differ from (and wait longer than) an offline one
         browser = await p.chromium.launch(args=['--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1'], **kw)
-        only = os.environ.get('ONLY', '')
-        run = lambda name: not only or any(o in name for o in only.split(','))
-        for lang in ('ru', 'en', 'de', 'es', 'zh'):
-            if run('language'): await timed(f'language {lang}', test_language(browser, port, lang))
-        for name, fn in [('playlists', test_playlists), ('youtube', test_youtube), ('youtube_captions', test_youtube_captions), ('columns', test_columns), ('settings', test_settings), ('updates', test_updates),
-                         ('tooltips', test_tooltips), ('canvas_volume', test_canvas_volume), ('fb2k_prefs', test_fb2k_prefs), ('welcome', test_welcome),
-                         ('playlist_editing', test_playlist_editing), ('windows', test_windows), ('vu', test_vu), ('smart_color_radio', test_smart_color_radio),
-                         ('lyrics_sync', test_lyrics_sync), ('album_details', test_album_details), ('level', test_level), ('sound_offer', test_sound_offer), ('similar_albums', test_similar_albums), ('sound_ai', test_sound_ai), ('layout', test_layout), ('stability', test_stability)]:
-            if run(name): await timed(name, fn(browser, port))
+        fns = dict(TESTS)
+        for name in names:
+            import time
+            t0 = time.time()
+            await timed(name, fns[name](browser, port))
+            times[name] = round(time.time() - t0)
         await browser.close()
     httpd.shutdown()
+    print('\ntimes: ' + json.dumps(times), flush=True)
     print(f'\n{len(failures)} failure(s)')
     sys.exit(1 if failures else 0)
+
+if os.environ.get('E2E_PLAN'):
+    # the plan of a sharded run: which tests go where, and how long each part takes
+    n = int(os.environ['E2E_PLAN'])
+    for i, (part, s) in enumerate(zip(*shards(n)), 1): print(f'{i}/{n}  ≈{s:>3} s  {", ".join(part)}')
+    sys.exit(0)
 
 if not os.environ.get('E2E_IMPORT_ONLY'):
     asyncio.run(main())

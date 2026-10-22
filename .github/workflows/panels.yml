@@ -4,7 +4,7 @@
 name: Panels
 on:
   push:
-    paths: ['panels/**', '.github/workflows/panels.yml']
+    paths: ['panels/**', '.github/workflows/panels.yml', '.github/actions/chromium/**']
   workflow_dispatch:
     inputs:
       publish:
@@ -19,12 +19,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: '3.12' }
-      - name: Playwright
-        run: |
-          pip install playwright==1.56.0
-          python -m playwright install --with-deps chromium
+      - uses: ./.github/actions/chromium      # Python, Playwright, Chromium and its system packages, from caches
       - name: Build and test (headless Chromium, mocked foobar2000 bridge)
         env: { PYTHONUNBUFFERED: '1' }
         run: python panels/test.py

@@ -1,0 +1,4 @@
+# the end-to-end tests (tests/e2e.py) and the stand-in sound-analysis models (tools/ml/fake_assets.py)
+playwright==1.56.0
+onnx==1.17.0
+numpy
