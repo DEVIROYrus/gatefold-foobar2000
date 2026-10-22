@@ -162,20 +162,22 @@ async function playlistFacts(seedKey, lib) {
   const like = new RegExp('^' + $t('Похоже на «{0}»').replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace('\\{0\\}', '.+') + '$');
   const lists = (all.playlists || []).filter((p) => !p.isAutoplaylist && p.trackCount >= 3 && p.trackCount <= 1500
     && !/^(Радио|Radio): /.test(p.name) && !p.name.startsWith(PREFIX()) && p.name !== LIKED && !like.test(p.name)).slice(0, 60);
-  const n = new Map(), co = new Map(); let nSeed = 0;
+  const n = new Map(), co = new Map(), cnt = new Map(); let nSeed = 0;
   for (const p of lists) {
     const r = await call('playlist.getTracks', { playlistGuid: p.guid, start: 0, count: p.trackCount, fields: ['artist', 'albumArtist'] });
     if (!ok(r)) continue;
     const set = new Set();
     for (const t of r.tracks || []) { for (const a of [t.albumArtist && !isVarious(t.albumArtist) ? t.albumArtist : '', t.artist]) { const k = a && artistKey(a); if (k && lib.has(k)) set.add(k); } }
-    if (set.size < 2 || set.size > 300) continue;          // one artist says nothing; a library dump neither
+    // one artist says nothing; a playlist of favourites from everywhere (or the whole library) neither
+    if (set.size < 2 || set.size > 120) continue;
     const w = 1 / Math.log2(2 + set.size);
     for (const k of set) n.set(k, (n.get(k) || 0) + w);
-    if (set.has(seedKey)) { nSeed += w; for (const k of set) co.set(k, (co.get(k) || 0) + w); }
+    if (set.has(seedKey)) { nSeed += w; for (const k of set) { co.set(k, (co.get(k) || 0) + w); cnt.set(k, (cnt.get(k) || 0) + 1); } }
   }
   if (!nSeed) return null;
   const m = new Map();
-  for (const [k, c] of co) if (k !== seedKey) m.set(k, Core.clamp01(c / Math.sqrt(nSeed * n.get(k)) * 1.2));
+  // only next to the seed in two playlists or more, and shrunk towards 0 while the evidence is thin
+  for (const [k, c] of co) if (k !== seedKey && cnt.get(k) >= 2) m.set(k, Core.clamp01(c / (Math.sqrt(nSeed * n.get(k)) + 0.3)));
   return m;
 }
 
@@ -242,9 +244,41 @@ async function gather(seedName, seedTrack, gen) {
   if (!ctx.sound) ctx.T = null;
   if (!ctx.T && seedTrack) ctx.seedVibe = await Vibe.of(seedTrack);
   if (dz) ctx.ids = dz.ids;
-
-  // genres: MusicBrainz's, else your specific tags; a genre counts by how rare it is in your library
+  Object.assign(ctx, { dz, lb, pl });
   await Genres.whenLoaded();
+  ctx.hubs = await hubStats();
+  ctx.pool = scorePool(ctx);
+  // the genres of the leading artists, from MusicBrainz first in its queue: the pool is scored again
+  // as they arrive (an artist the services relate but whose genres say otherwise drops out)
+  for (const n of [seedName, ...ctx.pool.slice(0, 40).map((p) => p.name)]) if (!Genres.artistGenres(n)) Genres.want(n);
+  noteHubs(ctx);
+  log('radio pool', seedName, ctx.pool.slice(0, 20).map((p) => `${p.name} ${p.s.toFixed(2)} [${Object.entries(p.f).filter(([, v]) => v != null && v !== false).map(([k, v]) => k + ' ' + (+v).toFixed(2)).join(', ')}]`));
+  return ctx;
+}
+
+/* artists that turn up on most radios whatever the seed (hubs: the famous names everybody's
+   listeners also play) — remembered over the last radios, and held back unless the genres agree */
+const HUB_KEY = 'radio.hubs.v1';
+async function hubStats() { return (await IDB.kvGet(HUB_KEY, null)) || { seeds: [], hits: {} }; }
+function noteHubs(ctx) {
+  const H = ctx.hubs;
+  if (!H.seeds.includes(ctx.seedKey)) { H.seeds.push(ctx.seedKey); if (H.seeds.length > 60) H.seeds.shift(); }
+  const live = new Set(H.seeds);
+  for (const p of ctx.pool.slice(0, 30)) { const l = (H.hits[p.key] || []).filter((x) => live.has(x) && x !== ctx.seedKey); l.push(ctx.seedKey); H.hits[p.key] = l; }
+  IDB.kvSet(HUB_KEY, H);
+}
+const hubFactor = (ctx, key, genre) => {
+  const H = ctx.hubs, total = H.seeds.filter((x) => x !== ctx.seedKey).length;
+  const hits = (H.hits[key] || []).filter((x) => x !== ctx.seedKey && H.seeds.includes(x)).length;
+  if (total < 5 || hits / total < 0.5 || (genre != null && genre >= 0.4)) return null;
+  return 0.6;
+};
+
+/** every library artist scored against the seed; the ones that are on the radio at all, best first */
+function scorePool(ctx) {
+  const { lib, seedKey, dz, lb, pl } = ctx;
+  const seedA = lib.get(seedKey);
+  // genres: MusicBrainz's, else your specific tags; a genre counts by how rare it is in your library
   const tagged = new Set();
   const gOf = (a) => { const mb = Genres.artistGenres(a.name); if (mb) return mb; if (!a.tags.size) return null; tagged.add(a.key); return new Map([...a.tags].map((g) => [g, 1])); };
   const G = new Map(); const df = new Map();
@@ -264,6 +298,7 @@ async function gather(seedName, seedTrack, gen) {
       deezer: dz && dz.d1.get(a.key), deezer2: dz && dz.d2.get(a.key), lb: lb && lb.get(a.key), pl: pl && pl.get(a.key),
       genre: Core.genreSim(gSeed, g, idf), genreTags: tagged.has(a.key) || tagged.has(seedKey), sound: snd ? snd.sound : null, style: snd ? snd.style : null, era: Core.eraSim(seedYear, year),
     };
+    f.hub = hubFactor(ctx, a.key, f.genre);
     const { s, C, K } = Core.artistScore(f);
     if (s < 0.1) continue;
     const why = [];
@@ -277,9 +312,7 @@ async function gather(seedName, seedTrack, gen) {
     pool.push({ key: a.key, name: a.name, s, C, K, f, why });
   }
   pool.sort((a, b) => b.s - a.s);
-  ctx.pool = pool.slice(0, 60);
-  log('radio pool', seedName, ctx.pool.slice(0, 20).map((p) => `${p.name} ${p.s.toFixed(2)} [${Object.entries(p.f).filter(([, v]) => v != null).map(([k, v]) => k + ' ' + (+v).toFixed(2)).join(', ')}]`));
-  return ctx;
+  return pool.slice(0, 60);
 }
 
 /* ---------------------------------------------------------------- an artist's tracks, with what we know of them */
@@ -365,6 +398,7 @@ async function fill(n) {
       if (gen !== R.gen) return;
       if (!x) { if (!R.ended) { R.ended = true; toast($t('Похожей музыки в медиатеке больше нет — радио на этом остановится'), { ms: 4000 }); } break; }
       buf.push(x.t.h);
+      if (i % 4 === 3 && R.ctx) R.planner.update(scorePool(R.ctx));      // more genres known by now
       if (buf.length >= (i < 4 ? 1 : 4)) { await call('playlist.addHandles', { playlistGuid: R.guid, handles: buf }); buf = []; }
     }
     if (buf.length && gen === R.gen) await call('playlist.addHandles', { playlistGuid: R.guid, handles: buf });

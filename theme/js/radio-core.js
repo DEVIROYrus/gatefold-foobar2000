@@ -109,20 +109,33 @@ export const eraSim = (y1, y2) => (y1 && y2 ? clamp01(1 - Math.abs(y1 - y2) / 22
  * → { s, C, K } — s ≥ 0.1 or so to be on the radio at all
  */
 export function artistScore(f) {
-  const C = noisyOr(f.deezer, 0.6 * (f.deezer2 || 0), f.lb, 0.75 * (f.pl || 0));
+  // the services count fully; your playlists only a little (a playlist of favourites mixes everything:
+  // sharing one with the seed says little about sounding like it)
+  const dz = Math.max(f.deezer || 0, 0.6 * (f.deezer2 || 0));
+  const C = noisyOr(dz, f.lb, 0.45 * (f.pl || 0));
+  const ext = (dz > 0.05 ? 1 : 0) + ((f.lb || 0) > 0.05 ? 1 : 0);       // independent outside sources that agree
   // genres voted on MusicBrainz are a strong fact; a file's own genre tag (genreTags) a weak one
+  const strongGenre = f.genre != null && !f.genreTags;
   const parts = [[f.genre, f.genreTags ? 0.2 : 0.45], [f.sound, 0.35], [f.style, 0.2]].filter(([v]) => v != null);
   const W = parts.reduce((s, [, w]) => s + w, 0);
   const K = W ? parts.reduce((s, [v, w]) => s + v * w, 0) / W : null;
-  const era = f.era == null ? 1 : 0.7 + 0.3 * f.era;
+  // the release years say little once the genres are known (a retro band of the 2010s is an 80s band)
+  const era = strongGenre || f.era == null ? 1 : 0.85 + 0.15 * f.era;
   let s;
-  if (C > 0.02) s = (0.35 + 0.65 * C) * (K == null ? 0.65 : 0.25 + 0.75 * K);
-  else if (K == null) s = 0;
+  if (C > 0.02) {
+    // people relate it, but the genres contradict: only when both outside sources agree on it
+    if (strongGenre && f.genre < 0.12 && ext < 2) return { s: 0, C, K, cut: 'genre' };
+    s = (0.35 + 0.65 * C) * (K == null ? 0.6 : 0.2 + 0.8 * K);
+    if (strongGenre && f.genre < 0.25) s *= 0.55;
+    if (!ext) s *= 0.55;                                                // only your playlists say so
+    if (K == null && ext < 2) s *= 0.8;                                 // nothing to confirm it with
+  } else if (K == null) s = 0;
   else {
     // content alone: only a strong match on what is known, and never against the genre
-    if (f.genre != null && !f.genreTags && f.genre < 0.2) return { s: 0, C, K };
+    if (strongGenre && f.genre < 0.3) return { s: 0, C, K, cut: 'genre' };
     s = 0.6 * K * K * (W >= 0.6 ? 1 : 0.5);
   }
+  if (f.hub) s *= f.hub;                                                // an artist that turns up on every radio
   return { s: s * era, C, K };
 }
 
@@ -136,13 +149,13 @@ export function artistScore(f) {
  *   candidates only, before one of them is chosen (optional, may be slow)
  */
 export class Planner {
-  constructor({ pool, seed, tracksOf, near = null, measure = null, rnd = Math.random, cap = 3, window = 25, seedEvery = 6, anchor = 6, anchorTop = 8 }) {
+  constructor({ pool, seed, tracksOf, near = null, measure = null, rnd = Math.random, cap = null, window = 25, seedEvery = 8, anchor = 6, anchorTop = 8 }) {
     this.pool = pool.map((p) => ({ ...p, fit: 1, pen: 1, dead: false, tries: 0 }));
     this.byKey = new Map(this.pool.map((p) => [p.key, p]));
     this.seed = seed && seed.key ? { key: seed.key, name: seed.name || '', s: 1, why: ['seed'], fit: 1, pen: 1, dead: false, tries: 0 } : null;
     this.seedTrack = seed && seed.track ? seed.track : null;
     this.tracksOf = tracksOf; this.near = near; this.measure = measure; this.rnd = rnd;
-    this.cap = cap; this.win = window; this.seedEvery = seedEvery; this.anchor = anchor; this.anchorTop = anchorTop;
+    this.cap = cap || (pool.length >= 14 ? 2 : 3); this.win = window; this.seedEvery = seedEvery; this.anchor = anchor; this.anchorTop = anchorTop;
     this.played = new Set(); this.songs = new Set(); this.hist = []; this.albums = []; this.n = 0; this.turn = 0;
     this.relaxed = false; this.why = new Map();
     if (this.seedTrack) this.mark(this.seedTrack, this.seed ? this.seed.key : '');
@@ -155,7 +168,18 @@ export class Planner {
   place(t, key) {
     this.mark(t, key); this.hist.push(key); this.albums.push(key + '|' + String(t.album || '').toLowerCase());
     if (this.hist.length > this.win) this.hist.shift();
-    if (this.albums.length > 10) this.albums.shift();
+    if (this.albums.length > this.win) this.albums.shift();
+  }
+  /** new scores (the genres of more artists have arrived): entries move, new ones join, gone ones stop */
+  update(pool) {
+    const seen = new Set();
+    for (const q of pool) {
+      seen.add(q.key);
+      const p = this.byKey.get(q.key);
+      if (p) Object.assign(p, { s: q.s, why: q.why });
+      else { const n = { ...q, fit: 1, pen: 1, dead: false, tries: 0 }; this.pool.push(n); this.byKey.set(q.key, n); }
+    }
+    for (const p of this.pool) if (!seen.has(p.key)) p.s = 0;
   }
   /** you skipped a track of this artist early: it comes up less */
   skip(key) { const p = this.byKey.get(key) || (this.seed && this.seed.key === key ? this.seed : null); if (p) p.pen *= 0.45; }
@@ -173,7 +197,7 @@ export class Planner {
       if (top.length >= 2) cands = top;
     }
     const w = (p, capOK) => {
-      if (p.key === last) return 0;
+      if (p.key === last || !(p.s > 0)) return 0;
       const cnt = this.hist.reduce((s, k) => s + (k === p.key), 0);
       if (cnt >= this.cap && !capOK) return 0;
       let x = p.s * p.s * p.fit * p.fit * p.pen;          // an artist whose tracks keep sounding off fades quickly
@@ -195,6 +219,9 @@ export class Planner {
   async bestOf(p) {
     const all = (await this.tracksOf(p.key)) || [];
     const lastAlbums = new Set(this.albums.slice(-8));
+    // one song per album on a radio; a second only when the artist has nothing else left
+    const usedAlbums = new Set(this.albums);
+    const albumOf = (t) => p.key + '|' + String(t.album || '').toLowerCase();
     const fresh = all.filter((t) => !this.played.has(String(t.h).toLowerCase()) && !this.songs.has(p.key + '|' + songKey(t.title)));
     if (!fresh.length) return { none: 'used' };
     const floor = this.relaxed ? 0.0 : 0.04;
@@ -216,6 +243,8 @@ export class Planner {
       scored.push({ t, sc: rate(t, chk.mul), mul: chk.mul });
     }
     if (!scored.length) return { none: 'far' };
+    const other = scored.filter((x) => !usedAlbums.has(albumOf(x.t)));
+    if (other.length) scored = other;
     scored.sort((a, b) => b.sc - a.sc);
     // the best candidates whose sound is not known yet are listened to first (a few per turn): a track
     // is only chosen once the ones ranked above it are known
