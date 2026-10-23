@@ -22,8 +22,9 @@
  *     and not shown again;
  *   · N / P — next / previous preset, B — keep this one; its name shows for a moment.
  */
-import { call, ok, log } from './bridge.js';
+import { log } from './bridge.js';
 import { settings, setSetting } from './settings.js';
+import * as AF from './audiofeed.js';
 
 const BASE = new URL('./vendor/milkdrop/', import.meta.url);
 let loading = null, Butterchurn = null, PRESETS = null;
@@ -48,51 +49,8 @@ function ensure() {
   })().catch((e) => { loading = null; throw e; }));
 }
 
-/* ---------------------------------------------------------------- the sound: foobar2000's PCM ring */
-const SID = 'gatefold-milkdrop';
-const pcm = { users: 0, f32: null, u32: null, ch: 2, ok: false, subscribed: false, tried: 0 };
-const TB = new Uint8Array(1024), TL = new Uint8Array(1024), TR = new Uint8Array(1024);
-try {
-  window.chrome?.webview?.addEventListener('sharedbufferreceived', (e) => {
-    let d = e.additionalData; if (typeof d === 'string') { try { d = JSON.parse(d); } catch { d = {}; } }
-    if (!d || d.purpose !== 'audio.subscribeStream' || d.subscriptionId !== SID) return;
-    const b = e.getBuffer();
-    pcm.f32 = new Float32Array(b); pcm.u32 = new Uint32Array(b, 0, 16); pcm.ch = d.channels || 2; pcm.ok = true;
-  });
-} catch { /* not in WebView2 */ }
-async function listen(on) {
-  pcm.users += on ? 1 : -1;
-  if (pcm.users > 0 && !pcm.subscribed) {
-    pcm.subscribed = true;
-    const r = await call('audio.subscribeStream', { subscriptionId: SID, interval: 0.016, bufferSeconds: 0.5 });
-    if (!ok(r)) { pcm.subscribed = false; log('milkdrop: no PCM stream', r.code || r.error); }
-  } else if (pcm.users <= 0 && pcm.subscribed) {
-    pcm.users = 0; pcm.subscribed = false; pcm.ok = false; pcm.f32 = pcm.u32 = null;
-    call('audio.unsubscribeStream', { subscriptionId: SID });
-  }
-}
-/** the newest 1024 frames as Butterchurn wants them (0…255 around 128), or silence */
-let synthT = 0;
-function levels(playing) {
-  const u = pcm.u32, f = pcm.f32;
-  if (playing && u && f && !(u[7] & 1) && u[6]) {
-    const cap = u[6], slot = u[15], ch = pcm.ch;
-    // quiet masters still move the picture: a gentle automatic gain up to ×3
-    let peak = 0.02;
-    for (let i = 0; i < 1024; i += 8) { let s = (slot - 1024 + i) % cap; if (s < 0) s += cap; const v = Math.abs(f[16 + s * ch]); if (v > peak) peak = v; }
-    const g = Math.min(3, 0.9 / peak);
-    for (let i = 0; i < 1024; i++) {
-      let s = (slot - 1024 + i) % cap; if (s < 0) s += cap;
-      const b = 16 + s * ch, l = f[b] * g, r = (ch > 1 ? f[b + 1] : f[b]) * g;
-      TL[i] = 128 + Math.max(-127, Math.min(127, l * 127)); TR[i] = 128 + Math.max(-127, Math.min(127, r * 127)); TB[i] = (TL[i] + TR[i]) >> 1;
-    }
-  } else if (playing && !pcm.ok) {
-    // no shared PCM (an older component): a soft pulse keeps the presets alive
-    synthT += 1 / 60;
-    for (let i = 0; i < 1024; i++) { const t = synthT + i / 44100; const v = Math.sin(t * 2 * Math.PI * 55) * 0.3 * (0.6 + 0.4 * Math.sin(t * 2 * Math.PI * 2)); TB[i] = TL[i] = TR[i] = 128 + v * 127; }
-  } else { TB.fill(128); TL.fill(128); TR.fill(128); }
-  return { timeByteArray: TB, timeByteArrayL: TL, timeByteArrayR: TR };
-}
+/* the sound: audiofeed.js (one PCM subscription for every visualiser on the page) */
+const levels = (playing) => AF.frame(playing).time;
 
 /* ---------------------------------------------------------------- the presets: which one next */
 const BAD = 'gatefold.milkdrop.bad';
@@ -119,7 +77,9 @@ export class Stage {
     this.tint = document.createElement('div'); this.tint.className = 'md-tint';
     host.append(this.cv, this.tint);
     this.ro = new ResizeObserver(() => this.size());
-    this.guard = { last: 0, lums: [], c: null, x: null };
+    this.guard = { last: 0, lums: [], c: null, x: null, busy: false };
+    this.q = 1; this.gov = { at: performance.now(), n: 0, sum: 0 };
+    this.key = '';
   }
   async start() {
     if (this.on) return;
@@ -129,14 +89,16 @@ export class Stage {
     if (!this.viz) {
       const { w, h } = this.dims();
       this.viz = Butterchurn.createVisualizer(null, this.cv, { width: w, height: h, pixelRatio: 1, textureRatio: 1, meshWidth: this.o.kind === 'backdrop' ? 32 : 48, meshHeight: this.o.kind === 'backdrop' ? 24 : 36 });
+      const t0 = this.o.track && this.o.track(); this.key = t0 ? String(t0.handle || t0.path || t0.title || '') : '';
       this.next('start', 0);
       // a preset builds its picture from feedback over a second or so: draw that before showing anything
       try { const lv = levels(true); for (let i = 0; i < 30; i++) this.viz.render({ audioLevels: lv, elapsedTime: 1 / 60 }); } catch {}
     }
     this.ro.observe(this.host);
     this.size();
-    listen(true);
+    AF.listen(true);
     this.host.classList.add('md-on');
+    this.started = performance.now();
     this.loop();
   }
   stop() {
@@ -144,7 +106,7 @@ export class Stage {
     this.on = false;
     cancelAnimationFrame(this.raf); clearTimeout(this.raf); this.raf = 0;
     this.ro.disconnect();
-    listen(false);
+    AF.listen(false);
     this.host.classList.remove('md-on');
   }
   destroy() { this.stop(); this.cv.remove(); this.tint.remove(); this.viz = null; }
@@ -152,10 +114,27 @@ export class Stage {
   dims() {
     const r = this.host.getBoundingClientRect();
     const W = Math.max(64, r.width), H = Math.max(36, r.height);
-    const max = this.o.kind === 'backdrop' ? 420 : Math.min(1600, 1280 * (devicePixelRatio > 1.4 ? 1.25 : 1));
-    const k = Math.min(1, max / W) * (this.o.kind === 'backdrop' ? 1 : Math.min(1.5, devicePixelRatio || 1));
-    return { w: Math.round(W * k), h: Math.round(H * k) };
+    // MilkDrop was made for ~1024×768: more pixels only cost the GPU (and, starved, the whole window's
+    // responsiveness); the picture is soft by nature and scaled up smoothly. The governor lowers it further
+    // when frames come late.
+    const max = (this.o.kind === 'backdrop' ? 420 : 1280) * this.q;
+    const k = Math.min(1, max / W);
+    return { w: Math.max(64, Math.round(W * k)), h: Math.max(36, Math.round(H * k)) };
   }
+  /* the quality governor: frames that come late (a busy or weak GPU) lower the resolution, a calm GPU
+     raises it again — never more often than every 3 s */
+  govern(now, dt) {
+    const g = this.gov;
+    g.n++; g.sum += dt;
+    if (now - g.at < 3000) return;
+    const avg = g.sum / g.n; g.at = now; g.n = 0; g.sum = 0;
+    if (now - (this.started || 0) < 4000) return;          // the first seconds (shaders compiling) say nothing
+    const target = 1 / this.fps(), q = this.q;
+    if (avg > target * 1.35 && q > 0.45) this.q = Math.max(0.45, q * 0.8);
+    else if (avg < target * 1.08 && q < 1) this.q = Math.min(1, q * 1.12);
+    if (this.q !== q) { log('visuals: quality', this.q.toFixed(2)); this.size(); }
+  }
+  fps() { return !this.o.playing() ? 20 : this.o.kind === 'backdrop' || settings.motionFps === 'eco' ? 30 : 60; }
   size() {
     if (!this.viz) return;
     const { w, h } = this.dims();
@@ -173,10 +152,14 @@ export class Stage {
       this.last = now;
       try { this.viz.render({ audioLevels: levels(playing), elapsedTime: dt }); } catch (e) { log('milkdrop: render', e.message); this.next('error'); }
       if (this.o.kind === 'canvas') this.checkFlash(now);
+      this.govern(now, dt);
+      // a new track: a new preset (watched here too, so no host has to remember to say so)
+      const t = this.o.track && this.o.track(), key = t ? String(t.handle || t.path || t.title || '') : '';
+      if (key !== this.key) { const had = this.key; this.key = key; if (had && key && settings.mdChange !== 'time' && settings.mdChange !== 'manual') this.next('track'); }
       if (settings.mdChange === 'time' && playing && !settings.mdLock && now - this.changed > 30000) this.next('timer');
       // MilkDrop presets are made for ~60 fps; «economical» draws 30, a paused track 20, the backdrop 30
-      const fps = !playing ? 20 : this.o.kind === 'backdrop' || settings.motionFps === 'eco' ? 30 : 0;
-      if (fps) this.raf = setTimeout(() => { this.raf = requestAnimationFrame(tick); }, Math.max(0, 1000 / fps - 4));
+      const fps = this.fps();
+      if (fps < 60) this.raf = setTimeout(() => { this.raf = requestAnimationFrame(tick); }, Math.max(0, 1000 / fps - 4));
       else this.raf = requestAnimationFrame(tick);
     };
     this.raf = requestAnimationFrame(tick);
@@ -212,16 +195,26 @@ export class Stage {
      changes of ≥ 10 % within a second count as flashing (WCAG 2.3.1) */
   checkFlash(now) {
     const g = this.guard;
-    if (now - g.last < 160) return;
+    if (now - g.last < 160 || g.busy) return;
     g.last = now;
     if (!g.c) { g.c = document.createElement('canvas'); g.c.width = 16; g.c.height = 9; g.x = g.c.getContext('2d', { willReadFrequently: true }); }
-    try {
-      g.x.drawImage(this.cv, 0, 0, 16, 9);
+    // a snapshot taken right after drawing, scaled down by the GPU and read without waiting for it
+    // (a synchronous read of a WebGL canvas stalls the page until the GPU is done)
+    g.busy = true;
+    createImageBitmap(this.cv, { resizeWidth: 16, resizeHeight: 9, resizeQuality: 'low' }).then((bmp) => {
+      g.busy = false;
+      if (!this.on) { bmp.close(); return; }
+      g.x.clearRect(0, 0, 16, 9); g.x.drawImage(bmp, 0, 0); bmp.close();
       const d = g.x.getImageData(0, 0, 16, 9).data;
-      let L = 0;
-      for (let i = 0; i < d.length; i += 4) L += 0.2126 * lin(d[i]) + 0.7152 * lin(d[i + 1]) + 0.0722 * lin(d[i + 2]);
-      g.lums.push([now, L / 144]);
-    } catch { return; }
+      let L = 0, any = 0;
+      for (let i = 0; i < d.length; i += 4) { L += 0.2126 * lin(d[i]) + 0.7152 * lin(d[i + 1]) + 0.0722 * lin(d[i + 2]); any |= d[i + 3]; }
+      if (!any) return;                                  // an empty snapshot (the canvas was between frames): not a sample
+      this.flashSample(performance.now(), L / 144);
+    }, () => { g.busy = false; });
+  }
+  flashSample(now, lum) {
+    const g = this.guard;
+    g.lums.push([now, lum]);
     while (g.lums.length && now - g.lums[0][0] > 1100) g.lums.shift();
     let last = 0, flips = 0;
     for (let i = 1; i < g.lums.length; i++) {
