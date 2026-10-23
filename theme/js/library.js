@@ -30,6 +30,7 @@ import * as Cx from './columns.js';
 import * as Own from './ownart.js';
 import * as CoverPick from './coverpick.js';
 import * as Names from './artistnames.js';
+import * as Folders from './folders.js';
 const ownRg = () => performance.now() < Loud.writingUntil;   // Gatefold's own ReplayGain tag writes change nothing shown
 const dpr = () => Math.min(2, window.devicePixelRatio || 1);
 /** A track as the host's context-menu/handle APIs want it: path, or path|subsong:N. */
@@ -56,7 +57,9 @@ function heartClick(e, trackOf) {
   if (t) { b.classList.remove('pop'); void b.offsetWidth; if (!Likes.has(t)) b.classList.add('pop'); Likes.toggle(t); }
   return true;
 }
-export const shared = { playing: { playlist: -1, index: -1 }, isPlaying: false, onPlayAlbum: null };
+export const shared = { playing: { playlist: -1, index: -1 }, isPlaying: false, onPlayAlbum: null, nowHandle: '' };
+/** what a list of tracks elsewhere (folders.js) needs to look and behave like the playlist */
+export const rowKit = { LIKE_BTN, likeAttr, likeRow, heartClick };
 
 // ============================================================ cover URLs: disk thumbnail cache → fb2k:// URLs
 const coverCache = new Map(); // `${path}@${size}` → fb2k url | ''
@@ -1252,7 +1255,7 @@ function layoutLib() {
 let libRaf = 0, relayout = false;
 function scheduleLib(re) { relayout = relayout || re; if (!libRaf) libRaf = requestAnimationFrame(() => { libRaf = 0; renderLib(relayout); relayout = false; }); }
 libScroller.addEventListener('scroll', () => scheduleLib(false), { passive: true });
-new ResizeObserver(() => { if (router.current === 'library') layoutLib(); }).observe(libScroller);
+new ResizeObserver(() => { if (router.current === 'library' && !Folders.active()) layoutLib(); }).observe(libScroller);
 
 function renderLib(re) {
   if (router.current !== 'library' || !LIB.view.length) return;
@@ -1286,7 +1289,7 @@ function renderLib(re) {
   }
 }
 
-$('libFilter').addEventListener('input', debounce(applyFilter, 160));
+$('libFilter').addEventListener('input', debounce(() => { if (Folders.active()) Folders.filter($('libFilter').value); else applyFilter(); }, 160));
 $('libSort').addEventListener('change', async (e) => {
   setSetting('librarySort', e.target.value);
   if (!LIB.loaded) return loadLibrary(true);
@@ -1309,8 +1312,10 @@ async function albumMenu(a, x, y) {
     { type: 'sep' },
     { id: 'cover', label: $t('Обложка…') },
     { id: 'colors', label: $t('Цвета…') },
+    { id: 'folder', label: $t('Показать папку в медиатеке') },
     { id: 'explorer', label: $t('Показать в проводнике') },
   ], x, y);
+  if (id === 'folder' && a.firstTrackAbsolutePath) Folders.reveal(a.firstTrackAbsolutePath);
   if (id === 'colors') AC.open(a);
   if (id === 'play') playAlbumRow(a);
   if (id === 'queue') queueAlbum(a);
@@ -1732,7 +1737,18 @@ $('btnNewPl').addEventListener('click', async (e) => {
 
 // ============================================================ routes
 router.on('playlist', (guid) => { openPlaylist(guid || PL.guid || '').then(() => setTimeout(() => jumpToPlaying(false), 50)); renderPlaylists(); });
-router.on('library', () => loadLibrary(false));
+router.on('library', (arg) => {
+  // Library has two modes: albums (the grid) and folders (folders.js); a folder is a screen of its own
+  if (arg && arg.folder !== undefined) { Folders.show(arg.folder, arg.focus || ''); return; }
+  if (!(arg && arg.albums) && settings.libMode === 'folders') { Folders.show(); return; }
+  Folders.setMode(false);
+  loadLibrary(false);
+  if (LIB.loaded) requestAnimationFrame(layoutLib);
+});
+document.querySelectorAll('#view-library .lib-mode button').forEach((b) => {
+  b.onclick = () => { if (b.classList.contains('on')) return; router.go('library', b.dataset.m === 'folders' ? { folder: settings.libFolder || '' } : { albums: true }); };
+});
+libEvents.addEventListener('changed', () => Folders.invalidate());
 router.on('album', (a) => openAlbum(a));
 router.on('search', () => {});
 router.on('queue', () => renderQueue());

@@ -4,6 +4,7 @@ All notable changes are listed here. Versions follow [Semantic Versioning](https
 
 ## [Unreleased]
 
+- **Library → Folders:** browse the library by its folders — play, shuffle, queue or send a whole folder, filter everything below it, show an album's folder; optionally files not yet in the library.
 - **Sharper text (ClearType) everywhere except Now Playing:** the background stands still there instead of drifting under the text.
 
 ## [1.4.0] — your covers, editions, several artists, your colours, sound

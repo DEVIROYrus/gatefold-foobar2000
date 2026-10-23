@@ -186,6 +186,7 @@
     <div class="view-head">
       <div><div class="kicker">Медиатека</div><h2>Альбомы</h2><div class="sub" id="libSub"></div></div>
       <div class="actions lib-tools">
+        <div class="seg lib-mode" role="group" aria-label="Вид медиатеки"><button data-m="albums" class="on" aria-pressed="true">Альбомы</button><button data-m="folders" aria-pressed="false">Папки</button></div>
         <input class="filter" id="libFilter" placeholder="Фильтр…" spellcheck="false">
         <select class="select" id="libSort">
           <option value="artist">По исполнителю</option>
@@ -200,6 +201,14 @@
     </div>
     <div class="color-ribbon" id="libRibbon" hidden></div>
     <div class="scroller" id="libScroller"><div class="vlist" id="libGrid"></div></div>
+    <div class="fd" id="folderView">
+      <div class="fd-bar" id="fdBar"></div>
+      <div class="scroller list-surface" id="fdScroller">
+        <div class="agrid fd-grid" id="fdDirs"></div>
+        <div class="list-head fd-head" id="fdHead" hidden></div>
+        <div class="vlist fd-list" id="fdList"></div>
+      </div>
+    </div>
   </section>
 
   <!-- ARTISTS -->
