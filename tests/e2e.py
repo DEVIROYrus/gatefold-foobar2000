@@ -1347,17 +1347,86 @@ async def test_cover_pick(browser, port):
     check(not errs, f'no page errors {errs}')
     await ctx.close()
 
+async def test_folders(browser, port):
+    print('· Library → Folders: the tree from the library, tiles and tracks, the filter, back and up, play / queue / Explorer, show an album\'s folder, files not in the library')
+    ctx, pg, errs = await page(browser, port, {'language': 'en'})
+    await pg.evaluate("(() => { const b = window.fb2k.invoke.bind(window.fb2k); window.fb2k.invoke = (m, p) => { if (/^(library.addToPlaylist|playlist.addPathsSequential|playlist.playTrack|queue.addPaths|shell.showInExplorer)$/.test(m)) window.__calls.push([m, (p && p.paths || []).length]); return b(m, p); }; })()")
+    await nav(pg, 'library', 1600)
+    await pg.click('.lib-mode button[data-m=folders]'); await pg.wait_for_timeout(1400)
+    tiles = lambda: pg.evaluate("[...document.querySelectorAll('#fdDirs .fd-tile .tt')].map(t => t.textContent)")
+    crumbs = lambda: pg.evaluate("[...document.querySelectorAll('.fd-crumb')].map(c => c.textContent.trim())")
+    top = await tiles()
+    check('Lumen Arcade' in top and 'Blue Hours' in top and len(top) == 6, f'the artists\' folders of D:\\Music {top}')
+    check(await crumbs() == ['D:\\Music'], f'the single root folder is where the tree starts {await crumbs()}')
+    check(await pg.evaluate("document.querySelector('#view-library h2').textContent") == 'Folders', 'the header says Folders')
+    check(await pg.evaluate("JSON.parse(localStorage.getItem('aurora.settings.v1')).libMode") == 'folders', 'the mode is remembered')
+    await pg.evaluate("[...document.querySelectorAll('#fdDirs .fd-tile')].find(t => t.querySelector('.tt').textContent === 'Lumen Arcade').click()"); await pg.wait_for_timeout(900)
+    check(await crumbs() == ['D:\\Music', 'Lumen Arcade'], f'a step into a folder {await crumbs()}')
+    subs = await pg.evaluate("[...document.querySelectorAll('#fdDirs .fd-tile .ta')].map(t => t.textContent)")
+    check(subs and all('Lumen Arcade' in x for x in subs), f'an album\'s folder is named by its tags {subs}')
+    await pg.evaluate("document.querySelector('#fdDirs .fd-tile').click()"); await pg.wait_for_timeout(900)
+    rows = await pg.evaluate("document.querySelectorAll('#fdList .vrow').length")
+    check(rows > 0 and len(await crumbs()) == 3, f'a folder\'s own tracks ({rows})')
+    check(await pg.evaluate("!!document.querySelector('#fdList .vrow .lnk[data-go=artist]') && !!document.querySelector('#fdList .vrow .row-like')"), 'rows link the artist and can be liked')
+    await pg.keyboard.press('Backspace'); await pg.wait_for_timeout(700)
+    check(await crumbs() == ['D:\\Music', 'Lumen Arcade'], f'Backspace goes back {await crumbs()}')
+    await pg.keyboard.press('Alt+ArrowUp'); await pg.wait_for_timeout(700)
+    check(await crumbs() == ['D:\\Music'], f'Alt+↑ goes up {await crumbs()}')
+    # the filter searches everything below
+    await pg.fill('#libFilter', 'Afterglow'); await pg.wait_for_timeout(700)
+    found = await pg.evaluate("[...document.querySelectorAll('#fdList .vrow .c-title')].map(c => c.textContent)")
+    check(found and all('Afterglow' in x for x in found), f'the filter finds tracks in every folder below ({len(found)})')
+    await pg.fill('#libFilter', ''); await pg.wait_for_timeout(600)
+    check(len(await tiles()) == 6, 'and gives the folder back when cleared')
+    # play the whole folder; the queue from a tile's menu; Explorer from the bar
+    n0 = len(await pg.evaluate("window.__calls"))
+    await pg.click('.fd-acts [data-act=play]'); await pg.wait_for_timeout(900)
+    adds = [c for c in (await pg.evaluate("window.__calls"))[n0:] if c[0] in ('library.addToPlaylist', 'playlist.addPathsSequential', 'playlist.playTrack')]
+    check(adds, f'«Play» plays the folder and everything below it {adds[:2]}')
+    tile = await pg.query_selector('#fdDirs .fd-tile')
+    await tile.click(button='right'); await pg.wait_for_timeout(300)
+    await pg.evaluate("[...document.querySelectorAll('#layer .menu .mi')].find(m => m.textContent.trim() === 'Queue').click()"); await pg.wait_for_timeout(500)
+    check(any(c[0] == 'queue.addPaths' for c in await pg.evaluate("window.__calls")), 'a folder can be queued from its menu')
+    await pg.click('.fd-acts [data-act=more]'); await pg.wait_for_timeout(300)
+    menu = await pg.evaluate("[...document.querySelectorAll('#layer .menu .mi')].map(m => m.textContent)")
+    check(any('Explorer' in m for m in menu) and any('not in the library' in m for m in menu), f'the folder menu {menu}')
+    await pg.keyboard.press('Escape'); await pg.wait_for_timeout(200)
+    # an album's folder, from the album grid
+    await pg.click('.lib-mode button[data-m=albums]'); await pg.wait_for_timeout(1200)
+    check(await pg.evaluate("document.querySelectorAll('#libGrid .tile').length") > 0 and not await pg.evaluate("document.getElementById('view-library').classList.contains('folders')"), 'back to the albums')
+    await pg.fill('#libFilter', 'Nightdrive'); await pg.wait_for_timeout(600)
+    t = await pg.query_selector('#libGrid .tile')
+    name = await pg.evaluate("document.querySelector('#libGrid .tile .tt').textContent")
+    await pg.fill('#libFilter', '')
+    await t.click(button='right'); await pg.wait_for_timeout(300)
+    await pg.evaluate("[...document.querySelectorAll('#layer .menu .mi')].find(m => /folder in library/i.test(m.textContent)).click()"); await pg.wait_for_timeout(1200)
+    sel = await pg.evaluate("[...document.querySelectorAll('#fdList .vrow.sel')].length")
+    check(await pg.evaluate("document.getElementById('view-library').classList.contains('folders')") and sel == 1, f'«Show folder in library» opens the album\'s folder, its first track marked ({name}, {sel})')
+    # files of the folder that the library does not have
+    folder = await pg.evaluate("import('./js/settings.js').then(m => m.settings.libFolder)")
+    await pg.evaluate(f"window.__fs[{json.dumps(folder + chr(92) + 'bonus track.flac')}] = 'AAAA'; window.__fs[{json.dumps(folder + chr(92) + 'cover.jpg')}] = 'AAAA'")
+    await pg.click('.fd-acts [data-act=more]'); await pg.wait_for_timeout(300)
+    await pg.evaluate("[...document.querySelectorAll('#layer .menu .mi')].find(m => m.textContent.includes('not in the library')).click()"); await pg.wait_for_timeout(1000)
+    extra = await pg.evaluate("[...document.querySelectorAll('#fdList .vrow.extra .c-title')].map(c => c.textContent)")
+    check(len(extra) == 1 and 'bonus track' in extra[0], f'audio files the library does not have are listed, marked; pictures are not {extra}')
+    n0 = len(await pg.evaluate("window.__calls"))
+    await pg.dblclick('#fdList .vrow.extra .c-title'); await pg.wait_for_timeout(900)
+    check(any(c[0] in ('library.addToPlaylist', 'playlist.addPathsSequential') for c in (await pg.evaluate("window.__calls"))[n0:]), 'and can be played')
+    if os.environ.get('SHOTS'): await pg.screenshot(path=os.environ['SHOTS'] + '/folders.png')
+    check(not errs, f'no page errors {errs}')
+    await ctx.close()
+
 TESTS = [*((f'language_{l}', (lambda l: lambda b, p: test_language(b, p, l))(l)) for l in ('ru', 'en', 'de', 'es', 'zh')),
          ('playlists', test_playlists), ('youtube', test_youtube), ('youtube_captions', test_youtube_captions), ('columns', test_columns), ('settings', test_settings), ('updates', test_updates),
          ('tooltips', test_tooltips), ('canvas_volume', test_canvas_volume), ('fb2k_prefs', test_fb2k_prefs), ('welcome', test_welcome),
          ('playlist_editing', test_playlist_editing), ('windows', test_windows), ('vu', test_vu), ('smart_color_radio', test_smart_color_radio),
-         ('lyrics_sync', test_lyrics_sync), ('album_details', test_album_details), ('level', test_level), ('sound_offer', test_sound_offer), ('similar_albums', test_similar_albums), ('editions_artists', test_editions_artists), ('colors', test_colors), ('sound_panel', test_sound_panel), ('cover_pick', test_cover_pick), ('sound_ai', test_sound_ai), ('layout', test_layout), ('stability', test_stability)]
+         ('lyrics_sync', test_lyrics_sync), ('album_details', test_album_details), ('level', test_level), ('sound_offer', test_sound_offer), ('similar_albums', test_similar_albums), ('editions_artists', test_editions_artists), ('colors', test_colors), ('sound_panel', test_sound_panel), ('cover_pick', test_cover_pick), ('folders', test_folders), ('sound_ai', test_sound_ai), ('layout', test_layout), ('stability', test_stability)]
 # seconds each test takes on a CI runner (from the « (N s)» lines of a run); only used to share the tests
 # out evenly between parallel parts — a test missing here counts as DEFAULT_S and still runs
 DURATIONS = {'language_ru': 13, 'language_en': 18, 'language_de': 18, 'language_es': 18, 'language_zh': 18, 'playlists': 10, 'youtube': 14,
              'youtube_captions': 29, 'columns': 23, 'settings': 6, 'updates': 20, 'tooltips': 9, 'canvas_volume': 4, 'fb2k_prefs': 9, 'welcome': 24,
              'playlist_editing': 14, 'windows': 13, 'vu': 32, 'smart_color_radio': 27, 'lyrics_sync': 11, 'album_details': 20, 'level': 7,
-             'sound_offer': 14, 'similar_albums': 3, 'editions_artists': 20, 'colors': 16, 'sound_panel': 8, 'cover_pick': 12, 'sound_ai': 58, 'layout': 60, 'stability': 70}
+             'sound_offer': 14, 'similar_albums': 3, 'editions_artists': 20, 'colors': 16, 'sound_panel': 8, 'cover_pick': 12, 'folders': 16, 'sound_ai': 58, 'layout': 60, 'stability': 70}
 DEFAULT_S = 20
 
 def shards(n):

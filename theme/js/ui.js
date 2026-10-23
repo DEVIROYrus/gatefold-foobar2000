@@ -10,7 +10,7 @@ export const icon = (name, size) => `<svg${size ? ` width="${size}" height="${si
 const handlers = new Map();
 const stack = [], fwd = [];
 const TITLES = { now: $t('Сейчас играет'), playlist: $t('Плейлист'), artists: $t('Исполнители'), library: $t('Альбомы'), queue: $t('Очередь'), search: $t('Поиск'), covers: $t('Обложки'), settings: $t('Настройки'), youtube: 'YouTube', liked: $t('Понравившиеся') };
-const titleOf = ([v, a]) => (v === 'album' && a && a.name) ? a.name : (v === 'artist' && a) ? (typeof a === 'string' ? a : a.name || $t('Исполнитель')) : TITLES[v] || '';
+const titleOf = ([v, a]) => (v === 'library' && a && a.folder !== undefined) ? (String(a.folder).split(/[\\/]/).filter(Boolean).pop() || $t('Папки')) : (v === 'album' && a && a.name) ? a.name : (v === 'artist' && a) ? (typeof a === 'string' ? a : a.name || $t('Исполнитель')) : TITLES[v] || '';
 export const router = {
   current: '',
   arg: null,

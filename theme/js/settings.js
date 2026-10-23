@@ -82,6 +82,9 @@ export const DEFAULTS = {
   coverPickName: 'cover',   //   … and the file name, for 'file'
   coverPickDir: '',         //   … and the folder the file dialog opened last
   coverPattern: '',         // your covers by a path rule in title formatting, e.g. D:\Covers\%album artist% - %album%
+  libMode: 'albums',        // Library: 'albums' (the grid) | 'folders' (folders.js)
+  libFolder: '',            //   … the folder shown last ('' = where the tree starts)
+  folderExtras: false,      //   … also list files of a folder that the library does not have
   splitEditions: true,      // one title by one artist in two releases (2014 and its 2016 reissue) is two albums
   artistSplit: [';'],       // separators that make one name several artists (also: '/', ',', '&', 'feat')
   artistKeep: [],           // names never split (AC/DC, Earth, Wind & Fire)

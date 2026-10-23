@@ -27,6 +27,7 @@ import * as VU from './vu.js';
 import * as CF from './coverfetch.js';
 import * as Lib from './library.js';
 import * as SoundPanel from './soundpanel.js';
+import * as Folders from './folders.js';
 import * as LY from './lyrics.js';
 import * as Canvas from './canvas.js';
 import * as Likes from './likes.js';
@@ -280,6 +281,7 @@ function updateSpectrum() {
 async function setTrack(t, { fromEvent = false } = {}) {
   const prevKey = app.track ? albumKeyOf(app.track.albumArtist, app.track.album) : '';
   app.track = t;
+  Lib.shared.nowHandle = t ? t.handle || t.path || '' : ''; Folders.nowPlaying();
   if (!t) {
     $('npTitle').textContent = 'Gatefold'; $('npArtist').textContent = ''; $('npAlbum').textContent = ''; $('npYear').textContent = '';
     $('pbTitle').textContent = '—'; $('pbArtist').textContent = ''; $('npBadges').innerHTML = ''; $('npActions').innerHTML = '';
