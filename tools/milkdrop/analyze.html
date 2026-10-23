@@ -1,0 +1,78 @@
+<!doctype html><html><body style="margin:0;background:#000">
+<canvas id="c" width="128" height="72"></canvas>
+<script src="butterchurn.min.js"></script>
+<script>
+(async () => {
+  const all = await (await fetch('all.json')).json();
+  const names = Object.keys(all);
+  const c = document.getElementById('c');
+  const W = 128, H = 72;
+  const sm = document.createElement('canvas'); sm.width = 32; sm.height = 18; const sx = sm.getContext('2d', { willReadFrequently: true });
+  const bc = window.butterchurn.default || window.butterchurn;
+  const viz = bc.createVisualizer(null, c, { width: W, height: H, pixelRatio: 1, textureRatio: 1 });
+  // synthetic music: kick 2/s, bass, a chord, hats
+  let t = 0; const SR = 44100;
+  function audio() {
+    const a = new Uint8Array(1024), l = new Uint8Array(1024), r = new Uint8Array(1024);
+    for (let i = 0; i < 1024; i++) {
+      const tt = t + i / SR, beat = tt % 0.5, hat = tt % 0.125;
+      let v = Math.sin(2 * Math.PI * 55 * tt) * 0.25 + Math.sin(2 * Math.PI * (60 - beat * 60) * tt) * Math.exp(-beat * 12) * 0.6
+        + (Math.sin(2 * Math.PI * 261.6 * tt) + Math.sin(2 * Math.PI * 329.6 * tt) + Math.sin(2 * Math.PI * 392 * tt)) * 0.06
+        + (Math.random() * 2 - 1) * Math.exp(-hat * 60) * 0.15;
+      v = Math.max(-1, Math.min(1, v));
+      const b = Math.round(128 + v * 127);
+      a[i] = l[i] = b; r[i] = Math.round(128 + Math.max(-1, Math.min(1, v * 0.9 + Math.sin(2 * Math.PI * 110 * tt) * 0.05)) * 127);
+    }
+    return { timeByteArray: a, timeByteArrayL: l, timeByteArrayR: r };
+  }
+  const out = {};
+  for (let k = 0; k < names.length; k++) {
+    const name = names[k];
+    const res = { err: '' };
+    try {
+      viz.loadPreset(all[name], 0);
+      const lums = [], frames = [];
+      for (let f = 0; f < 150; f++) {
+        t += 1 / 30;
+        viz.render({ audioLevels: audio(), elapsedTime: 1 / 30 });
+        if (f >= 30 && f % 3 === 0) {
+          sx.drawImage(c, 0, 0, 32, 18);
+          const d = sx.getImageData(0, 0, 32, 18).data;
+          const px = new Float32Array(32 * 18 * 4);
+          let L = 0, chroma = 0, dark = 0;
+          for (let i = 0, j = 0; i < d.length; i += 4, j++) {
+            const R = d[i] / 255, G = d[i + 1] / 255, B = d[i + 2] / 255;
+            const lin = (x) => (x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4);
+            const y = 0.2126 * lin(R) + 0.7152 * lin(G) + 0.0722 * lin(B);
+            px[j] = y; L += y; if (y < 0.01) dark++;
+            const rg = R - G, yb = 0.5 * (R + G) - B; chroma += Math.hypot(rg, yb);
+          }
+          lums.push(L / (32 * 18)); frames.push({ px, chroma: chroma / (32 * 18), dark: dark / (32 * 18) });
+        }
+      }
+      // flashes (WCAG-like): opposing luminance changes of ≥ 0.1 where the darker state is < 0.8, per second (samples at 10/s)
+      const flashRate = (series) => { let last = 0, n = 0; for (let i = 1; i < series.length; i++) { const d = series[i] - series[i - 1]; if (Math.abs(d) >= 0.1 && Math.min(series[i], series[i - 1]) < 0.8) { const s = Math.sign(d); if (last && s !== last) n++; last = s; } } return n / 2 / (series.length / 10); };
+      res.flash = flashRate(lums);
+      // local flashing: 4×3 cells
+      let worst = 0;
+      for (let cy = 0; cy < 3; cy++) for (let cx = 0; cx < 4; cx++) {
+        const s = frames.map((fr) => { let a = 0, n = 0; for (let y = cy * 6; y < cy * 6 + 6; y++) for (let x = cx * 8; x < cx * 8 + 8; x++) { a += fr.px[y * 32 + x]; n++; } return a / n; });
+        worst = Math.max(worst, flashRate(s));
+      }
+      res.flashLocal = worst;
+      let motion = 0; for (let i = 1; i < frames.length; i++) { let m = 0; for (let j = 0; j < frames[i].px.length; j++) m += Math.abs(frames[i].px[j] - frames[i - 1].px[j]); motion += m / frames[i].px.length; }
+      res.motion = motion / (frames.length - 1);
+      res.lum = lums.reduce((a, b) => a + b, 0) / lums.length;
+      res.lumVar = Math.sqrt(lums.reduce((a, b) => a + (b - res.lum) ** 2, 0) / lums.length);
+      res.chroma = frames.reduce((a, b) => a + b.chroma, 0) / frames.length;
+      res.dark = frames.reduce((a, b) => a + b.dark, 0) / frames.length;
+      // spatial detail (not a flat fill)
+      const last = frames[frames.length - 1].px; const m = last.reduce((a, b) => a + b, 0) / last.length;
+      res.detail = Math.sqrt(last.reduce((a, b) => a + (b - m) ** 2, 0) / last.length);
+    } catch (e) { res.err = String(e && e.message || e).slice(0, 120); }
+    out[name] = res;
+    if (k % 20 === 0) console.log('progress ' + k);
+  }
+  window.__out = out; window.__done = true;
+})();
+</script></body></html>

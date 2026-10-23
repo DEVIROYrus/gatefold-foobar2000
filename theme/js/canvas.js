@@ -11,13 +11,15 @@
  *
  * Hosts: the main window (overlay, app.js feeds it via setHost/notify) or a
  * popup window on another monitor (canvas.html → canvas-main.js), same module.
- * Layouts: cover (cover + lyrics side by side) · lyrics (lyrics first) · minimal.
+ * Layouts: cover (cover + lyrics side by side) · lyrics (lyrics first) · minimal · visual (MilkDrop on the
+ * whole screen, a small card with the cover and the title — milkdrop.js; only when turned on in Settings).
  */
 import { call, ok, on, esc, fmtTime } from './bridge.js';
 import { fetchArt } from './artbytes.js';
 import { setFullscreen } from './winfs.js';
 import { settings, setSetting, onSettings } from './settings.js';
 import * as LY from './lyrics.js';
+import * as MD from './milkdrop.js';
 
 import { $t } from './i18n.js';
 let host = null;             // { getPos, getDur, state, track, art, standalone, palette? }
@@ -35,6 +37,7 @@ function build() {
   el.id = 'canvas';
   el.className = 'cv';
   el.innerHTML = `
+    <div class="cv-md" aria-hidden="true"></div>
     <div class="cv-bg" aria-hidden="true"><div class="cv-blur a"></div><div class="cv-blur b"></div><div class="cv-glow g1"></div><div class="cv-glow g2"></div><div class="cv-vignette"></div></div>
     <div class="cv-stage">
       <div class="cv-art"><div class="cv-art-frame"><img class="a" alt=""><img class="b" alt=""><div class="cv-noart">${ICON('music', 72)}</div></div></div>
@@ -56,7 +59,7 @@ function build() {
         </div>
         <span class="cv-time num" data-dur>0:00</span>
         <div class="cv-tools">
-          <div class="cv-seg" data-a="layout"><button data-v="cover" title="${$t('Обложка и текст')}">${$t('Обложка')}</button><button data-v="lyrics" title="${$t('Крупный текст')}">${$t('Текст\u0004lyrics')}</button><button data-v="minimal" title="${$t('Только обложка')}">${$t('Минимум')}</button></div>
+          <div class="cv-seg" data-a="layout"><button data-v="cover" title="${$t('Обложка и текст')}">${$t('Обложка')}</button><button data-v="lyrics" title="${$t('Крупный текст')}">${$t('Текст\u0004lyrics')}</button><button data-v="minimal" title="${$t('Только обложка')}">${$t('Минимум')}</button><button data-v="visual" title="${$t('Визуализация MilkDrop (V)')}">${$t('Визуал')}</button></div>
           <div class="cv-vol"><button class="cv-btn" data-a="mute" title="${$t('Без звука (M)')}">${ICON('vol')}</button><input class="cv-range" type="range" min="0" max="100" step="1" aria-label="${$t('Громкость')}"></div>
           <button class="cv-btn" data-a="lyrics" title="${$t('Текст песни (T)')}">${ICON('quote')}</button>
           <button class="cv-btn" data-a="screen" title="${$t('Открыть на другом мониторе')}">${ICON('monitor2')}</button>
@@ -115,18 +118,43 @@ function onClick(e) {
   }
 }
 
+/* ---------------------------------------------------------------- MilkDrop (layout «visual») */
+const visOk = () => !!settings.milkdrop && MD.supported();
+const layoutOf = () => { const l = settings.canvasLayout || 'cover'; return l === 'visual' && !visOk() ? 'cover' : l; };
+const LAYOUTS = () => (visOk() ? ['cover', 'lyrics', 'minimal', 'visual'] : ['cover', 'lyrics', 'minimal']);
+let md = null, freshT = 0;
+function syncMilk() {
+  const want = isOpen && layoutOf() === 'visual';
+  if (want && !md) {
+    md = new MD.Stage(el.querySelector('.cv-md'), {
+      kind: 'canvas',
+      playing: () => host.state() === 'playing',
+      track: () => host.track(),
+      onPreset: (name, why) => { if (why === 'next' || why === 'prev' || why === 'flash') hint(nice(name)); },
+    });
+  }
+  if (md) { if (want) md.start().then(() => { if (isOpen && layoutOf() === 'visual') freshCard(); }); else md.stop(); }
+  el.classList.toggle('md-tint', !!settings.mdTint);
+}
+/* «Flexi, martin + geiss - dedicated to the sherwin maxawow» → «dedicated to the sherwin maxawow — Flexi, martin + geiss» */
+const nice = (n) => { const m = String(n).replace(/^[$!_\s-]+/, '').match(/^(.*?)\s+-\s+(.+)$/); return m ? `${m[2]} — ${m[1]}` : n; };
+/** the card shows itself for a few seconds when the track changes, then fades with the cursor */
+function freshCard() { el.classList.add('fresh'); clearTimeout(freshT); freshT = setTimeout(() => el.classList.remove('fresh'), 6000); }
+
 function applySettings() {
   if (!el) return;
-  el.dataset.layout = settings.canvasLayout || 'cover';
+  el.dataset.layout = layoutOf();
+  el.querySelector('.cv-seg [data-v=visual]').hidden = !visOk();
   el.classList.toggle('motion', !!settings.canvasMotion && !matchMedia('(prefers-reduced-motion: reduce)').matches);
   el.classList.toggle('no-lyrics', !settings.canvasLyrics || settings.canvasLayout === 'minimal');
   el.classList.toggle('clock', !!settings.canvasClock);
-  el.querySelectorAll('.cv-seg button').forEach((x) => x.classList.toggle('on', x.dataset.v === (settings.canvasLayout || 'cover')));
+  el.querySelectorAll('.cv-seg button').forEach((x) => x.classList.toggle('on', x.dataset.v === layoutOf()));
   el.querySelector('[data-a=lyrics]').classList.toggle('on', !!settings.canvasLyrics);
   el.querySelector('[data-a=screen]').style.display = host && host.standalone ? 'none' : '';
   if (view && view.doc) { view.cur = -2; requestAnimationFrame(() => view && view.tick(true)); }
+  syncMilk();
 }
-onSettings((k) => { if (/^canvas/.test(k) || k === '*') { applySettings(); if (isOpen && k === 'canvasLyrics') loadLyrics(true); } });
+onSettings((k) => { if (/^(canvas|milkdrop|md)/.test(k) || k === '*') { applySettings(); if (isOpen && (k === 'canvasLyrics' || k === 'canvasLayout')) loadLyrics(true); } });
 
 // ---------------------------------------------------------------- open / close
 export async function open(opts = {}) {
@@ -138,6 +166,7 @@ export async function open(opts = {}) {
   document.body.classList.add('canvas-open');
   applySettings();
   refresh(true);
+  if (layoutOf() === 'visual') freshCard();
   poke(!auto);
   clockT = setInterval(tickClock, 5000); tickClock();
   startProgress();
@@ -155,6 +184,7 @@ export async function close() {
   el.classList.remove('on', 'idle');
   document.body.classList.remove('canvas-open');
   clearInterval(clockT); clearTimeout(hideT); stopProgress(); view.stop();
+  syncMilk();
   if (enteredFullscreen) { const r = await call('window.setFullscreen', { enabled: false }); enteredFullscreen = false; host.onFullscreen && host.onFullscreen(false, r); }
   canvasEvents.dispatchEvent(new Event('close'));
 }
@@ -169,7 +199,7 @@ async function toggleWindowFullscreen() {
 /** Host calls this on any change: 'track' | 'state' | 'art' | 'seek' | 'palette'. */
 export function notify(type) {
   if (!isOpen || !el) return;
-  if (type === 'track') refresh(false);
+  if (type === 'track') { refresh(false); freshCard(); if (md && md.on && settings.mdChange !== 'time' && settings.mdChange !== 'manual') md.next('track'); }
   else if (type === 'art') setArt();
   else if (type === 'state') { setState(); view.kick(); startProgress(); }
   else if (type === 'seek') { view.kick(); drawProgress(); }
@@ -254,7 +284,7 @@ async function setBackdrop(img) {
 
 async function loadLyrics(force) {
   const t = host.track();
-  if (!settings.canvasLyrics || settings.canvasLayout === 'minimal' || !t) { el.classList.add('no-text'); view.message(''); lyrKey = ''; return; }
+  if (!settings.canvasLyrics || layoutOf() === 'minimal' || layoutOf() === 'visual' || !t) { el.classList.add('no-text'); view.message(''); lyrKey = ''; return; }
   const k = LY.trackKey(t);
   if (!force && k === lyrKey) { view.kick(); return; }
   lyrKey = k;
@@ -304,7 +334,11 @@ document.addEventListener('keydown', (e) => {
     case ' ': call('playback.playOrPause'); break;
     case 'ArrowRight': if (e.shiftKey) call('playback.next'); else { const p = host.getPos() + 5; call('playback.setPosition', { position: p }); host.onSeek && host.onSeek(p); } break;
     case 'ArrowLeft': if (e.shiftKey) call('playback.previous'); else { const p = Math.max(0, host.getPos() - 5); call('playback.setPosition', { position: p }); host.onSeek && host.onSeek(p); } break;
-    case 'l': case 'L': case 'д': case 'Д': { const L = ['cover', 'lyrics', 'minimal']; setSetting('canvasLayout', L[(L.indexOf(settings.canvasLayout) + 1) % L.length]); break; }
+    case 'l': case 'L': case 'д': case 'Д': { const L = LAYOUTS(); setSetting('canvasLayout', L[(L.indexOf(layoutOf()) + 1) % L.length]); break; }
+    case 'v': case 'V': case 'м': case 'М': if (visOk()) setSetting('canvasLayout', layoutOf() === 'visual' ? 'cover' : 'visual'); else handled = false; break;
+    case 'n': case 'N': case 'т': case 'Т': if (md && md.on) md.next('next'); else handled = false; break;
+    case 'p': case 'P': case 'з': case 'З': if (md && md.on) md.next('prev'); else handled = false; break;
+    case 'b': case 'B': case 'и': case 'И': if (md && md.on) { const k2 = md.lock(); hint(k2 ? $t('Пресет закреплён: {0}', nice(k2)) : $t('Пресеты снова меняются')); } else handled = false; break;
     case 't': case 'T': case 'е': case 'Е': setSetting('canvasLyrics', !settings.canvasLyrics); break;
     case 'c': case 'C': case 'с': case 'С': setSetting('canvasClock', !settings.canvasClock); break;
     case 'ArrowUp': case 'ArrowDown': { const v = Math.max(0, Math.min(100, vol.v + (k === 'ArrowUp' ? 5 : -5))); paintVol(v, false); call('playback.setVolume', { volume: v }); hint($t('Громкость {0}%', v)); break; }

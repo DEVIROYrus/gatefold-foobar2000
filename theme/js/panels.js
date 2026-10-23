@@ -23,6 +23,7 @@ import * as Cx from './columns.js';
 import * as CoverPick from './coverpick.js';
 import * as Own from './ownart.js';
 import * as Names from './artistnames.js';
+import * as MD from './milkdrop.js';
 const CF_pl = (n) => plural(n, 'файл', 'файла', 'файлов');
 
 // ---------------------------------------------------------------- control builders
@@ -172,6 +173,29 @@ export function parseTheme(text) {
   if (!t.accent || !t.bg) return null;
   if (!t.accent2) delete t.accent2;
   return t;
+}
+function milkdropRows() {
+  if (!MD.supported()) return [h(`<div class="row st-note"><div class="lbl"><small>${$t('Нужен WebGL 2 — на этом компьютере он недоступен')}</small></div></div>`)];
+  const on = !!settings.milkdrop;
+  const rows = [toggle('milkdrop', $t('Визуализация MilkDrop'), '', (v) => {
+    if (v) { MD.preload(); if (settings.canvasLayout !== 'visual') setSetting('canvasLayout', 'visual'); toast($t('Визуализация включена: Холст (F) → «Визуал». N / P — другой пресет, B — закрепить')); }
+    else if (settings.canvasLayout === 'visual') setSetting('canvasLayout', 'cover');
+    setTimeout(renderSettings, 30);
+  })];
+  if (!on) {
+    rows.push(h(`<div class="row st-note"><div class="lbl"><small>${$t('Классические визуализации Winamp на весь экран «Холста» — под музыку, которая играет. Пресеты со вспышками отобраны и исключены; если вспышка всё же случится, пресет сменится сам.')}</small></div></div>`));
+    return rows;
+  }
+  rows.push(
+    seg('mdPresets', $t('Пресеты'), '', [['calm', $t('Спокойные и плавные')], ['all', $t('Все, включая яркие')]]),
+    seg('mdChange', $t('Смена пресета'), '', [['track', $t('С каждым треком')], ['time', $t('Каждые 30 с')], ['manual', $t('Вручную (N / P)')]]),
+    ...(settings.soundAI ? [toggle('mdMood', $t('Под характер трека'), '' /* спокойная музыка — спокойные пресеты (анализ звука) */)] : []),
+    toggle('mdTint', $t('В цветах обложки'), ''),
+    toggle('mdNow', $t('Фоном на «Сейчас играет»'), ''),
+    actions(button($t('{0}Открыть «Визуал»', icon('canvas')), () => { setSetting('canvasLayout', 'visual'); Canvas.open(); }, 'primary')),
+    h(`<div class="row st-note"><div class="lbl"><small>${$t('Пресеты со вспышками отобраны и исключены; если вспышка всё же случится, пресет сменится сам. В «Холсте»: N / P — следующий / предыдущий, B — закрепить, V — включить и выключить.')}</small></div></div>`),
+  );
+  return rows;
 }
 const group = (title, ...rows) => { const g = h(`<div class="card st-group">${title ? `<div class="st-gt">${title}</div>` : ''}</div>`); g.append(...rows.filter(Boolean)); return g; };
 const actions = (...btns) => { const r = h('<div class="row st-acts"></div>'); r.append(...btns.filter(Boolean)); return r; };
@@ -327,12 +351,14 @@ export function renderSettings() {
   // ---- Холст
   section('canvas', 'canvas', $t('Холст'), '' /* Полноэкранный «Сейчас играет»: <kbd>F</kbd> — открыть, <kbd>L</kbd> раскладка, <kbd>T</kbd> текст, <kbd>C</kbd> часы */,
     group('',
-      seg('canvasLayout', $t('Раскладка'), '', [['cover', $t('Обложка + текст')], ['lyrics', $t('Крупный текст')], ['minimal', $t('Только обложка')]]),
+      seg('canvasLayout', $t('Раскладка'), '', [['cover', $t('Обложка + текст')], ['lyrics', $t('Крупный текст')], ['minimal', $t('Только обложка')], ...(settings.milkdrop && MD.supported() ? [['visual', $t('Визуал')]] : [])]),
       toggle('canvasMotion', $t('Движение'), '' /* Медленный наезд камеры и дрейф фона */),
       toggle('canvasLyrics', $t('Текст песни'), ''),
       toggle('canvasClock', $t('Часы'), ''),
       seg('canvasIdleMin', $t('Включаться самому'), '' /* Как заставка, если окно не трогают */, [[0, $t('Нет')], [2, $t('2 мин')], [5, '5'], [10, '10'], [20, '20']]),
       actions(button($t('{0}Открыть Холст', icon('canvas')), () => Canvas.open(), 'primary'), button($t('{0}На другом мониторе', icon('monitor2')), () => Canvas.openOnOtherScreen()))),
+    // MilkDrop (milkdrop.js): off by default; nothing is loaded until it is turned on
+    group($t('Визуализация MilkDrop'), ...milkdropRows()),
   );
 
   // ---- YouTube

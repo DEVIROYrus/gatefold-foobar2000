@@ -71,6 +71,13 @@ export const DEFAULTS = {
   canvasLyrics: true,
   canvasClock: false,
   canvasIdleMin: 5,         // enter Canvas after N idle minutes while playing and focused (0 = off)
+  milkdrop: false,          // MilkDrop visuals (milkdrop.js): Canvas → «Visual», optionally behind Now Playing
+  mdPresets: 'calm',        //   'calm' (calm + flowing presets) | 'all' (vivid ones too)
+  mdChange: 'track',        //   a new preset: 'track' | 'time' (every 30 s) | 'manual'
+  mdMood: true,             //   presets by the track's character (sound analysis)
+  mdTint: false,            //   in the colours of the cover
+  mdNow: false,             //   also behind Now Playing
+  mdLock: '',               //   a preset kept (B in Canvas)
   soundAI: false,          // sound analysis with a neural network (ml/sound.js): models downloaded on request
   soundPaused: false,
   soundGenresOnline: true,  // genres of artists and albums from MusicBrainz (ml/genres.js), only with soundAI on

@@ -1416,17 +1416,75 @@ async def test_folders(browser, port):
     check(not errs, f'no page errors {errs}')
     await ctx.close()
 
+async def test_milkdrop(browser, port):
+    print('· MilkDrop: off and not loaded by default; the switch; Canvas «Visual» with the card; N / P / B / V; the flash guard; behind Now Playing')
+    ctx, pg, errs = await page(browser, port, {'language': 'en'})
+    check(await pg.evaluate("typeof window.butterchurn") == 'undefined', 'nothing is loaded while it is off')
+    await nav(pg, 'settings', 900)
+    await pg.evaluate("document.getElementById('st-canvas').scrollIntoView()"); await pg.wait_for_timeout(200)
+    row = "[...document.querySelectorAll('#st-canvas .row')].find(r => r.textContent.includes('MilkDrop') && r.querySelector('input[type=checkbox]'))"
+    check(await pg.evaluate(f"!!{row}"), 'Settings → Canvas has the switch')
+    await pg.evaluate(f"{row}.querySelector('input').click()"); await pg.wait_for_timeout(1500)
+    st = await pg.evaluate("JSON.parse(localStorage.getItem('aurora.settings.v1'))")
+    check(st.get('milkdrop') is True and st.get('canvasLayout') == 'visual', f'turned on, Canvas switches to «Visual» {st.get("canvasLayout")}')
+    opts = await pg.evaluate("[...document.querySelectorAll('#st-canvas .row b')].map(b => b.textContent)")
+    check(all(any(x in o for o in opts) for x in ['Presets', 'Preset change', 'colours of the cover', 'Now Playing']), f'its options {opts}')
+    await pg.keyboard.press('f'); await pg.wait_for_timeout(3000)
+    check(await pg.evaluate("document.querySelector('.cv').dataset.layout") == 'visual' and await pg.evaluate("document.querySelector('.cv-md').classList.contains('md-on')"), 'Canvas opens in «Visual», the visuals running')
+    check(any(c[0] == 'audio.subscribeStream' and c[1] == 'gatefold-milkdrop' for c in await pg.evaluate("window.__calls")), 'it listens to what foobar2000 plays')
+    from PIL import Image
+    import io
+    png = await pg.screenshot(clip={'x': 300, 'y': 100, 'width': 1000, 'height': 500})
+    ext = Image.open(io.BytesIO(png)).convert('L').getextrema()
+    check(ext[1] - ext[0] > 40, f'something is drawn {ext}')
+    card = await pg.evaluate("(() => { const c = document.querySelector('.cv-stage').getBoundingClientRect(), p = document.querySelector('.cv-progress').getBoundingClientRect(); return { w: c.width, bottom: c.bottom, line: p.top, title: document.querySelector('.cv-title').textContent }; })()")
+    check(card['w'] < 700 and card['bottom'] < card['line'] and card['title'], f'a small card with the title, above the progress line {card}')
+    await pg.keyboard.press('n'); await pg.wait_for_timeout(300)
+    h1 = await pg.evaluate("document.querySelector('.cv-hint').textContent")
+    check(bool(h1), f'N: another preset, its name shown ({h1})')
+    await pg.keyboard.press('b'); await pg.wait_for_timeout(200)
+    lock = await pg.evaluate("JSON.parse(localStorage.getItem('aurora.settings.v1')).mdLock")
+    check(bool(lock), f'B keeps it ({lock})')
+    await pg.keyboard.press('b'); await pg.wait_for_timeout(200)
+    check(await pg.evaluate("JSON.parse(localStorage.getItem('aurora.settings.v1')).mdLock") == '', 'B again lets them change')
+    await pg.keyboard.press('v'); await pg.wait_for_timeout(500)
+    check(await pg.evaluate("document.querySelector('.cv').dataset.layout") == 'cover' and not await pg.evaluate("document.querySelector('.cv-md').classList.contains('md-on')"), 'V: back to the cover, the visuals stopped')
+    await pg.keyboard.press('v'); await pg.wait_for_timeout(800)
+    await pg.keyboard.press('Escape'); await pg.wait_for_timeout(600)
+    check(not await pg.evaluate("document.querySelector('.cv-md').classList.contains('md-on')"), 'closing Canvas stops them')
+    # the flash guard: a picture flashing six times a second gets its preset replaced
+    why = await pg.evaluate("""import('./js/milkdrop.js').then((M) => {
+      const d = document.createElement('div'); document.body.append(d);
+      const s = new M.Stage(d, { kind: 'canvas', playing: () => true }); let got = '';
+      s.next = (w) => { got = w; }; s.cur = 'test preset';
+      const c = document.createElement('canvas'); c.width = 16; c.height = 9; const x = c.getContext('2d'); s.cv = c;
+      for (let i = 0; i < 8; i++) { x.fillStyle = i % 2 ? '#fff' : '#000'; x.fillRect(0, 0, 16, 9); s.checkFlash(1000 + i * 170); }
+      const calm = new M.Stage(d, { kind: 'canvas', playing: () => true }); let got2 = ''; calm.next = (w) => { got2 = w; }; calm.cv = c;
+      for (let i = 0; i < 8; i++) { x.fillStyle = `rgb(${100 + i * 3},${100 + i * 3},${100 + i * 3})`; x.fillRect(0, 0, 16, 9); calm.checkFlash(1000 + i * 170); }
+      d.remove(); return [got, got2];
+    })""")
+    check(why == ['flash', ''], f'the flash guard replaces a flashing preset, and only that {why}')
+    # behind Now Playing
+    await pg.evaluate("import('./js/settings.js').then(m => m.setSetting('mdNow', true))")
+    await nav(pg, 'now', 2500)
+    check(await pg.evaluate("document.getElementById('npMd').classList.contains('md-on')"), 'behind Now Playing when asked')
+    if os.environ.get('SHOTS'): await pg.screenshot(path=os.environ['SHOTS'] + '/milkdrop-now.png')
+    await nav(pg, 'library', 800)
+    check(not await pg.evaluate("document.getElementById('npMd').classList.contains('md-on')"), 'and only there')
+    check(not errs, f'no page errors {errs}')
+    await ctx.close()
+
 TESTS = [*((f'language_{l}', (lambda l: lambda b, p: test_language(b, p, l))(l)) for l in ('ru', 'en', 'de', 'es', 'zh')),
          ('playlists', test_playlists), ('youtube', test_youtube), ('youtube_captions', test_youtube_captions), ('columns', test_columns), ('settings', test_settings), ('updates', test_updates),
          ('tooltips', test_tooltips), ('canvas_volume', test_canvas_volume), ('fb2k_prefs', test_fb2k_prefs), ('welcome', test_welcome),
          ('playlist_editing', test_playlist_editing), ('windows', test_windows), ('vu', test_vu), ('smart_color_radio', test_smart_color_radio),
-         ('lyrics_sync', test_lyrics_sync), ('album_details', test_album_details), ('level', test_level), ('sound_offer', test_sound_offer), ('similar_albums', test_similar_albums), ('editions_artists', test_editions_artists), ('colors', test_colors), ('sound_panel', test_sound_panel), ('cover_pick', test_cover_pick), ('folders', test_folders), ('sound_ai', test_sound_ai), ('layout', test_layout), ('stability', test_stability)]
+         ('lyrics_sync', test_lyrics_sync), ('album_details', test_album_details), ('level', test_level), ('sound_offer', test_sound_offer), ('similar_albums', test_similar_albums), ('editions_artists', test_editions_artists), ('colors', test_colors), ('sound_panel', test_sound_panel), ('cover_pick', test_cover_pick), ('folders', test_folders), ('milkdrop', test_milkdrop), ('sound_ai', test_sound_ai), ('layout', test_layout), ('stability', test_stability)]
 # seconds each test takes on a CI runner (from the « (N s)» lines of a run); only used to share the tests
 # out evenly between parallel parts — a test missing here counts as DEFAULT_S and still runs
 DURATIONS = {'language_ru': 13, 'language_en': 18, 'language_de': 18, 'language_es': 18, 'language_zh': 18, 'playlists': 10, 'youtube': 14,
              'youtube_captions': 29, 'columns': 23, 'settings': 6, 'updates': 20, 'tooltips': 9, 'canvas_volume': 4, 'fb2k_prefs': 9, 'welcome': 24,
              'playlist_editing': 14, 'windows': 13, 'vu': 32, 'smart_color_radio': 27, 'lyrics_sync': 11, 'album_details': 20, 'level': 7,
-             'sound_offer': 14, 'similar_albums': 3, 'editions_artists': 20, 'colors': 16, 'sound_panel': 8, 'cover_pick': 12, 'folders': 16, 'sound_ai': 58, 'layout': 60, 'stability': 70}
+             'sound_offer': 14, 'similar_albums': 3, 'editions_artists': 20, 'colors': 16, 'sound_panel': 8, 'cover_pick': 12, 'folders': 18, 'milkdrop': 38, 'sound_ai': 58, 'layout': 60, 'stability': 70}
 DEFAULT_S = 20
 
 def shards(n):
