@@ -4,6 +4,7 @@ All notable changes are listed here. Versions follow [Semantic Versioning](https
 
 ## [Unreleased]
 
+- **MilkDrop visuals** (off by default, Settings → Canvas): Canvas → «Visual» and, optionally, behind Now Playing. Curated presets without strobing, a flash guard, presets by the track's character, colours of the cover; N / P / B / V in Canvas.
 - **Library → Folders:** browse the library by its folders — play, shuffle, queue or send a whole folder, filter everything below it, show an album's folder; optionally files not yet in the library.
 - **Sharper text (ClearType) everywhere except Now Playing:** the background stands still there instead of drifting under the text.
 
