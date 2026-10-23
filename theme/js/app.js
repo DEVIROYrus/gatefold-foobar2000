@@ -53,6 +53,7 @@ function applyAppearance(key) {
   root.style.setProperty('--tx', settings.transitionMs + 'ms');
   root.dataset.font = settings.fontMode;
   root.dataset.crisp = settings.crispText ? '1' : '0';
+  if (key === 'crispText' || key === 'ambient') Ambient.refresh();
   root.dataset.lyr = settings.lyricsSize || 'm';
   body.classList.toggle('no-ambient', !settings.ambient);
   body.classList.toggle('no-motion', !settings.ambientMotion);
@@ -171,6 +172,7 @@ async function applyBackdrop() {
   body.classList.toggle('mica', mica);
   document.documentElement.classList.toggle('mica', mica); // instead of :root:has(body.mica)
   document.getElementById('bg').style.opacity = mica ? '0.82' : '';
+  Ambient.refresh();
 }
 
 $('capMin').onclick = () => call('window.minimize');
@@ -510,6 +512,7 @@ async function renderNpPanel() {
       <div class="desc" style="margin-top:8px">${$t('{0} схема · {1} · средняя светлота {2}%', p.dark ? $t('Тёмная') : $t('Светлая'), p.monochrome ? $t('монохромная обложка') : $t('кластеров: ') + p.stats.clusters, (p.stats.avgL * 100).toFixed(0))}</div>`;
   }
 }
+Theme.onPalette(() => Ambient.changed());
 Theme.onPalette(() => { if (npTab === 'palette' && router.current === 'now') renderNpPanel(); Canvas.notify('palette'); });
 
 // ---------------------------------------------------------------- lyrics tab
@@ -745,6 +748,7 @@ async function syncAll() {
 
 // ================================================================ navigation, search, keyboard
 document.querySelectorAll('.nav-item[data-view]').forEach((n) => n.addEventListener('click', () => router.go(n.dataset.view)));
+onRoute((view) => Ambient.setView(view));
 onRoute((view) => {
   updateSpectrum();
   if (view === 'now') { Viz.resizeAll(); if (npTab !== 'lyrics') renderNpPanel(); else lyrKick(); }

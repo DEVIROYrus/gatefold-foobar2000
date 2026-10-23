@@ -109,6 +109,9 @@ a, svg, [draggable] { -webkit-user-drag: none; }
 
 /* ---------- ambient background ---------- */
 #bg { position: fixed; inset: 0; z-index: -1; overflow: hidden; background: var(--bg); contain: strict; }
+/* the still background (ambient.js): the same picture, painted into the page itself so text keeps ClearType */
+:root.still-bg { background: var(--bg) var(--still) center / cover no-repeat; }
+:root.still-bg #bg { display: none; }
 #bg .bg-art {
   position: absolute; inset: -6%; background-size: cover; background-position: center;
   opacity: 0; transition: opacity calc(var(--tx) * 1.4) var(--ease);
@@ -221,15 +224,17 @@ body.side-collapsed .nav-item { justify-content: center; padding: 0; }
 /* now-playing equaliser glyph (CSS only; paused when not playing) */
 .eq { display: inline-flex; gap: 2px; align-items: flex-end; height: 12px; }
 .eq i { width: 3px; border-radius: 1px; background: var(--accent-ink); animation: eq 900ms ease-in-out infinite alternate; }
-.eq i:nth-child(1) { height: 60%; animation-delay: -200ms; } .eq i:nth-child(2) { height: 100%; animation-delay: -500ms; } .eq i:nth-child(3) { height: 40%; animation-delay: -800ms; }
-@keyframes eq { 0% { transform: scaleY(.25); } 100% { transform: scaleY(1); } }
-.eq i { transform-origin: bottom; }
+.eq i:nth-child(1) { --eq-h: 60%; height: 60%; animation-delay: -200ms; } .eq i:nth-child(2) { --eq-h: 100%; height: 100%; animation-delay: -500ms; } .eq i:nth-child(3) { --eq-h: 40%; height: 40%; animation-delay: -800ms; }
+/* the bars grow in height, not by a transform: an animated transform is a compositor layer, and the
+   rows painted over it would lose ClearType (see ambient.js) */
+@keyframes eq { 0% { height: calc(var(--eq-h) * .25); } 100% { height: var(--eq-h); } }
+.eq { contain: layout paint; }
 body:not(.is-playing) .eq i { animation-play-state: paused; }
 
 /* ---------- main / views ---------- */
 #main { grid-area: main; min-height: 0; min-width: 0; position: relative; overflow: clip; }   /* nothing spills over the player bar or the sidebar */
 .view { position: absolute; inset: 0; display: none; flex-direction: column; min-height: 0; }
-.view.active { display: flex; animation: viewIn 320ms var(--ease) both; }
+.view.active { display: flex; animation: viewIn 320ms var(--ease) backwards; }
 @keyframes viewIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 .view-head { display: flex; align-items: flex-end; gap: 16px; padding: 18px 28px 14px; flex: none; }
 .view-head h2 { margin: 0; font-family: var(--font-display); font-size: var(--fs-2xl); line-height: 1.1; font-weight: 750; letter-spacing: -.028em; }
@@ -439,7 +444,7 @@ body.vu-on #viz { display: none; }
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 18px; align-self: end; align-content: start;
   padding: 14px 16px; border-radius: 14px; max-height: 220px; overflow: hidden;
   background: color-mix(in oklab, var(--surface) 60%, transparent); border: 1px solid var(--line);
-  box-shadow: 0 18px 40px -28px rgb(0 0 0 / .55); backdrop-filter: blur(14px); animation: factsIn 260ms var(--ease) both;
+  box-shadow: 0 18px 40px -28px rgb(0 0 0 / .55); backdrop-filter: blur(14px); animation: factsIn 260ms var(--ease) backwards;
 }
 @keyframes factsIn { from { opacity: 0; transform: translateY(6px); } }
 .album-facts .f { min-width: 0; }
@@ -593,7 +598,7 @@ body.vu-on #viz { display: none; }
 .menu {
   position: fixed; min-width: 220px; max-width: 360px; padding: 5px; border-radius: 11px; pointer-events: auto;
   background: var(--surface-2); border: 1px solid var(--line-2); box-shadow: var(--shadow-pop);
-  animation: menuIn 140ms var(--ease) both; transform-origin: top left; max-height: calc(100vh - 20px); overflow-y: auto;
+  animation: menuIn 140ms var(--ease) backwards; transform-origin: top left; max-height: calc(100vh - 20px); overflow-y: auto;
 }
 @keyframes menuIn { from { opacity: 0; transform: scale(.97) translateY(-4px); } }
 .menu .mi { display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 10px; border-radius: 7px; font-size: var(--fs-sm); color: var(--text); white-space: nowrap; cursor: default; }
@@ -604,7 +609,7 @@ body.vu-on #viz { display: none; }
 .menu .ms { height: 1px; margin: 4px 6px; background: var(--line); }
 #toasts { position: fixed; right: 18px; bottom: calc(var(--bar-h) + 14px); display: flex; flex-direction: column; gap: 8px; z-index: 60; pointer-events: none; }
 .toast { display: flex; gap: 12px; align-items: center; min-width: 260px; max-width: 420px; padding: 10px 14px; border-radius: 12px; pointer-events: auto;
-  background: var(--surface-2); border: 1px solid var(--line-2); box-shadow: var(--shadow-pop); animation: toastIn 260ms var(--ease-spring) both; font-size: var(--fs-sm); }
+  background: var(--surface-2); border: 1px solid var(--line-2); box-shadow: var(--shadow-pop); animation: toastIn 260ms var(--ease-spring) backwards; font-size: var(--fs-sm); }
 .toast img { width: 36px; height: 36px; border-radius: 6px; object-fit: cover; }
 .toast.out { animation: toastOut 220ms var(--ease) both; }
 @keyframes toastIn { from { opacity: 0; transform: translateY(10px) scale(.98); } }
@@ -663,7 +668,7 @@ body.native-frame #titlebar { padding-right: 10px; }
 /* ---------- drag & drop ---------- */
 #dropOverlay { position: fixed; inset: var(--tb-h) 0 var(--bar-h) var(--side-w); z-index: 40; display: none; gap: 18px; padding: 28px; pointer-events: none;
   background: color-mix(in oklab, var(--bg) 94%, transparent); }
-body.dragging #dropOverlay { display: grid; grid-template-columns: 1fr 1fr; pointer-events: auto; animation: viewIn 160ms var(--ease) both; }
+body.dragging #dropOverlay { display: grid; grid-template-columns: 1fr 1fr; pointer-events: auto; animation: viewIn 160ms var(--ease) backwards; }
 .drop-zone { display: grid; place-content: center; justify-items: center; gap: 10px; text-align: center; border-radius: 22px; color: var(--text-2);
   border: 2px dashed color-mix(in oklab, var(--text) 25%, transparent); background: var(--surface); transition: all 160ms var(--ease); }
 .drop-zone b { font-family: var(--font-display); font-size: var(--fs-xl); color: var(--text); letter-spacing: -.015em; }
@@ -827,8 +832,10 @@ body.batch-on #toasts { bottom: calc(var(--bar-h) + 84px); }
 
 /* ================= settings, two panes (2.0) ================= */
 .st-scroller { scroll-padding-top: 8px; }
-.st-wrap { display: grid; grid-template-columns: clamp(200px, calc(var(--fs, 14px) * 15.5), 300px) minmax(0, calc(820px + (var(--fs, 14px) - 14px) * 30)); gap: 36px; padding: 6px 28px 48px; align-items: start; }
-.st-nav { position: sticky; top: 6px; display: flex; flex-direction: column; gap: 10px; }
+.st-shell { flex: 1; min-height: 0; display: grid; grid-template-columns: clamp(200px, calc(var(--fs, 14px) * 15.5), 300px) minmax(0, 1fr); column-gap: 36px; padding-left: 28px; }
+.st-navhost { min-height: 0; overflow-y: auto; scrollbar-width: none; padding: 6px 0 24px; }
+.st-wrap { max-width: calc(820px + (var(--fs, 14px) - 14px) * 30); padding: 6px 28px 48px 0; }
+.st-nav { display: flex; flex-direction: column; gap: 10px; }
 .st-search { display: flex; align-items: center; gap: 8px; min-height: 36px; height: calc(var(--fs, 14px) * 2.5); padding: 0 12px; border-radius: 10px; background: var(--hover); border: 1px solid var(--line); color: var(--text-3); }
 .st-search:focus-within { border-color: color-mix(in oklab, var(--accent) 55%, transparent); background: var(--surface); }
 .st-search svg { width: 16px; height: 16px; flex: none; }
@@ -868,8 +875,10 @@ body.batch-on #toasts { bottom: calc(var(--bar-h) + 84px); }
 .st-empty.on { display: block; }
 .st-foot { color: var(--text-3); font-size: var(--fs-xs); padding: 0 4px; }
 @media (max-width: 1100px) {
-  .st-wrap { grid-template-columns: minmax(0, 1fr); gap: 16px; }
-  .st-nav { position: sticky; top: 0; z-index: 2; flex-direction: row; align-items: center; padding: 6px 0; background: color-mix(in oklab, var(--bg) 82%, transparent); backdrop-filter: blur(14px); }
+  .st-shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); padding-left: 0; }
+  .st-navhost { overflow: visible; padding: 2px 28px 10px; }
+  .st-wrap { padding: 6px 28px 48px; }
+  .st-nav { flex-direction: row; align-items: center; }
   .st-links { flex-direction: row; overflow-x: auto; scrollbar-width: none; }
   .st-link span { white-space: nowrap; }
   .st-search { width: 220px; flex: none; }
@@ -927,7 +936,7 @@ body.fullscreen #playerbar { background: linear-gradient(to top, color-mix(in ok
 .upd-pill { display: flex; align-items: center; gap: 10px; width: 100%; margin: 0 0 8px; padding: 9px 10px 9px 12px; border-radius: 12px; cursor: pointer; text-align: left;
   color: var(--text); font: inherit; border: 1px solid color-mix(in oklab, var(--accent) 45%, transparent);
   background: linear-gradient(135deg, color-mix(in oklab, var(--accent) 22%, transparent), color-mix(in oklab, var(--accent) 8%, transparent));
-  transition: background 160ms var(--ease), transform 120ms var(--ease); animation: updIn 420ms var(--ease) both; }
+  transition: background 160ms var(--ease), transform 120ms var(--ease); animation: updIn 420ms var(--ease) backwards; }
 .upd-pill[hidden] { display: none; }
 .upd-pill:hover { background: linear-gradient(135deg, color-mix(in oklab, var(--accent) 32%, transparent), color-mix(in oklab, var(--accent) 14%, transparent)); }
 .upd-pill:active { transform: scale(.98); }
@@ -996,7 +1005,7 @@ body.side-collapsed .upd-pill .upd-txt, body.side-collapsed .upd-pill svg { disp
 
 /* ================= first run: no music yet (js/welcome.js) ================= */
 body.no-music #view-now > .np { display: none; }
-.welcome { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; padding: 48px 32px 40px; animation: updIn 420ms var(--ease) both; }
+.welcome { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; padding: 48px 32px 40px; animation: updIn 420ms var(--ease) backwards; }
 .wl-hero { text-align: center; max-width: 620px; }
 .wl-mark { width: 72px; height: 72px; margin: 0 auto 18px; display: grid; place-items: center; }
 .wl-mark .wl-g { width: 64px; height: 64px; filter: drop-shadow(0 12px 26px color-mix(in oklab, var(--glow) 70%, transparent)); }
@@ -1041,7 +1050,7 @@ body.pl-dragging #plList .vrow.sel, body.pl-dragging #plList .vtile.sel { opacit
 .drop-line.v::before { left: -3px; top: -4px; }
 .pl-item.drop-hl { background: color-mix(in oklab, var(--accent) 22%, transparent) !important; box-shadow: inset 0 0 0 1px var(--accent); }
 .pl-selbar { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 20; display: flex; align-items: center; gap: 6px; padding: 8px 8px 8px 16px; border-radius: 14px;
-  background: color-mix(in oklab, var(--surface-2, var(--surface)) 96%, transparent); border: 1px solid var(--line-2, var(--line)); box-shadow: 0 18px 40px -14px rgb(0 0 0 / .6); backdrop-filter: blur(12px); animation: updIn 220ms var(--ease) both; }
+  background: color-mix(in oklab, var(--surface-2, var(--surface)) 96%, transparent); border: 1px solid var(--line-2, var(--line)); box-shadow: 0 18px 40px -14px rgb(0 0 0 / .6); backdrop-filter: blur(12px); animation: updIn 220ms var(--ease) backwards; }
 .pl-selbar[hidden] { display: none; }
 .pl-selbar .n { font-weight: 650; font-size: var(--fs-sm); white-space: nowrap; }
 .pl-selbar .gap { width: 10px; }

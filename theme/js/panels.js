@@ -384,7 +384,10 @@ export function renderSettings() {
   }
   const main = h('<div class="st-main"></div>');
   main.append(...secs.map((x) => x.el), h(`<div class="st-empty">${$t('Ничего не нашлось')}</div>`), h(`<div class="st-foot">${'Gatefold ' + VERSION}</div>`));
-  body.append(nav, main);
+  // the sections list stands beside the scroller, not sticky inside it: a sticky element is a
+  // compositor layer, and everything scrolling past it would lose ClearType (ambient.js)
+  $('settingsNav').replaceChildren(nav);
+  body.append(main);
 
   const mark = (id) => links.querySelectorAll('.st-link').forEach((b) => b.classList.toggle('on', b.dataset.sec === id));
   // scroll-spy
