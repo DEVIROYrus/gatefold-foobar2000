@@ -17,6 +17,7 @@ import { settings, JsonStore } from './settings.js';
 import { scoreCandidate, cleanAlbum, queryArtist, isVarious } from './match.js';
 
 import { $t } from './i18n.js';
+import * as Own from './ownart.js';
 const UA = 'GatefoldFoobarTheme/1.0 (foobar2000 WebView2 theme; cover art lookup)';
 const store = new JsonStore('aurora.covers.v1', 30000);       // key → { s, t, src, w, h, sc }
 const review = new JsonStore('aurora.covers.review.v1', 400); // key → { job, cands }
@@ -254,7 +255,27 @@ export async function embedIntoAlbum(job, img) {
   return { via: $t('встроено в {0} {1} (общая папка)', n, plural(n, 'трек', 'трека', 'треков')), savedTo: '', tracks: done };
 }
 
+/** an album's tracks (every part of a merged one) — for covers kept by Gatefold and for embedding */
+export async function albumPaths(job) {
+  if (job.paths && job.paths.length) return job.paths;      // an edition: exactly its own tracks
+  const out = [];
+  for (const p of job.parts || [{ name: job.album, albumArtist: job.artist }]) {
+    const r = await bgCall('library.getAlbumTracks', { album: p.name, albumArtist: p.albumArtist }, 'normal');
+    if (ok(r)) for (const t of r.tracks || r.items || []) out.push(t.handle || (t.subsong ? `${t.absolutePath}|subsong:${t.subsong}` : t.absolutePath));
+  }
+  return out.length ? out : [job.path];
+}
+/** keep the picture in Gatefold only: music files and folders stay as they are (ownart.js) */
+async function keepInGatefold(job, img, { lock = false, src = 'web' } = {}) {
+  const paths = await albumPaths(job);
+  const dirs = (await otherAlbumsInDir(job)) === 0 ? [dirOf(job.path)] : [];
+  await Own.set({ key: job.key, name: job.album, artist: job.artist, paths, dirs }, { blob: img.blob }, { where: 'gatefold', src, lock });
+  return { via: $t('только в Gatefold'), savedTo: '' };
+}
+
 async function save(job, img, url) {
+  if (settings.coverTarget === 'gatefold') return keepInGatefold(job, img);
+  if (settings.coverTarget === 'embedded') { if (!img.b64) img = { ...img, b64: await blobToB64(img.blob) }; return embedIntoAlbum(job, img); }
   const others = await otherAlbumsInDir(job);
   if (others > 0) {
     if (settings.coverSharedDir === 'skip') throw new Error($t('папка общая для {0} альбомов — cover.jpg испортил бы их обложки (включите встраивание в треки)', others + 1));
@@ -339,12 +360,17 @@ export async function repairSharedCovers({ includeForeign = false } = {}) {
   return { moved, failed };
 }
 
-export async function applyCandidate(job, cand) {
+/** an album whose cover you set yourself (wherever it was saved): never searched for or replaced again */
+export async function lockCover(job, where) {
+  await Own.set({ key: job.key, name: job.album, artist: job.artist, paths: await albumPaths(job), dirs: [] }, null, { where, src: 'manual', lock: true });
+}
+export async function applyCandidate(job, cand, { manual = false } = {}) {
   let img = await download(cand.url);
   const bad = validate(img);
   if (bad) throw new Error(bad);
   img = await maybeDownscale(img);
-  const saved = await save(job, img, cand.url);
+  const saved = manual && settings.coverTarget === 'gatefold' ? await keepInGatefold(job, img, { lock: true, src: 'web' }) : await save(job, img, cand.url);
+  if (manual && settings.coverTarget !== 'gatefold') await lockCover(job, settings.coverTarget === 'embedded' ? 'embedded' : 'file');
   const objUrl = URL.createObjectURL(img.blob);
   store.set(job.key, { s: 'ok', t: Date.now(), src: cand.src, w: img.w, h: img.h, sc: +(cand.score || 0).toFixed(3) });
   review.delete(job.key);
@@ -363,7 +389,8 @@ export function jobFromTrack(t) {
 export function jobFromAlbum(a) {
   const artist = a.albumArtist || a.artist || '';
   if (!a.name || !isLocal(a.firstTrackAbsolutePath)) return null;
-  return { key: albumKeyOf(artist, a.name), artist, album: a.name, year: String(a.year || '').slice(0, 4), tracks: a.trackCount || 0, path: a.firstTrackAbsolutePath, parts: a.parts || null };
+  // an edition of an album (library.js) has its own key and exactly its own tracks
+  return { key: a.edKey || albumKeyOf(artist, a.name), artist, album: a.name, year: String(a.year || '').slice(0, 4), tracks: a.trackCount || 0, path: a.firstTrackAbsolutePath, parts: a.parts || null, paths: a.edPaths || null, edition: a.edition || '' };
 }
 
 export function enqueue(job, priority = false, force = false) {
@@ -396,6 +423,12 @@ async function pump() {
 async function processJob(job) {
   const thr = settings.coverThreshold;
   try {
+    await Own.ready();
+    if (Own.get(job.key) || Own.keyForPath(job.path)) {
+      // a cover you set or Gatefold keeps for this album: nothing to look for
+      store.set(job.key, { s: 'ok', t: Date.now(), src: $t('ваша обложка') });
+      return;
+    }
     if (!job.force && (await otherAlbumsInDir(job)) === 0 && await folderHasCover(job.path)) {
       // a cover file exists but foobar didn't match it (pattern settings / cache) — never overwrite it
       store.set(job.key, { s: 'ok', t: Date.now(), src: $t('папка') });
@@ -487,6 +520,8 @@ async function availability(path, priority = 'low') {
   return parseAvailability(a);
 }
 export async function hasArt(path) {
+  await Own.ready();
+  if (Own.keyForPath(path)) return true;                  // a cover you chose (ownart.js)
   const u = await bgCall('artwork.getFb2kUrlByPath', { path, maxSize: 48 }, 'normal');
   const probe = ok(u) && u.dataUrl ? await probeImage(artUrl(u.dataUrl)) : null;
   if (probe === true) return true;
@@ -515,7 +550,7 @@ async function folderHasCover(path) {
 
 /** Called by the UI whenever a cover visibly fails to load. */
 export function reportMissing(job) {
-  if (!job) return false;
+  if (!job || Own.locked(job.key)) return false;
   forgetSeen(job.key);
   if (!(settings.coverAuto || settings.coverSweep)) return false;
   return enqueue(job, true);
@@ -537,7 +572,7 @@ export async function sweepLibrary(manual = false) {
   emit('change');
   const live = () => (manual || settings.coverSweep) && !state.paused;
   try {
-    await loadSeen();
+    await loadSeen(); await Own.ready();
     const now = Date.now();
     let offset = 0;
     for (;;) {
@@ -551,6 +586,7 @@ export async function sweepLibrary(manual = false) {
         state.scanned++;
         const j = jobFromAlbum(a);
         if (!j || !shouldTry(j.key)) { state.skipped++; continue; }
+        if (Own.get(j.key) || Own.keyForPath(j.path)) { state.withArt++; continue; }     // your cover
         if (!manual && now - (seen.get(j.key) || 0) < SEEN_TTL) { state.withArt++; continue; }
         todo.push(j);
       }

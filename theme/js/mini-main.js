@@ -6,6 +6,7 @@
 import './i18n-boot.js';
 import './input-guard.js';
 import './tooltip.js';
+import './coverfit.js';
 import { waitForBridge, call, on, ok, normTrack, artUrl, fmtTime, log } from './bridge.js';
 import { settings, setSetting } from './settings.js';
 import * as Theme from './theme.js';
@@ -13,6 +14,7 @@ import * as Likes from './likes.js';
 import { placeholder } from './ui.js';
 import { $t } from './i18n.js';
 import { follower } from './position.js';
+import * as Own from './ownart.js';
 
 const $ = (id) => document.getElementById(id);
 const S = { track: null, state: 'stopped', pos: 0, dur: 0, t0: performance.now(), vol: 100, muted: false };
@@ -53,9 +55,10 @@ let artTok = 0;
 async function loadArt(t) {
   const tok = ++artTok;
   const img = $('miImg');
-  const r = await call('artwork.getFb2kUrl', { type: 'front', maxSize: Math.round(160 * (devicePixelRatio || 1)) });
+  const own = t ? await Own.urlForPath(t.handle || t.path, 'thumb') : '';     // a cover you chose (ownart.js)
+  const r = own ? null : await call('artwork.getFb2kUrl', { type: 'front', maxSize: Math.round(160 * (devicePixelRatio || 1)) });
   if (tok !== artTok) return;
-  const url = ok(r) && r.available !== false && r.dataUrl ? artUrl(r.dataUrl) : '';
+  const url = own || (ok(r) && r.available !== false && r.dataUrl ? artUrl(r.dataUrl) : '');
   img.classList.remove('on');
   if (url) { img.onload = () => img.classList.add('on'); img.onerror = () => img.removeAttribute('src'); img.src = url; } else img.removeAttribute('src');
   Theme.themeForTrack(t, { available: !!url, url, small: url });

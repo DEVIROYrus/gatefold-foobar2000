@@ -8,7 +8,7 @@
  * independent of picture content, unlike bytes-per-pixel).
  *
  * Flags: shortest side < qualityMinRes · JPEG quality < qualityMinJpegQ ·
- * aspect outside 0.9…1.11 (scans with borders/spines).
+ * (a cover that is not square is not flagged: it is often chosen on purpose — an LP sleeve).
  *
  * Upgrade: the usual sources (iTunes/Deezer/MusicBrainz) are searched, but
  * unlike the missing-cover case we HAVE the right picture already — so every
@@ -32,6 +32,7 @@ import { img as imgOp } from './imgw.js';
 import * as TC from './thumbcache.js';
 
 import { $t } from './i18n.js';
+import * as Own from './ownart.js';
 export const events = new EventTarget();
 const emit = (type, detail) => events.dispatchEvent(new CustomEvent(type, { detail }));
 export const qstate = { scanning: false, scanned: 0, total: 0, withArt: 0, paused: false, auto: false, busyKey: '', lastError: '', loaded: false, scannedAt: 0 };
@@ -138,7 +139,7 @@ function flagsOf(info) {
   const min = Math.min(info.w, info.h);
   if (info.w && min < (settings.qualityMinRes || 600)) f.push('lowres');
   if (info.fmt === 'JPEG' && info.q && info.q < (settings.qualityMinJpegQ || 55)) f.push('jpegq');
-  if (info.w && info.h) { const ar = info.w / info.h; if (ar < 0.9 || ar > 1.11) f.push('aspect'); }
+  // not square is no defect: LP-proportioned sleeves, scans of a whole booklet front are chosen on purpose
   return f;
 }
 export const severity = (r) => (r.flags.includes('lowres') ? 1000 - Math.min(r.w, r.h) / 10 : 0) + (r.flags.includes('jpegq') ? 100 - (r.q || 100) : 0) + (r.flags.includes('aspect') ? 10 : 0);
@@ -160,6 +161,7 @@ export async function scan() {
       if (!r.hasMore || !(r.albums || []).length) break;
     }
     qstate.total = all.length;
+    await Own.ready();
     // original-size artwork URLs, 100 per call
     const urlMap = new Map();
     const urlFor = async (path) => {
@@ -179,7 +181,7 @@ export async function scan() {
         const a = all[idx++];
         const job = CF.jobFromAlbum(a);
         qstate.scanned++;
-        if (!job) continue;
+        if (!job || Own.locked(job.key) || Own.keyForPath(job.path)) continue;     // a cover you set is never «improved»
         try {
           const url = await urlFor(job.path);
           if (!url) continue;

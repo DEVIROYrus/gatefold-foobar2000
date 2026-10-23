@@ -120,21 +120,65 @@ export const FIXED = {
 const fcss = (L, C, h) => `oklch(${(L * 100).toFixed(1)}% ${C.toFixed(4)} ${h.toFixed(1)})`;
 const fpack = ([L, C, h]) => ({ css: fcss(L, C, h), hex: PC.srgbHex(PC.lchToSrgb(L, C, h)), L, C, h });
 export function fixedPalette(id) {
+  if (id === 'custom') return customPalette(settings.customTheme);
   const d = FIXED[id]; if (!d) return null;
   const p = { dark: d.dark, monochrome: id === 'gray', fixed: id, stats: {}, blobs: d.blobs.map(fpack) };
   for (const k of VARS) p[k] = fpack(d[k]);
   p.swatches = ['bg', 'surface', 'surface2', 'text3', 'text2', 'text', 'accent', 'accent2'].map((k) => ({ hex: p[k].hex, share: 0.125 }));
   return p;
 }
-export const fixedId = () => (settings.colorSource && FIXED[settings.colorSource] ? settings.colorSource : null);
+export const fixedId = () => (settings.colorSource && (FIXED[settings.colorSource] || (settings.colorSource === 'custom' && settings.customTheme)) ? settings.colorSource : null);
+
+/* ---------------------------------------------------------------- colours you chose
+   · an album's own colours (album page → «Цвета…»): an accent, and a background tint if you like —
+     kept for that album (or that edition) instead of the ones read from its cover;
+   · «Своя тема»: your background and accents, constant like the fixed themes.
+   Both go through the same palette builder, so text keeps its contrast whatever is picked, and an
+   accent too close to the background is moved just enough to stay visible (palette.adjusted says by how much). */
+export function hexToLch(hex) {
+  const m = String(hex || '').trim().match(/^#?([0-9a-f]{6}|[0-9a-f]{3})$/i); if (!m) return null;
+  let x = m[1]; if (x.length === 3) x = x.split('').map((c) => c + c).join('');
+  const [r, g, b] = [0, 2, 4].map((i) => PC.srgbToLinear(parseInt(x.slice(i, i + 2), 16) / 255));
+  const [L, a, bb] = PC.linearRgbToOklab(r, g, b);
+  return PC.toLch(L, a, bb);
+}
+const ovOpts = (ov) => {
+  if (!ov) return {};
+  const o = {}; for (const k of ['accent', 'accent2', 'bg']) { const c = ov[k] && hexToLch(ov[k]); if (c) o[k] = c; }
+  return o;
+};
+/** the clusters a palette is built from when there is no cover (your theme: your colours) */
+const clustersOf = (ov) => {
+  const o = ovOpts(ov), out = [];
+  if (o.bg) out.push({ ...o.bg, share: 0.7, lab: [o.bg.L, 0, 0] });
+  if (o.accent) out.push({ ...o.accent, share: 0.2, lab: [o.accent.L, 0, 0] });
+  if (o.accent2) out.push({ ...o.accent2, share: 0.1, lab: [o.accent2.L, 0, 0] });
+  return out;
+};
+export function customPalette(t) {
+  if (!t || !t.accent) return null;
+  const o = ovOpts(t);
+  const p = PC.buildPalette(clustersOf(t), { mode: o.bg ? 'auto' : settings.themeMode, intensity: 1, ...o });
+  p.fixed = 'custom';
+  return p;
+}
+/** the colours you set for an album (key: its edition's key or albumKeyOf(artist, album)), or null */
+export const albumColorsFor = (...keys) => { const m = settings.albumColors || {}; for (const k of keys) if (k && m[k]) return m[k]; return null; };
+let editionKey = () => '';
+/** library.js tells which edition a track belongs to (an edition has colours of its own) */
+export const setEditionKeyResolver = (fn) => { editionKey = fn; };
+/** the cache key of a track's album: its edition when the album has several (each its own cover) */
+const keyOf = (track) => (track ? editionKey(track) || albumKeyOf(track.albumArtist, track.album) : '');
+const trackOv = (track) => (track ? albumColorsFor(editionKey(track), albumKeyOf(track.albumArtist, track.album)) : null);
+let curOv = null;
 function applyFixed() { const p = fixedPalette(fixedId()); applyPalette(p); setBackdrop(null); return p; }
 
 function opts() {
   return { mode: settings.themeMode, intensity: settings.colorIntensity };
 }
 
-export function paletteFromClusters(clusters) {
-  return PC.buildPalette(clusters.map((c) => ({ ...c })), opts());
+export function paletteFromClusters(clusters, ov = curOv) {
+  return PC.buildPalette(clusters.map((c) => ({ ...c })), { ...opts(), ...ovOpts(ov) });
 }
 
 const VARS = ['bg', 'surface', 'surface2', 'text', 'text2', 'text3', 'accent', 'accentInk', 'accent2', 'onAccent', 'glow'];
@@ -179,7 +223,8 @@ export async function themeForTrack(track, artInfo) {
   const token = ++themeToken;
   lastTrack = track; lastArt = artInfo;
   if (fixedId()) { if (current.key !== 'fixed:' + fixedId()) { current.key = 'fixed:' + fixedId(); applyFixed(); } return; }
-  const key = albumKeyOf(track?.albumArtist, track?.album) || 'none';
+  const key = keyOf(track) || 'none';
+  curOv = trackOv(track);
   const cached = clusterCache.get(key);
   if (cached && current.key !== key) {
     current.key = key; current.clusters = cached;
@@ -230,7 +275,7 @@ const fresh = new Set();
 export const forgetFresh = (key) => (key ? fresh.delete(key) : fresh.clear());
 /** Palette + blurred backdrop of an album that is about to play (next in queue). */
 export async function prefetchAlbum(track, smallUrl) {
-  const key = albumKeyOf(track?.albumArtist, track?.album);
+  const key = keyOf(track);
   if (!key || fresh.has(key) || !smallUrl) return false;
   const px = await tryPixels([smallUrl]);
   if (!px) return false;
@@ -247,7 +292,8 @@ export async function themeFromUrl(track, url) {
   if (fixedId()) return;
   const px = await tryPixels([url]);
   if (!px) return;
-  const key = albumKeyOf(track?.albumArtist, track?.album);
+  const key = keyOf(track);
+  curOv = trackOv(track);
   blurCache.set(key, px.blur);
   setBackdrop(px.blur);
   const clusters = await analyzePixels(px.data, px.w, px.h);
@@ -258,9 +304,15 @@ export async function themeFromUrl(track, url) {
 }
 
 /** Palette for an arbitrary album (album page) — scoped, not global. */
-export async function paletteForAlbum(artist, album, path) {
+export async function paletteForAlbum(artist, album, path, edKey = '') {
   if (fixedId()) return fixedPalette(fixedId());
   const key = albumKeyOf(artist, album);
+  const ov = albumColorsFor(edKey, key);
+  const cl = await albumClusters(edKey || key, path);
+  return paletteFromClusters(cl || syntheticClusters(key), ov);
+}
+/** the colour clusters of an album's cover (cached), or null */
+export async function albumClusters(key, path) {
   let cl = clusterCache.get(key);
   if (!cl && path) {
     const r = await call('artwork.getFb2kUrlByPath', { path, maxSize: 128 });
@@ -274,7 +326,7 @@ export async function paletteForAlbum(artist, album, path) {
       clusterCache.set(key, cl.map((c) => ({ L: c.L, C: c.C, h: c.h, share: c.share, lab: c.lab })));
     }
   }
-  return paletteFromClusters(cl || syntheticClusters(key));
+  return cl || null;
 }
 
 /** Palette of any readable image URL (data:, blob:, same-origin) — e.g. a YouTube thumbnail. */
@@ -288,6 +340,20 @@ export async function paletteFromImage(url, key = url) {
   return p;
 }
 
+/** the colours you set changed: the playing album takes them at once */
+export function reapply() {
+  curOv = trackOv(lastTrack);
+  if (fixedId()) { applyFixed(); return; }
+  if (current.clusters) applyPalette(paletteFromClusters(current.clusters));
+}
+/** a cluster as #rrggbb (the swatches of a cover) */
+export const clusterHex = (c) => PC.srgbHex(PC.lchToSrgb(c.L, c.C, c.h));
+/** the palette an album would get with these colours (the editor's preview) */
+export async function previewPalette(a, ov) {
+  const key = albumKeyOf(a.albumArtist, a.name);
+  const cl = await albumClusters(a.edKey || key, a.firstTrackAbsolutePath);
+  return { palette: paletteFromClusters(cl || syntheticClusters(key), ov), clusters: cl || [] };
+}
 /** Re-derive from cached clusters after a settings change (instant). */
 export function rebuild() {
   if (fixedId()) { applyFixed(); return; }
@@ -296,6 +362,7 @@ export function rebuild() {
 /** colour source switched (album ↔ fixed theme): re-theme from scratch */
 export function refreshSource() {
   current.key = '';
+  curOv = trackOv(lastTrack);
   if (fixedId()) { current.key = 'fixed:' + fixedId(); applyFixed(); return; }
   if (lastTrack || lastArt) themeForTrack(lastTrack, lastArt);
   else applyPalette(paletteFromClusters(syntheticClusters('aurora')));

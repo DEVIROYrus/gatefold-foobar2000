@@ -78,6 +78,15 @@ export const DEFAULTS = {
   motionFps: 'max',         // 'max': animations at the monitor's refresh rate | 'eco': spectrum ≤ 60 fps, background 12 fps
   plViewDefault: 'auto',   // playlist view when the playlist has none of its own: auto | albums | covers | grid | compact
   fullscreenTopmost: false, // true: fullscreen stays above every other window (the component's default)
+  coverPickTarget: 'gatefold', // the cover picker: where the last picture went ('gatefold' | 'embedded' | 'file')
+  coverPickName: 'cover',   //   … and the file name, for 'file'
+  coverPickDir: '',         //   … and the folder the file dialog opened last
+  coverPattern: '',         // your covers by a path rule in title formatting, e.g. D:\Covers\%album artist% - %album%
+  splitEditions: true,      // one title by one artist in two releases (2014 and its 2016 reissue) is two albums
+  artistSplit: [';'],       // separators that make one name several artists (also: '/', ',', '&', 'feat')
+  artistKeep: [],           // names never split (AC/DC, Earth, Wind & Fire)
+  albumColors: {},          // your colours of an album: key → { accent, glow }
+  customTheme: null,        // «Своя тема»: { accent, bg, surface, text } or null
   albumDetails: false,      // album page: the details card and the extra columns (album-details.js)
   level: false,             // volume levelling (loudness.js): foobar2000's ReplayGain, set up and fed by Gatefold
   levelMode: 'album',       // 'album' (whole albums) | 'auto' (albums unless shuffling) | 'track'
