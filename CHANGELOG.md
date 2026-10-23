@@ -4,6 +4,8 @@ All notable changes are listed here. Versions follow [Semantic Versioning](https
 
 ## [Unreleased]
 
+- **Sharper text (ClearType) everywhere except Now Playing:** the background stands still there instead of drifting under the text.
+
 ## [1.4.0] — your covers, editions, several artists, your colours, sound
 
 **Covers your way.** «Cover…» on an album page (and in an album's menu, and on Now Playing) opens one sheet for the picture and where it goes.

@@ -7,6 +7,14 @@
  * quarter of the window's size, scaled up (a soft gradient loses nothing): every frame of the
  * monitor with «Smoothness: as the monitor», 12 times a second with «economical». Still while
  * «Background motion» is off, stopped while the window is hidden.
+ *
+ * Sharp text (Settings → Look → «Sharpest text», on by default): Chromium draws text with ClearType
+ * only into an opaque layer. A live background is a layer of its own, so everything above it goes
+ * into a transparent layer and gets grey antialiasing — soft on a 96–120 dpi monitor. So on every
+ * screen but Now Playing the background stands still: once a change of colours or cover has faded
+ * in, the cover art, the blobs, the veil and the grain are painted into one opaque picture that
+ * becomes the page's own background, and the live layers go away. It looks the same; the text is
+ * crisp. (With Mica the window itself is transparent, so this cannot apply.)
  */
 import { settings } from './settings.js';
 
@@ -28,7 +36,7 @@ function ease(t) {
   return by((lo + hi) / 2);
 }
 
-let canvas = null, ctx = null, timer = 0, t0 = performance.now();
+let canvas = null, ctx = null, timer = 0, clock = 0, last = performance.now();
 const probe = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
 const rgbCache = new Map();
 function rgb(css) {
@@ -48,7 +56,7 @@ function draw() {
   if (canvas.width !== cw || canvas.height !== ch) { canvas.width = cw; canvas.height = ch; }
   const cs = getComputedStyle(document.documentElement);
   const moving = !document.body.classList.contains('no-motion');
-  const t = moving ? (performance.now() - t0) / 1000 : 0;
+  const t = moving ? clock / 1000 : 0;
   ctx.clearRect(0, 0, cw, ch);
   BLOBS.forEach((b, i) => {
     const ph = (t / b.T) % 2, k = ease(ph < 1 ? ph : 2 - ph);            // alternate: there and back
@@ -67,6 +75,10 @@ function tick() {
   if (!canvas) return;
   const body = document.body;
   if (document.hidden || body.classList.contains('paused-bg') || body.classList.contains('no-ambient')) { timer = setTimeout(tick, 1000); return; }
+  const now = performance.now();
+  if (!stillOn) clock += Math.min(now - last, 250);       // the drift pauses while the background stands still
+  last = now;
+  if (stillOn) { timer = setTimeout(tick, 1000); return; }
   draw();
   // still: only colour changes (the palette crossfade) need repainting, 4 times a second is plenty
   if (body.classList.contains('no-motion')) timer = setTimeout(tick, 250);
@@ -82,6 +94,105 @@ export function init() {
   ctx = canvas.getContext('2d', { alpha: true });
   host.replaceChildren(canvas);
   document.addEventListener('visibilitychange', () => { if (!document.hidden && !timer) tick(); });
-  addEventListener('resize', () => { if (canvas) draw(); });
+  addEventListener('resize', () => { if (canvas) draw(); if (stillOn || stillWanted()) { clearTimeout(resizeT); resizeT = setTimeout(() => schedule(0), 300); } });
+  // a new cover fades in on the backdrop: live while it fades, still again after
+  for (const el of document.querySelectorAll('#bg .bg-art')) new MutationObserver(() => changed()).observe(el, { attributes: true, attributeFilter: ['class', 'style'] });
   tick();
+  schedule(0);
+}
+
+/* ---------------------------------------------------------------- the still background */
+let stillOn = false, stillView = true, stillT = 0, resizeT = 0, stillUrl = '', grainImg = null, token = 0;
+const root = document.documentElement;
+const stillWanted = () => settings.crispText !== false && stillView && !root.classList.contains('mica') && !document.body.classList.contains('paused-bg');
+const settleMs = () => {
+  const tx = parseFloat(getComputedStyle(root).getPropertyValue('--tx')) || 1100;
+  return Math.round(tx * 1.6 + 120);                    // the cover crossfade lasts --tx × 1.4
+};
+function setStill(on) {
+  if (stillOn === on) return;
+  stillOn = on;
+  root.classList.toggle('still-bg', on);
+  if (!on && !timer) tick();
+}
+function schedule(ms = settleMs()) {
+  clearTimeout(stillT);
+  if (!canvas) return;
+  if (!stillWanted()) { setStill(false); return; }
+  const my = ++token;
+  stillT = setTimeout(async () => {
+    if (my !== token || !stillWanted()) return;
+    const url = await renderStill().catch(() => '');
+    if (my !== token || !url || !stillWanted()) return;
+    const old = stillUrl; stillUrl = url;
+    root.style.setProperty('--still', `url("${url}")`);
+    setStill(true);
+    if (old) setTimeout(() => URL.revokeObjectURL(old), 2000);
+  }, ms);
+}
+/** colours or the cover changed: show the live background while they fade, then stand still again */
+export function changed() {
+  if (!canvas) return;
+  if (stillOn) setStill(false);
+  schedule();
+}
+/** the screen shown: Now Playing keeps the live background, every other screen the still one */
+export function setView(view) {
+  const want = view !== 'now';
+  if (want === stillView && (stillOn || !want)) return;
+  stillView = want;
+  if (!want) { token++; clearTimeout(stillT); setStill(false); } else schedule(0);
+}
+/** a setting that affects it changed (sharp text, Mica, ambient) */
+export function refresh() { if (stillOn) setStill(false); schedule(0); }
+
+const loadImg = (src) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+const urlOf = (el) => { const m = String(el && el.style.backgroundImage || '').match(/url\(["']?(.*?)["']?\)/); return m ? m[1] : ''; };
+/** #bg painted into one opaque picture (what the live layers show, frozen) → an object URL */
+async function renderStill() {
+  const W = Math.max(64, innerWidth), H = Math.max(64, innerHeight);
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const x = c.getContext('2d', { alpha: false });
+  const cs = getComputedStyle(root);
+  const [bR, bG, bB] = rgb(cs.getPropertyValue('--bg').trim() || '#111');
+  const bga = (a) => `rgba(${bR},${bG},${bB},${a})`;
+  x.fillStyle = bga(1); x.fillRect(0, 0, W, H);
+  const light = root.dataset.scheme === 'light';
+  if (!document.body.classList.contains('no-ambient')) {
+    // the blurred cover: background-size cover over inset −6 %
+    const art = document.querySelector('#bg .bg-art.on'), src = urlOf(art);
+    if (src) {
+      try {
+        const im = await loadImg(src);
+        const bx = -0.06 * W, by = -0.06 * H, bw = W * 1.12, bh = H * 1.12;
+        const sc = Math.max(bw / im.naturalWidth, bh / im.naturalHeight), dw = im.naturalWidth * sc, dh = im.naturalHeight * sc;
+        x.globalAlpha = light ? 0.5 : 0.62;
+        x.imageSmoothingQuality = 'high';
+        x.drawImage(im, bx + (bw - dw) / 2, by + (bh - dh) / 2, dw, dh);
+        x.globalAlpha = 1;
+      } catch {}
+    }
+    draw();                                               // the blobs, as they stand now
+    x.drawImage(canvas, 0, 0, W, H);
+  }
+  // the veil: radial-gradient(120% 90% at 30% 20%, transparent, bg 55% at 70%) + linear 180deg bg 20% → 70%
+  x.save(); x.translate(W * 0.3, H * 0.2); x.scale(W * 1.2, H * 0.9);
+  const rg = x.createRadialGradient(0, 0, 0, 0, 0, 1);
+  rg.addColorStop(0, bga(0)); rg.addColorStop(0.7, bga(0.55)); rg.addColorStop(1, bga(0.55));
+  x.fillStyle = rg; x.fillRect(-2, -2, 4, 4); x.restore();
+  const lg = x.createLinearGradient(0, 0, 0, H);
+  lg.addColorStop(0, bga(0.2)); lg.addColorStop(1, bga(0.7));
+  x.fillStyle = lg; x.fillRect(0, 0, W, H);
+  // the grain (overlay), which keeps large dark gradients from banding
+  const gsrc = urlOf(document.querySelector('#bg .grain'));
+  if (gsrc) {
+    try {
+      grainImg = grainImg && grainImg.src === gsrc ? grainImg : await loadImg(gsrc);
+      x.globalCompositeOperation = 'overlay'; x.globalAlpha = light ? 0.05 : 0.07;
+      x.fillStyle = x.createPattern(grainImg, 'repeat'); x.fillRect(0, 0, W, H);
+      x.globalCompositeOperation = 'source-over'; x.globalAlpha = 1;
+    } catch {}
+  }
+  const blob = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.92));
+  return blob ? URL.createObjectURL(blob) : '';
 }
