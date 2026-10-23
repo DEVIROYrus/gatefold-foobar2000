@@ -19,7 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 FIX = ROOT / 'tests' / 'fixtures'
-MOCK = ''.join((FIX / f).read_text(encoding='utf-8') for f in ('mock-bridge.js', 'mock-extras.js', 'mock-updates.js', 'mock-prefs.js', 'mock-welcome.js', 'mock-edit.js', 'mock-win.js', 'mock-more.js', 'mock-ml.js', 'mock-level.js'))
+MOCK = ''.join((FIX / f).read_text(encoding='utf-8') for f in ('mock-bridge.js', 'mock-extras.js', 'mock-updates.js', 'mock-prefs.js', 'mock-welcome.js', 'mock-edit.js', 'mock-win.js', 'mock-more.js', 'mock-ml.js', 'mock-level.js', 'mock-editions.js'))
 VIEWS = ['now', 'playlist', 'artists', 'library', 'queue', 'youtube', 'covers', 'settings']
 # Russian strings that come from the mock music library itself (data, not interface text)
 DATA = ['Слепое пятно', 'Тихий Час', 'Неизвестный Бэнд', 'Другой альбом', 'Кто-то ещё', 'Без обложки', 'Локальная строка',
@@ -1182,17 +1182,182 @@ async def test_album_details(browser, port):
     await ctx.close()
 
 # every test, in the order a full run takes them
+async def test_editions_artists(browser, port):
+    print('· editions and artists: one title in two releases, «A; B» and multi-value tags, the separators preview')
+    ctx, pg, errs = await page(browser, port, {'language': 'en'}, pre='window.__eds = true;')
+    await nav(pg, 'library', 2600)
+    async def lib_filter(q):
+        await pg.fill('#libFilter', q); await pg.wait_for_timeout(600)
+    await lib_filter('Everybody')
+    tiles = await pg.evaluate("[...document.querySelectorAll('#libGrid .tile')].filter(t => t.querySelector('.tt')?.textContent === 'Everybody Wants').map(t => t.querySelector('.ta').textContent)")
+    check(sorted(tiles) == ['The Struts · 2014', 'The Struts · 2016 · Deluxe'], f'two tiles, each named by its edition {tiles}')
+    await lib_filter('Long Way')
+    long = await pg.evaluate("[...document.querySelectorAll('#libGrid .tile .tt')].filter(t => t.textContent === 'Long Way').length")
+    check(long == 1, f'CD1/CD2 folders of one release stay one album ({long})')
+    await lib_filter('Everybody')
+    await pg.evaluate("[...document.querySelectorAll('#libGrid .tile')].find(t => t.querySelector('.ta')?.textContent.includes('Deluxe')).click()")
+    await pg.wait_for_timeout(1300)
+    ed = await pg.evaluate("document.querySelector('#albumHero .al-ed')?.textContent")
+    rows = await pg.evaluate("[...document.querySelectorAll('#albumList .vrow .c-t, #albumList .vrow')].length && [...document.querySelectorAll('#albumList .vrow')].map(r => r.textContent)")
+    check(ed == '2016 · Deluxe', f'the album page names the edition ({ed})')
+    check(len(rows) == 4 and any('Mary Go Round' in r for r in rows) and not any('Kiss This' in r for r in rows), f'only the songs of this edition {rows}')
+    other = await pg.evaluate("[...document.querySelectorAll('#albumHero .al-eds [data-ed]')].map(b => b.textContent)")
+    check(other == ['2014'], f'«Other editions» links the 2014 release {other}')
+    await pg.click('#albumHero .al-eds [data-ed]'); await pg.wait_for_timeout(1300)
+    rows = await pg.evaluate("[...document.querySelectorAll('#albumList .vrow')].map(r => r.textContent)")
+    check(await pg.evaluate("document.querySelector('#albumHero .al-ed')?.textContent") == '2014' and any('Kiss This' in r for r in rows) and len(rows) == 4, f'the link opens the other edition {rows}')
+    # an album by «Alpha; Beta» links both, and is listed under each
+    await nav(pg, 'library', 900)
+    await lib_filter('Duets')
+    await pg.evaluate("[...document.querySelectorAll('#libGrid .tile')].find(t => t.querySelector('.tt')?.textContent === 'Duets').click()"); await pg.wait_for_timeout(1200)
+    links = await pg.evaluate("[...document.querySelectorAll('#albumArtistLink [data-ar]')].map(l => l.textContent)")
+    check(links == ['Alpha', 'Beta'], f'the album page links each artist {links}')
+    await pg.evaluate("document.querySelectorAll('#albumArtistLink [data-ar]')[1].click()"); await pg.wait_for_timeout(1200)
+    check(await pg.evaluate("document.querySelector('#artistHero h1')?.textContent") == 'Beta', 'the second name opens its own page')
+    await nav(pg, 'artists', 1500)
+    names = await pg.evaluate("import('./js/artists.js').then(m => m.artistsState.list.map(x => x.name))")
+    check(all(n in names for n in ['Alpha', 'Beta', 'Gamma', 'Delta', 'Simon & Garfunkel']) and 'Alpha; Beta' not in names, f'«;» and multi-value tags make separate artists, «&» is left alone by default {sorted(set(names))[:20]}')
+    # the separators: «&» on → the preview lists the names it would split; one is kept whole
+    await nav(pg, 'settings', 900)
+    await pg.evaluate("document.getElementById('st-library').scrollIntoView()"); await pg.wait_for_timeout(300)
+    await pg.evaluate("[...document.querySelectorAll('#st-library .seg.multi button')].find(b => b.textContent === '&').click()"); await pg.wait_for_timeout(300)
+    pv = await pg.evaluate("[...document.querySelectorAll('#st-library .sep-pv-i')].map(i => i.querySelector('.nm').textContent + ' → ' + i.querySelector('.parts').textContent)")
+    check('Simon & Garfunkel → Simon · Garfunkel' in pv, f'the preview shows what «&» would split {pv}')
+    if os.environ.get('SHOTS'): await pg.screenshot(path=os.environ['SHOTS'] + '/separators.png')
+    await pg.evaluate("[...document.querySelectorAll('#st-library .sep-pv-i')].find(i => i.querySelector('.nm').textContent === 'Simon & Garfunkel').querySelector('input').click()"); await pg.wait_for_timeout(200)
+    await pg.evaluate("document.querySelector('#st-library .st-acts .btn.primary').click()"); await pg.wait_for_timeout(2500)
+    st = await pg.evaluate("JSON.parse(localStorage.getItem('aurora.settings.v1'))")
+    check(st.get('artistSplit') == [';', '&'] and st.get('artistKeep') == ['Simon & Garfunkel'], f'applied and remembered {st.get("artistSplit")} {st.get("artistKeep")}')
+    await nav(pg, 'artists', 1500)
+    names = await pg.evaluate("import('./js/artists.js').then(m => m.artistsState.list.map(x => x.name))")
+    check('Simon & Garfunkel' in names and 'Garfunkel' not in names, 'a name marked «never split» stays whole')
+    check(not errs, f'no page errors {errs}')
+    await ctx.close()
+
+async def test_colors(browser, port):
+    print('· colours: an album of your colours (with the readability guard), «Своя тема», export and import')
+    ctx, pg, errs = await page(browser, port, {'language': 'en'}, pre='window.__themeIo = true;')
+    await nav(pg, 'library', 2200)
+    await pg.fill('#libFilter', 'Nightdrive'); await pg.wait_for_timeout(500)
+    await pg.evaluate("[...document.querySelectorAll('#libGrid .tile')].find(t => t.querySelector('.tt')?.textContent === 'Nightdrive').click()"); await pg.wait_for_timeout(1400)
+    acc0 = await pg.evaluate("getComputedStyle(document.getElementById('view-album')).getPropertyValue('--a-accent')")
+    await pg.click('#alColors'); await pg.wait_for_timeout(900)
+    check(await pg.evaluate("!!document.querySelector('.ac-veil.on .ac-pv')"), 'the colours sheet opens with a preview')
+    chips = await pg.evaluate("document.querySelectorAll('.ac-row[data-kind=accent] .ac-chip').length")
+    check(chips >= 1, f'the cover offers its own colours ({chips})')
+    async def pick(kind, hexv):
+        await pg.evaluate(f"(() => {{ const i = document.querySelector('.ac-row[data-kind={kind}] input[type=color]'); i.value = '{hexv}'; i.dispatchEvent(new Event('input', {{ bubbles: true }})); }})()")
+        await pg.wait_for_timeout(700)
+    await pick('accent', '#2a0505')
+    st = await pg.evaluate("JSON.parse(localStorage.getItem('aurora.settings.v1')).albumColors")
+    check(len(st or {}) == 1 and list(st.values())[0].get('accent') == '#2a0505', f'your accent is kept for this album {st}')
+    note = await pg.evaluate("document.querySelector('.ac-note.warn')?.textContent || ''")
+    check(bool(note), 'a near-black accent is moved to stay visible, and the sheet says so')
+    acc1 = await pg.evaluate("getComputedStyle(document.getElementById('view-album')).getPropertyValue('--a-accent')")
+    check(acc1 and acc1 != acc0, f'the album page takes the colour at once ({acc0} → {acc1})')
+    check(await pg.evaluate("!!document.querySelector('.ac-row[data-kind=bg]')"), 'with your accent, the background can be tinted too')
+    if os.environ.get('SHOTS'): await pg.screenshot(path=os.environ['SHOTS'] + '/album-colors.png')
+    await pg.click('.ac-acts [data-act=reset]'); await pg.wait_for_timeout(700)
+    check(not await pg.evaluate("JSON.parse(localStorage.getItem('aurora.settings.v1')).albumColors?.[Object.keys(JSON.parse(localStorage.getItem('aurora.settings.v1')).albumColors || {})[0]]"), 'reset forgets them')
+    await pg.keyboard.press('Escape'); await pg.wait_for_timeout(400)
+    # «Своя тема»: starts from the colours on screen, a light background makes a light theme
+    await nav(pg, 'settings', 900)
+    await pg.evaluate("[...document.querySelectorAll('.src-card')].at(-1).click()"); await pg.wait_for_timeout(700)
+    s = await pg.evaluate("JSON.parse(localStorage.getItem('aurora.settings.v1'))")
+    check(s.get('colorSource') == 'custom' and (s.get('customTheme') or {}).get('accent'), f'your theme, seeded from the current colours {s.get("customTheme")}')
+    await pg.evaluate("(() => { const i = document.querySelectorAll('.ct-row input[type=color]')[0]; i.value = '#f4efe4'; i.dispatchEvent(new Event('input', { bubbles: true })); })()"); await pg.wait_for_timeout(600)
+    sch = await pg.evaluate("document.documentElement.dataset.scheme")
+    check(sch == 'light', f'a light background makes a light theme ({sch})')
+    # the palette now in force (the page itself fades between palettes, so its variables may be mid-way)
+    cr = await pg.evaluate("""import('./js/theme.js').then(({ current: { palette: p } }) => {
+      const lum = (hex) => { const [r, g, b] = [1, 3, 5].map((i) => { let x = parseInt(hex.slice(i, i + 2), 16) / 255; return x <= .04045 ? x / 12.92 : ((x + .055) / 1.055) ** 2.4; }); return .2126 * r + .7152 * g + .0722 * b; };
+      const t = lum(p.text.hex), b = lum(p.bg.hex);
+      return (Math.max(t, b) + .05) / (Math.min(t, b) + .05);
+    })""")
+    check(cr >= 7, f'text keeps its contrast on your background ({cr:.1f}:1)')
+    await pg.evaluate("[...document.querySelectorAll('#st-look .st-acts .btn')][0].click()"); await pg.wait_for_timeout(500)
+    saved = await pg.evaluate("Object.values(window.__themeFiles)[0] || ''")
+    check('"gatefoldTheme": 1' in saved and '#f4efe4' in saved, f'export writes a theme file {saved[:80]!r}')
+    await pg.evaluate("window.__themeFiles['D:\\\\Themes\\\\gatefold-theme.json'] = JSON.stringify({ gatefoldTheme: 1, bg: '#101418', accent: '#ff7a59' })")
+    await pg.evaluate("[...document.querySelectorAll('#st-look .st-acts .btn')][1].click()"); await pg.wait_for_timeout(800)
+    t = await pg.evaluate("JSON.parse(localStorage.getItem('aurora.settings.v1')).customTheme")
+    check(t.get('bg') == '#101418' and t.get('accent') == '#ff7a59' and await pg.evaluate("document.documentElement.dataset.scheme") == 'dark', f'import reads it back {t}')
+    bad = await pg.evaluate("import('./js/panels.js').then(m => [m.parseTheme('{}'), m.parseTheme('nope'), m.parseTheme(JSON.stringify({ bg: 'red', accent: '#ffffff' }))])")
+    check(bad == [None, None, None], f'what is not a theme is refused {bad}')
+    check(not errs, f'no page errors {errs}')
+    await ctx.close()
+
+async def test_sound_panel(browser, port):
+    print('· «Звук»: DSP presets from the player bar, the chain playing now, foobar2000\'s equalizer and DSP Manager')
+    ctx, pg, errs = await page(browser, port, {'language': 'en'}, pre='window.__dsp = true;')
+    check(not await pg.evaluate("document.getElementById('btnSound').classList.contains('on')"), 'not lit without a DSP chain')
+    await pg.click('#btnSound'); await pg.wait_for_timeout(500)
+    items = await pg.evaluate("[...document.querySelectorAll('.snd-pop .snd-p span:last-child')].map(b => b.textContent)")
+    check(items == ['Headphones', 'Speakers', 'Night'], f'the presets {items}')
+    geo = await pg.evaluate("(() => { const p = document.querySelector('.snd-pop').getBoundingClientRect(), b = document.getElementById('btnSound').getBoundingClientRect(); return { above: p.bottom <= b.top + 1, inside: p.left >= 0 && p.right <= innerWidth && p.top >= 0 }; })()")
+    check(geo['above'] and geo['inside'], f'the panel opens above its button, inside the window {geo}')
+    await pg.evaluate("document.querySelectorAll('.snd-pop .snd-p')[0].click()"); await pg.wait_for_timeout(600)
+    check(['dsp.applyPreset', 0] in await pg.evaluate("window.__calls"), 'a click applies the preset')
+    chain = await pg.evaluate("[...document.querySelectorAll('.snd-pop .snd-chain .chip')].map(c => c.textContent)")
+    check(chain == ['Equalizer', 'Crossfeed'], f'the chain playing now {chain}')
+    check(await pg.evaluate("document.querySelector('.snd-pop .snd-p.on span:last-child')?.textContent") == 'Headphones', 'the active preset is ticked')
+    check(await pg.evaluate("document.getElementById('btnSound').classList.contains('on')"), 'the button is lit while a chain plays')
+    if os.environ.get('SHOTS'): await pg.screenshot(path=os.environ['SHOTS'] + '/sound.png')
+    await pg.evaluate("document.querySelector('.snd-pop [data-act=eq]').click()"); await pg.wait_for_timeout(400)
+    check(['menu.runMainMenuCommand', '{G-EQ}'] in await pg.evaluate("window.__calls"), 'the equalizer button opens foobar2000\'s equalizer')
+    check(not await pg.evaluate("!!document.querySelector('.snd-pop')"), 'and closes the panel')
+    await pg.click('#btnSound'); await pg.wait_for_timeout(400)
+    await pg.evaluate("document.querySelector('.snd-pop [data-act=dsp]').click()"); await pg.wait_for_timeout(400)
+    check(['menu.runMainMenuCommand', '{G-DSPPREF}'] in await pg.evaluate("window.__calls"), 'DSP Manager opens foobar2000\'s DSP page')
+    await pg.click('#btnSound'); await pg.wait_for_timeout(300)
+    await pg.keyboard.press('Escape'); await pg.wait_for_timeout(200)
+    check(not await pg.evaluate("!!document.querySelector('.snd-pop')"), 'Escape closes it')
+    check(not errs, f'no page errors {errs}')
+    await ctx.close()
+
+async def test_cover_pick(browser, port):
+    print('· your cover: from the computer, kept only in Gatefold and locked; whole, with a blurred backdrop on square tiles')
+    ctx, pg, errs = await page(browser, port, {'language': 'en'}, pre='window.__pick = true;')
+    await nav(pg, 'library', 2200)
+    await pg.fill('#libFilter', 'Sand & Signal'); await pg.wait_for_timeout(500)
+    await pg.evaluate("[...document.querySelectorAll('#libGrid .tile')].find(t => t.querySelector('.tt')?.textContent === 'Sand & Signal').click()"); await pg.wait_for_timeout(1300)
+    await pg.click('#alCover'); await pg.wait_for_timeout(900)
+    check(await pg.evaluate("!!document.querySelector('.cp-veil.on .cp-sheet')"), 'the cover sheet opens')
+    check(await pg.evaluate("document.querySelector('.cp-head h3')?.textContent") == 'Sand & Signal', 'named after the album')
+    await pg.click('.cp-sheet [data-a=file]'); await pg.wait_for_timeout(1200)
+    dim = await pg.evaluate("document.querySelector('.cp-dim')?.textContent || ''")
+    check(dim.startswith('900×1200'), f'the picture from the computer, at its real size ({dim})')
+    where = await pg.evaluate("[...document.querySelectorAll('input[name=cpw]')].map(r => r.value + (r.checked ? '*' : ''))")
+    check(where == ['gatefold*', 'embedded', 'file'], f'where to save, «only in Gatefold» first {where}')
+    await pg.click('.cp-sheet input[name=cpw][value=file]'); await pg.wait_for_timeout(200)
+    check(await pg.evaluate("!document.querySelector('.cp-fname').hidden"), 'a file name is asked only for «as a file»')
+    await pg.click('.cp-sheet input[name=cpw][value=gatefold]'); await pg.wait_for_timeout(200)
+    if os.environ.get('SHOTS'): await pg.screenshot(path=os.environ['SHOTS'] + '/cover-pick.png')
+    await pg.click('.cp-sheet [data-a=save]'); await pg.wait_for_timeout(1800)
+    check(not await pg.evaluate("document.querySelector('.cp-veil')?.classList.contains('on')"), 'saved and closed')
+    check(not any(c[0] in ('metadata.embedArtwork', 'file.write') for c in await pg.evaluate("window.__calls")), '«only in Gatefold» touches no file')
+    own = await pg.evaluate("import('./js/ownart.js').then(m => m.all().map(x => [x.album, x.where, x.lock, x.w, x.h]))")
+    check(own == [['Sand & Signal', 'gatefold', True, 900, 1200]], f'kept by Gatefold and locked {own}')
+    cov = await pg.evaluate("(() => { const c = document.querySelector('#view-album .album-cover'), r = c.getBoundingClientRect(), i = c.querySelector('img'); return { src: i.src.slice(0, 5), ar: +(r.width / r.height).toFixed(2), cls: c.className }; })()")
+    check(cov['src'] == 'blob:' and abs(cov['ar'] - 0.75) < 0.03, f'the album page shows it at once, at 3:4 {cov}')
+    await nav(pg, 'library', 900)
+    await pg.fill('#libFilter', 'Sand & Signal'); await pg.wait_for_timeout(900)
+    tile = await pg.evaluate("(() => { const t = [...document.querySelectorAll('#libGrid .tile')].find(t => t.querySelector('.tt')?.textContent === 'Sand & Signal'); const c = t.querySelector('.cov'); return { nsq: c.classList.contains('nsq'), bg: !!c.querySelector('.nsq-bg'), src: t.querySelector('.cov img').src.slice(0, 5) }; })()")
+    check(tile == {'nsq': True, 'bg': True, 'src': 'blob:'}, f'the square tile shows the whole picture over a blurred copy {tile}')
+    check(not errs, f'no page errors {errs}')
+    await ctx.close()
+
 TESTS = [*((f'language_{l}', (lambda l: lambda b, p: test_language(b, p, l))(l)) for l in ('ru', 'en', 'de', 'es', 'zh')),
          ('playlists', test_playlists), ('youtube', test_youtube), ('youtube_captions', test_youtube_captions), ('columns', test_columns), ('settings', test_settings), ('updates', test_updates),
          ('tooltips', test_tooltips), ('canvas_volume', test_canvas_volume), ('fb2k_prefs', test_fb2k_prefs), ('welcome', test_welcome),
          ('playlist_editing', test_playlist_editing), ('windows', test_windows), ('vu', test_vu), ('smart_color_radio', test_smart_color_radio),
-         ('lyrics_sync', test_lyrics_sync), ('album_details', test_album_details), ('level', test_level), ('sound_offer', test_sound_offer), ('similar_albums', test_similar_albums), ('sound_ai', test_sound_ai), ('layout', test_layout), ('stability', test_stability)]
+         ('lyrics_sync', test_lyrics_sync), ('album_details', test_album_details), ('level', test_level), ('sound_offer', test_sound_offer), ('similar_albums', test_similar_albums), ('editions_artists', test_editions_artists), ('colors', test_colors), ('sound_panel', test_sound_panel), ('cover_pick', test_cover_pick), ('sound_ai', test_sound_ai), ('layout', test_layout), ('stability', test_stability)]
 # seconds each test takes on a CI runner (from the « (N s)» lines of a run); only used to share the tests
 # out evenly between parallel parts — a test missing here counts as DEFAULT_S and still runs
 DURATIONS = {'language_ru': 13, 'language_en': 18, 'language_de': 18, 'language_es': 18, 'language_zh': 18, 'playlists': 10, 'youtube': 14,
              'youtube_captions': 29, 'columns': 23, 'settings': 6, 'updates': 20, 'tooltips': 9, 'canvas_volume': 4, 'fb2k_prefs': 9, 'welcome': 24,
              'playlist_editing': 14, 'windows': 13, 'vu': 32, 'smart_color_radio': 27, 'lyrics_sync': 11, 'album_details': 20, 'level': 7,
-             'sound_offer': 14, 'similar_albums': 3, 'sound_ai': 58, 'layout': 60, 'stability': 70}
+             'sound_offer': 14, 'similar_albums': 3, 'editions_artists': 20, 'colors': 16, 'sound_panel': 8, 'cover_pick': 12, 'sound_ai': 58, 'layout': 60, 'stability': 70}
 DEFAULT_S = 20
 
 def shards(n):

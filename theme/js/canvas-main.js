@@ -6,6 +6,7 @@
 import './i18n-boot.js';
 import './input-guard.js';
 import './tooltip.js';
+import './coverfit.js';
 import { waitForBridge, call, on, ok, normTrack, artUrl, log } from './bridge.js';
 import * as Theme from './theme.js';
 import * as Canvas from './canvas.js';
@@ -13,6 +14,7 @@ import { setFullscreen, unpin } from './winfs.js';
 import { follower } from './position.js';
 
 import { $t } from './i18n.js';
+import * as Own from './ownart.js';
 const S = { track: null, state: 'stopped', pos: 0, dur: 0, t0: performance.now(), art: { available: false, url: '', small: '' } };
 const getPos = () => (S.state === 'playing' ? S.pos + (performance.now() - S.t0) / 1000 : S.pos);
 const setPos = (p, d) => { S.pos = +p || 0; S.t0 = performance.now(); if (d != null && +d > 0) S.dur = +d; };
@@ -38,6 +40,15 @@ const loads = (url) => new Promise((res) => { const im = new Image(); im.onload 
 let artTok = 0;
 async function loadArt() {
   const tok = ++artTok;
+  // a cover you chose and Gatefold keeps (ownart.js) comes first
+  const tp = S.track && (S.track.handle || S.track.path);
+  const own = tp ? await Own.urlForPath(tp, 'full') : '';
+  if (own) {
+    if (tok !== artTok) return;
+    S.art = { available: true, url: own, small: (await Own.urlForPath(tp, 'thumb')) || own };
+    Canvas.notify('art'); Theme.themeForTrack(S.track, S.art);
+    return;
+  }
   const [big, small] = await Promise.all([
     call('artwork.getFb2kUrl', { type: 'front', maxSize: Math.min(2000, Math.round(Math.min(screen.width, screen.height) * 0.75 * (devicePixelRatio || 1))) }),
     call('artwork.getFb2kUrl', { type: 'front', maxSize: 128 }),

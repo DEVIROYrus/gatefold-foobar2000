@@ -5,6 +5,7 @@ import './input-guard.js';
 import './i18n-boot.js';
 import './tooltip.js';
 import './select.js';
+import './coverfit.js';
 import * as UpdUI from './update-ui.js';
 import * as Welcome from './welcome.js';
 import * as WinInteg from './wininteg.js';
@@ -25,6 +26,7 @@ import { follower } from './position.js';
 import * as VU from './vu.js';
 import * as CF from './coverfetch.js';
 import * as Lib from './library.js';
+import * as SoundPanel from './soundpanel.js';
 import * as LY from './lyrics.js';
 import * as Canvas from './canvas.js';
 import * as Likes from './likes.js';
@@ -34,6 +36,8 @@ import * as Art from './artists.js';
 import './dropzone.js';
 
 import { $t } from './i18n.js';
+import * as Own from './ownart.js';
+import * as CoverPick from './coverpick.js';
 const root = document.documentElement, body = document.body;
 const app = { track: null, state: 'stopped', art: { available: false, url: '', small: '', key: '' }, volume: 100, muted: false, order: 0, maximized: false, fullscreen: false, standalone: false };
 window.aurora = app; // handy in DevTools
@@ -56,6 +60,8 @@ function applyAppearance(key) {
   body.classList.toggle('side-collapsed', !!settings.sidebarCollapsed);
   if (key === 'colorSource' || key === '*') Theme.refreshSource();
   else if (key === 'themeMode' || key === 'colorIntensity') Theme.rebuild();
+  if (key === 'customTheme' && settings.colorSource === 'custom') Theme.refreshSource();
+  if (key === 'albumColors') Theme.reapply();
   if (key === 'waveformSeek') { if (settings.waveformSeek) Viz.loadWaveform(app.track); else Viz.refreshWaveVisibility(); }
   if (key === 'backdrop') applyBackdrop();
   if (key === 'baseSize') setTimeout(() => { Viz.resizeAll(); updateDragRegions(); Lib.relayoutForFont(); Art.relayoutArtists && Art.relayoutArtists(); }, 50);
@@ -375,6 +381,15 @@ const loadsOk = (url) => new Promise((res) => { const im = new Image(); im.onloa
 
 async function loadArt(t) {
   const token = ++artToken;
+  // a cover you chose and Gatefold keeps (ownart.js) comes first; such an album is never searched for
+  const own = await Own.urlForPath(t.handle || t.path, 'full');
+  if (own) {
+    const small = await Own.urlForPath(t.handle || t.path, 'thumb');
+    if (token !== artToken) return;
+    app.art = { available: true, url: own, small: small || own, key: albumKeyOf(t.albumArtist, t.album), own: true };
+    showArt(own); Canvas.notify('art'); Theme.themeForTrack(t, app.art); renderNpActions();
+    return;
+  }
   const [big, small] = await Promise.all([
     call('artwork.getFb2kUrl', { type: 'front', maxSize: Math.min(1600, Math.round(640 * Math.min(2, devicePixelRatio))) }),
     call('artwork.getFb2kUrl', { type: 'front', maxSize: 128 }),
@@ -424,7 +439,7 @@ function renderNpActions() {
   syncLike();
   if (t.album) btn($t('{0}Альбом', icon('grid')), openNpAlbum).id = 'npAlbumBtn';
   function openNpAlbum() { openTrackAlbum(t); }
-  if (!app.art.available && t.album) btn($t('{0}Найти обложку', icon('image')), () => router.go('covers', { manual: CF.jobFromTrack(t) }), 'primary');
+  if (!app.art.available && t.album) btn($t('{0}Обложка…', icon('image')), () => CoverPick.open(Lib.albumOfTrack(t)), 'primary');
   // the track playing when the button is pressed: these buttons are drawn when the cover changes,
   // so within one album `t` would still be the first track that played (the radio then started from it)
   if (t.artist) btn($t('{0}Радио', icon('sparkle')), () => app.track && Radio.start(app.track));
@@ -432,6 +447,7 @@ function renderNpActions() {
   btn(`${icon('more')}`, () => call('menu.showNativePopup', { mode: 'nowPlaying' }));
 }
 
+Own.events.addEventListener('change', () => { if (app.track) loadArt(app.track); });
 CF.events.addEventListener('saved', async (e) => {
   const { job, url, cand } = e.detail;
   toast(`${$t('Обложка установлена:')} <b>${esc(job.album)}</b> · ${esc(cand.src)}`, { img: url });
@@ -572,6 +588,7 @@ $('btnPrev').onclick = () => call('playback.previous');
 $('btnNext').onclick = () => call('playback.next');
 $('btnSac').onclick = () => call('playback.toggleStopAfterCurrent');
 $('btnQueue').onclick = () => router.go('queue');
+SoundPanel.init($('btnSound'));
 
 // ---------------------------------------------------------------- «Понравившиеся»
 function syncLike() {
@@ -597,13 +614,16 @@ $('pbArt').onclick = () => router.go('now');
 function setPbMeta(t) {
   $('pbTitle').innerHTML = `<span class="lnk" data-go="track" title="${$t('Показать в плейлисте')}">${esc(t.title || '—')}</span>`;
   const parts = [];
-  if (t.artist) parts.push(`<span class="lnk" data-go="artist" title="${$t('Открыть исполнителя')}">${esc(t.artist)}</span>`);
+  if (t.artist) parts.push(Lib.artistLinks(t.artist, $t('Открыть исполнителя')));
   if (t.album) parts.push(`<span class="lnk" data-go="album" title="${$t('Открыть альбом')}">${esc(t.album)}</span>`);
   $('pbArtist').innerHTML = parts.join('<span class="sep">—</span>');
 }
 /** the album page of a track's album; `focus` (a track handle) marks that song there */
 export async function openTrackAlbum(t, focus = '') {
   if (!t || !t.album) return;
+  // an album with several editions: the one this track is on
+  const ed = Lib.editionOfPath(t.handle) || Lib.editionOfPath(t.path) || Lib.editionOfPath(t.absolutePath);
+  if (ed) { if (focus) Lib.focusNextAlbumTrack(focus); router.go('album', ed); return; }
   const r = await call('library.getAlbums', { query: t.album, limit: 60 });
   const rows = (ok(r) && r.albums) || [];
   const lc = (x) => String(x || '').toLowerCase();
@@ -615,7 +635,7 @@ export async function openTrackAlbum(t, focus = '') {
 document.querySelector('.pb-meta').addEventListener('click', (e) => {
   const l = e.target.closest('.lnk'); const t = app.track; if (!l || !t) return;
   if (l.dataset.go === 'track') Lib.revealPlaying();
-  if (l.dataset.go === 'artist') router.go('artist', t.artist || t.albumArtist);
+  if (l.dataset.go === 'artist') router.go('artist', l.textContent || t.artist || t.albumArtist);
   if (l.dataset.go === 'album') openTrackAlbum(t);
 });
 $('npArtist').onclick = () => app.track && router.go('artist', app.track.albumArtist || app.track.artist);
@@ -819,6 +839,9 @@ Lib.shared.onPlayAlbum = () => { if (router.current !== 'now') toast($t('Вос�
   UpdUI.init();
   Welcome.init();
   Radio.init({ getAllAlbums: Lib.getAllAlbums });
+  Own.ready();                                   // your covers (ownart.js), before the first tiles are drawn
+  // covers by your path rule: new albums get theirs a while after the start
+  if (settings.coverPattern) setTimeout(async () => CoverPick.patternScan(await Lib.getAllAlbums()), 20000);
   Lib.shared.radioFor = (t) => Radio.start(t);
   Lib.shared.radioWhy = (t) => Radio.why(t);
   Lib.shared.openTrackAlbum = (t, focus) => openTrackAlbum(t, focus);

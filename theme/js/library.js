@@ -9,7 +9,8 @@ import { call, on, ok, normTrack, esc, fmtTime, fmtDuration, plural, debounce, l
 import { settings, setSetting } from './settings.js';
 import { router, onRoute, $, h, icon, toast, placeholder, popupMenu, backButton } from './ui.js';
 import { idle, slot, spent } from './sched.js';
-import { paletteForAlbum } from './theme.js';
+import { paletteForAlbum, setEditionKeyResolver } from './theme.js';
+import * as AC from './albumcolors.js';
 import * as CF from './coverfetch.js';
 import * as TC from './thumbcache.js';
 import * as SORT from './sorting.js';
@@ -26,13 +27,18 @@ import * as Sound from './ml/sound.js';
 import * as Loud from './loudness.js';
 import * as AD from './album-details.js';
 import * as Cx from './columns.js';
+import * as Own from './ownart.js';
+import * as CoverPick from './coverpick.js';
+import * as Names from './artistnames.js';
 const ownRg = () => performance.now() < Loud.writingUntil;   // Gatefold's own ReplayGain tag writes change nothing shown
 const dpr = () => Math.min(2, window.devicePixelRatio || 1);
 /** A track as the host's context-menu/handle APIs want it: path, or path|subsong:N. */
 const trackHandle = (t) => t.handle || ((t.subsong ? `${t.absolutePath || t.path}|subsong:${t.subsong}` : (t.absolutePath || t.path)));
 /* ---- hearts on track rows */
 /* a text that leads somewhere: the song (its album page, the song marked), the artist, the album */
-const lnk = (go, text) => (text ? `<span class="lnk" data-go="${go}">${esc(text)}</span>` : '');
+const lnk = (go, text) => (!text ? '' : go === 'artist' ? artistLinks(text) : `<span class="lnk" data-go="${go}">${esc(text)}</span>`);
+/** «A; B»: each artist its own link (the separators in Settings → Library) */
+export const artistLinks = (text, title = '') => Names.segments(text).map((g) => (g.name ? `<span class="lnk" data-go="artist"${title ? ` title="${esc(title)}"` : ''}>${esc(g.text)}</span>` : esc(g.text))).join('');
 const LIKE_BTN = `<button class="row-like" tabindex="-1" aria-label="${$t('Нравится')}" title="${$t('В понравившиеся')}"><svg><use href="#i-heart"/></svg></button>`;
 const likeAttr = (t) => { const k = String(trackHandle(t) || '').toLowerCase(); return ` data-h="${esc(k)}"${Likes.has({ handle: k }) ? ' data-liked="1"' : ''}`; };
 function likeRow(el) {
@@ -57,6 +63,11 @@ const coverCache = new Map(); // `${path}@${size}` → fb2k url | ''
 const pendingCapture = new Map(); // fb2k url → [[path, size], …]  (stored into the disk cache once it has loaded)
 function takeCapture(url) { const l = pendingCapture.get(url); if (!l) return; pendingCapture.delete(url); for (const [p, S] of l) TC.capture(p, S, url); }
 export async function coversFor(paths, size) {
+  const own = await Own.prepare(paths);                // covers you chose, kept by Gatefold (ownart.js), come first
+  const get = await fb2kCoversFor(paths, size);
+  return (p) => own(p) || get(p);
+}
+async function fb2kCoversFor(paths, size) {
   const S = TC.enabled() ? TC.snap(size) : size;
   const hits = await TC.lookup(paths.filter(Boolean), S);
   const need = [...new Set(paths.filter((p) => p && !hits.has(p) && !coverCache.has(`${p}@${S}`)))];
@@ -103,6 +114,15 @@ CF.events.addEventListener('repaired', () => {
   if (router.current === 'library') layoutLib();
   if (router.current === 'playlist') { PL.nodes.forEach((el) => el.remove()); PL.nodes.clear(); schedulePl(); }
 });
+/* a cover you chose (ownart.js) changed: tiles and rows show it at once */
+Own.events.addEventListener('change', () => {
+  LIB.nodes.forEach((el) => el.remove()); LIB.nodes.clear();
+  if (router.current === 'library') layoutLib();
+  if (PL.kind) { PL.nodes.forEach((el) => el.remove()); PL.nodes.clear(); schedulePl(); }
+  if (router.current === 'album' && ALB.a && ALB.a.firstTrackAbsolutePath) {
+    coversFor([ALB.a.firstTrackAbsolutePath], Math.round(220 * dpr())).then((get) => { const u = get(ALB.a.firstTrackAbsolutePath); const im = albumView.querySelector('.album-cover img'); if (u && im) setImg(im, u); });
+  }
+});
 export function forgetCover(path) { for (const k of coverCache.keys()) if (k.startsWith(path + '@')) coverCache.delete(k); TC.forget(path); }
 
 function setImg(img, url, onFail) {
@@ -126,7 +146,7 @@ function coverMissing(a) {
   if (CF.reportMissing(job)) markFetching(a, job.key);
 }
 function markFetching(a, key) {
-  const el = LIB.nodes.get(a.name + '\u0001' + a.albumArtist);
+  const el = LIB.nodes.get(tileKey(a));
   const cov = el && el.querySelector('.cov');
   if (cov && !cov.querySelector('.fetching')) { const sp = h(`<span class="fetching" title="${$t('Ищу обложку')}"><span class="spinner"></span></span>`); sp.dataset.key = key; cov.appendChild(sp); }
 }
@@ -168,7 +188,7 @@ const FIELDS = ['title', 'artist', 'album', 'albumArtist', 'duration', 'trackNum
 
 /** Visit the library tiles currently in the DOM (for optional decorations). */
 export function eachTile(fn) {
-  const m = new Map(LIB.view.map((a) => [a.name + '\u0001' + a.albumArtist, a]));
+  const m = new Map(LIB.view.map((a) => [tileKey(a), a]));
   for (const [k, el] of LIB.nodes) { const a = m.get(k); if (a) fn(el, a); }
 }
 
@@ -966,11 +986,129 @@ export function mergeAlbums(rows) {
   return out;
 }
 /** The (possibly merged) album a raw library row belongs to. */
+/** the album row a track belongs to (its edition when the album has several), for the album's actions */
+export function albumOfTrack(t) {
+  const ed = editionOfPath(t.handle) || editionOfPath(t.path);
+  return ed || mergedFor({ name: t.album, albumArtist: t.albumArtist || t.artist, artist: t.artist, firstTrackAbsolutePath: t.path, year: t.year });
+}
+/** the edition a track path belongs to (null when its album has one edition) */
+let edMap = null, edFor = null;
+export function editionOfPath(p) {
+  if (!p || !LIB.albums) return null;
+  if (edFor !== LIB.albums) {
+    edMap = new Map(); edFor = LIB.albums;
+    for (const a of LIB.albums) for (const x of a.edPaths || []) { const k = String(x).toLowerCase(); edMap.set(k, a); edMap.set(k.split('|subsong:')[0], a); }
+  }
+  if (!edMap.size) return null;
+  const k = String(p).toLowerCase();
+  return edMap.get(k) || edMap.get(k.split('|subsong:')[0]) || null;
+}
 export function mergedFor(row) {
-  if (!row || row.parts) return row;
+  if (!row || row.parts || row.edKey) return row;
   return (LIB.index && LIB.index.get(albumKeyOf(row.albumArtist, row.name))) || row;
 }
-const indexFrom = (albums) => { const ix = new Map(); for (const a of albums) { ix.set(albumKeyOf(a.albumArtist, a.name), a); for (const p of a.parts || []) ix.set(albumKeyOf(p.albumArtist, p.name), a); } return ix; };
+const indexFrom = (albums) => { const ix = new Map(); for (const a of albums) { if (a.edKey) { ix.set(a.edKey, a); if (ix.has(albumKeyOf(a.albumArtist, a.name))) continue; } ix.set(albumKeyOf(a.albumArtist, a.name), a); for (const p of a.parts || []) ix.set(albumKeyOf(p.albumArtist, p.name), a); } return ix; };
+
+/* ============================================================ editions
+   One title by one artist can be two releases: Everybody Wants (2014) and its 2016 reissue with other
+   tracks and remixes. foobar2000's album list (and the component's) groups by title + album artist,
+   so both played as one album with every song twice. Here an album is split into editions when its
+   tracks lie in different release folders (CD1/CD2 sub-folders belong together) or, in one folder,
+   carry different years — unless the parts are only the discs of one release (no song in common,
+   each its own disc numbers, one year) or share one MusicBrainz release id.
+   Each edition is an album of its own: its tracks, its cover, its colours; it is named by its edition
+   tag (%edition%, %version%, %releasecomment%), else by what its folder name adds, else by its year. */
+const yearOf4 = (d) => (String(d || '').match(/\d{4}/) || [''])[0];
+const songOf = (t) => String(t || '').toLowerCase().replace(/[([][^)\]]*[)\]]/g, ' ').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+export const tileKey = (a) => a.name + '\u0001' + a.albumArtist + (a.edKey ? '\u0002' + a.edKey : '');
+/** every track of the library, once per load: editions and the artists of each album come from it */
+async function enrichAlbums(rows) {
+  if (!rows.length) return rows;
+  const r = await bgCall('library.query', { query: 'ALL', limit: 1000000, fields: ['album', 'albumArtists', 'artists', 'title', 'absolutePath', 'subsong', 'date', 'discNumber', 'duration'] }, 'normal');
+  const tracks = ok(r) ? r.tracks || [] : [];
+  if (!tracks.length) return rows.map(withNames);
+  const index = indexFrom(rows);
+  const byRow = new Map(), seen = new Set();
+  for (const t of tracks) {
+    for (const v of t.artists || []) seen.add(v);
+    for (const v of t.albumArtists || []) seen.add(v);
+    if (!t.album) continue;
+    // the album's identity is the first value of «album artist» (else of «artist»), as foobar2000 groups it
+    const by = (t.albumArtists && t.albumArtists[0]) || (t.artists && t.artists[0]) || t.albumArtist || t.artist || '';
+    const row = index.get(albumKeyOf(by, t.album)); if (!row) continue;
+    let l = byRow.get(row); if (!l) byRow.set(row, (l = [])); l.push(t);
+  }
+  const out = []; let split = false;
+  for (const row0 of rows) {
+    const list = byRow.get(row0);
+    const row = withNames(row0, list);
+    const eds = settings.splitEditions !== false && list && list.length >= 4 ? editionsOf(row, list) : null;
+    if (!eds) { out.push(row); continue; }
+    // the edition tags, for the names (only these few albums are asked)
+    const tf = await bgCall('titleformat.evalFieldsBatch', { paths: eds.map((e) => e.tracks[0].absolutePath), fields: { ed: '[$if2(%edition%,$if2(%version%,%releasecomment%))]', mb: '[%musicbrainz_albumid%]' } }, 'normal');
+    const tags = ok(tf) ? tf.results || [] : [];
+    const mbs = new Set(tags.map((x) => String((x && x.mb) || '').trim()).filter(Boolean));
+    if (mbs.size === 1 && tags.every((x) => x && x.mb)) { out.push(row); continue; }      // one release, by its id
+    const years = new Set(eds.map((e) => e.year));
+    const base = (s) => normTitle(s).replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+    const drop = new Set([...base(row.name).split(' '), ...base(row.albumArtist || row.artist).split(' ')]);
+    const label = (e, i) => {
+      const tag = String((tags[i] && tags[i].ed) || '').trim();
+      const extra = base(e.folder).split(' ').filter((w) => w && !drop.has(w) && !/^\d{4}$/.test(w)).join(' ');
+      const words = tag || (extra && extra.length <= 40 ? extra.replace(/\b\p{L}/gu, (c) => c.toUpperCase()) : '');
+      return [years.size > 1 ? e.year : '', words].filter(Boolean).join(' · ') || e.folder || e.year || String(i + 1);
+    };
+    const keys = eds.map((e) => albumKeyOf(row.albumArtist || row.artist, row.name) + '\u0002' + e.id);
+    eds.forEach((e, i) => {
+      const t0 = e.tracks.slice().sort((x, y) => (x.discNumber || 1) - (y.discNumber || 1) || String(x.absolutePath).localeCompare(String(y.absolutePath)))[0];
+      out.push({ ...row, edition: label(e, i), edKey: keys[i], edSiblings: keys, edPaths: e.tracks.map(trackHandle),
+        trackCount: e.tracks.length, duration: e.tracks.reduce((n, t) => n + (t.duration || 0), 0), year: e.year || row.year, firstTrackAbsolutePath: t0.absolutePath });
+    });
+    split = true;
+  }
+  if (split) LIB.index = indexFrom(out);
+  LIB.names = [...seen];
+  return out;
+}
+/** the artists an album is listed under: every value of its «album artist» tag (a value most of its
+    tracks carry), each split by the separators in use — «A; B» is listed under A and under B */
+function withNames(row, tracks) {
+  let vals = [];
+  if (tracks && tracks.length) {
+    const n = new Map();
+    for (const t of tracks) for (const v of new Set(t.albumArtists || [])) n.set(v, (n.get(v) || 0) + 1);
+    vals = [...n.entries()].filter(([, c]) => c >= tracks.length / 2).map(([v]) => v);
+  }
+  if (!vals.length || row.parts) vals = [row.albumArtist || row.artist].filter(Boolean);
+  const names = Names.splitAll(vals);
+  if (names.length < 2) return row;
+  // a multi-value tag shows all its names, not only the first one foobar2000 groups by
+  const shown = vals.length > 1 && row.artist === vals[0] ? vals.join(', ') : row.artist;
+  return { ...row, artists: names, artist: shown };
+}
+/** the editions of one album's tracks, or null when it is one release */
+function editionsOf(row, list) {
+  const groups = new Map();
+  for (const t of list) { const d = releaseDir(t.absolutePath); let g = groups.get(d); if (!g) groups.set(d, (g = [])); g.push(t); }
+  let parts = [...groups.entries()].map(([dir, tracks]) => ({ id: 'd:' + dir, dir, tracks }));
+  if (parts.length < 2) {
+    // one folder: the years tell the releases apart
+    const ys = new Map();
+    for (const t of list) { const y = yearOf4(t.date); let g = ys.get(y); if (!g) ys.set(y, (g = [])); g.push(t); }
+    parts = [...ys.entries()].filter(([y]) => y).map(([y, tracks]) => ({ id: 'y:' + y, dir: [...groups.keys()][0], tracks }));
+    if (parts.length < 2 || parts.some((p) => p.tracks.length < 3) || parts.reduce((n, p) => n + p.tracks.length, 0) < list.length * 0.9) return null;
+  }
+  if (parts.some((p) => p.tracks.length < 2)) return null;
+  // only the discs of one release (no song twice, each part its own discs, one year): one album
+  const songs = parts.map((p) => new Set(p.tracks.map((t) => songOf(t.title)).filter(Boolean)));
+  const shared = songs.slice(1).some((s, i) => [...s].some((x) => songs.slice(0, i + 1).some((o) => o.has(x))));
+  const discs = parts.map((p) => new Set(p.tracks.map((t) => t.discNumber || 1)));
+  const disjointDiscs = discs.every((d, i) => discs.every((o, j) => i === j || ![...d].some((x) => o.has(x))));
+  const years = new Set(parts.map((p) => yearOf4(p.tracks.find((t) => yearOf4(t.date))?.date)).filter(Boolean));
+  if (!shared && years.size <= 1 && (disjointDiscs || parts[0].id.startsWith('d:'))) return null;
+  return parts.map((p) => ({ ...p, year: yearOf4((p.tracks.find((t) => yearOf4(t.date)) || {}).date), folder: String(p.dir).split(/[\\/]/).pop() || '' }))
+    .sort((a, b) => (a.year || '9999').localeCompare(b.year || '9999') || a.folder.localeCompare(b.folder));
+}
 
 /** All album rows of the media library (loads once, shared with Artists). */
 export async function getAllAlbums() {
@@ -981,6 +1119,10 @@ export async function getAllAlbums() {
   return LIB.albums;
 }
 
+/** read the library again and rebuild its rows (after a change of how they are formed) */
+export async function rebuildLibrary() { while (LIB.loading) await sleep(80); LIB.sig = ''; LIB.stale = true; LIB.fromSnap = false; await loadLibrary(true); }
+/** every artist name the library holds (album artists, track artists), for the separators preview */
+export const artistNamesSeen = () => [...new Set([...(LIB.names || []), ...LIB.albums.flatMap((a) => [a.albumArtist, a.artist])].filter(Boolean))];
 export async function loadLibrary(force, background = false) {
   if (!LIB.loaded && !background && await fromSnapshot()) { ensureTiles(); return; }
   if (LIB.loading || (LIB.loaded && !force && (!LIB.stale || LIB.fromSnap))) { ensureTiles(); return; }
@@ -999,12 +1141,16 @@ export async function loadLibrary(force, background = false) {
   // If nothing that the grid shows changed, keep the DOM (and the same array, which
   // tells Artists not to rebuild either).
   if (!out.length && LIB.loaded && LIB.albums.length) { LIB.loading = false; return; } // host hiccup: keep what we show
-  const sig = fnv(out.length + '\u0002' + out.map((a) => `${a.name}\u0001${a.albumArtist || a.artist}\u0001${a.year || ''}\u0001${a.trackCount || 0}\u0001${a.firstTrackAbsolutePath}\u0001${a.genre || ''}`).sort().join('\u0003'));
+  // the settings that shape the rows (editions, artist separators) are part of the signature
+  const shape = JSON.stringify(['e1', settings.splitEditions !== false, settings.artistSplit || [';'], settings.artistKeep || []]);
+  const sig = fnv(shape + out.length + '\u0002' + out.map((a) => `${a.name}\u0001${a.albumArtist || a.artist}\u0001${a.year || ''}\u0001${a.trackCount || 0}\u0001${a.firstTrackAbsolutePath}\u0001${a.genre || ''}`).sort().join('\u0003'));
   LIB.fromSnap = false;
   if (LIB.loaded && sig === LIB.sig) { LIB.stale = false; LIB.loading = false; layoutLib(); return; }
   const wasLoaded = LIB.loaded;
   LIB.sig = sig;
-  const merged = mergeAlbums(out);
+  const plain = mergeAlbums(out);
+  // editions and artist names are extras: a failure there must not leave the library unread
+  const merged = await enrichAlbums(plain).catch((e) => { log('library: editions/artists skipped', e && e.message); return plain; });
   LIB.albums = merged; LIB.loaded = true; LIB.stale = false; LIB.loading = false;
   IDB.kvSet(SNAP, { albums: merged, sig, t: Date.now() });
   showCounts();
@@ -1115,14 +1261,14 @@ function renderLib(re) {
   const keep = new Set(), want = [];
   for (let r = r0; r <= r1; r++) for (let c = 0; c < LIB.cols; c++) {
     const i = r * LIB.cols + c; if (i >= LIB.view.length) break;
-    const a = LIB.view[i]; const key = a.name + '\u0001' + a.albumArtist;
+    const a = LIB.view[i]; const key = tileKey(a);
     keep.add(key);
     let el = LIB.nodes.get(key);
     if (!el) {
       const ph = placeholder(a.name, a.albumArtist);
       el = h(`<div class="tile"><div class="cov"><div class="ph" style="background:${ph.bg}">${esc(ph.ini)}</div><img alt=""><button class="play" title="${$t('Слушать')}">${icon('play', 18)}</button></div><div class="tt"></div><div class="ta"></div></div>`);
       el.querySelector('.tt').textContent = a.name;
-      el.querySelector('.ta').textContent = [a.artist, (String(a.year || '').match(/\d{4}/) || [''])[0]].filter(Boolean).join(' · ');
+      el.querySelector('.ta').textContent = [a.artist, a.edition || (String(a.year || '').match(/\d{4}/) || [''])[0]].filter(Boolean).join(' · ');
       el.querySelector('.play').addEventListener('click', (e) => { e.stopPropagation(); playAlbumRow(a); });
       el.addEventListener('click', () => router.go('album', a));
       el.addEventListener('contextmenu', (e) => { e.preventDefault(); albumMenu(a, e.clientX, e.clientY); });
@@ -1150,7 +1296,7 @@ $('libSort').addEventListener('change', async (e) => {
 CF.events.addEventListener('saved', (e) => {
   const p = e.detail.job.path; forgetCover(p);
   for (const a of LIB.albums) if (a.firstTrackAbsolutePath === p) {
-    const el = LIB.nodes.get(a.name + '\u0001' + a.albumArtist);
+    const el = LIB.nodes.get(tileKey(a));
     if (el) { el.querySelector('.fetching')?.remove(); const img = el.querySelector('img'); img.style.display = ''; img.onload = () => { img.classList.add('on'); el.querySelector('.ph')?.remove(); }; img.src = e.detail.url; }
   }
 });
@@ -1161,13 +1307,15 @@ async function albumMenu(a, x, y) {
     { id: 'queue', label: $t('Добавить в очередь') },
     ...(shared.radioFor ? [{ id: 'radio', label: $t('Радио «Похожее на это»') }] : []),
     { type: 'sep' },
-    { id: 'cover', label: $t('Найти обложку…') },
+    { id: 'cover', label: $t('Обложка…') },
+    { id: 'colors', label: $t('Цвета…') },
     { id: 'explorer', label: $t('Показать в проводнике') },
   ], x, y);
+  if (id === 'colors') AC.open(a);
   if (id === 'play') playAlbumRow(a);
   if (id === 'queue') queueAlbum(a);
   if (id === 'radio') shared.radioFor(a.albumArtist || a.artist);
-  if (id === 'cover') router.go('covers', { manual: CF.jobFromAlbum(a) });
+  if (id === 'cover') CoverPick.open(a);
   if (id === 'explorer' && a.firstTrackAbsolutePath) call('shell.showInExplorer', { path: a.firstTrackAbsolutePath });
 }
 
@@ -1175,7 +1323,8 @@ async function albumMenu(a, x, y) {
 export async function albumTracks(a) {
   const parts = a.parts || [{ name: a.name, albumArtist: a.albumArtist }];
   const lists = await Promise.all(parts.map((p) => call('library.getAlbumTracks', { album: p.name, albumArtist: p.albumArtist })));
-  const all = lists.flatMap((r) => (ok(r) ? (r.tracks || r.items || []) : []));
+  let all = lists.flatMap((r) => (ok(r) ? (r.tracks || r.items || []) : []));
+  if (a.edPaths) { const mine = new Set(a.edPaths.map((x) => String(x).toLowerCase())); all = all.filter((t) => mine.has(String(trackHandle(t)).toLowerCase())); }
   if (parts.length > 1) all.sort((x, y) => ((x.discNumber || 1) - (y.discNumber || 1)) || ((x.trackNumber || 0) - (y.trackNumber || 0)) || String(x.absolutePath || '').localeCompare(String(y.absolutePath || '')));
   return all;
 }
@@ -1214,6 +1363,12 @@ export async function playPaths(paths, start = 0, label = '') {
 // ============================================================ album page
 const albumView = $('view-album');
 let albumToken = 0;
+/** «Другие издания: 2014 · 2016 Deluxe» under the title of an album that has several */
+function editionsHtml(a) {
+  const others = (a.edSiblings || []).filter((k) => k !== a.edKey).map((k) => LIB.index && LIB.index.get(k)).filter(Boolean);
+  if (!others.length) return '';
+  return `<div class="al-eds">${$t('Другие издания:')} ${others.map((o) => `<button class="link" data-ed="${esc(o.edKey)}">${esc(o.edition)}</button>`).join('<span class="dot">·</span>')}</div>`;
+}
 export async function openAlbum(a) {
   if (!a) return;
   a = mergedFor(a);
@@ -1224,12 +1379,14 @@ export async function openAlbum(a) {
     <div class="album-cover" style="background:${ph.bg}"><img alt="" style="display:none"></div>
     <div style="min-width:0">
       <div class="kicker">${$t('Альбом')}${year ? ' · ' + year : ''}${a.genre ? ' · ' + esc(a.genre) : ''}</div>
-      <h1>${esc(a.name)}</h1>
-      <div class="album-meta"><b class="link" id="albumArtistLink">${esc(a.artist || a.albumArtist || '')}</b> · <span class="more-link" id="albumMore" role="button" tabindex="0" title="${$t('Подробнее об альбоме (I)')}">${a.trackCount || 0} ${plural(a.trackCount || 0, 'трек', 'трека', 'треков')} · ${fmtDuration(a.duration || 0)}</span>${a.label ? ' · ' + esc(a.label) : ''}</div>
+      <h1>${esc(a.name)}${a.edition ? ` <span class="al-ed">${esc(a.edition)}</span>` : ''}</h1>
+      ${editionsHtml(a)}
+      <div class="album-meta"><b id="albumArtistLink">${(a.artists && a.artists.length > 1 ? a.artists : [a.artist || a.albumArtist || '']).map((n) => `<span class="link" data-ar="${esc(n)}">${esc(n)}</span>`).join(', ')}</b> · <span class="more-link" id="albumMore" role="button" tabindex="0" title="${$t('Подробнее об альбоме (I)')}">${a.trackCount || 0} ${plural(a.trackCount || 0, 'трек', 'трека', 'треков')} · ${fmtDuration(a.duration || 0)}</span>${a.label ? ' · ' + esc(a.label) : ''}</div>
       <div class="album-actions">
         <button class="btn primary" id="alPlay">${icon('play')}${$t('Слушать')}</button>
         <button class="btn" id="alQueue">${icon('queue')}${$t('В очередь')}</button>
         <button class="btn" id="alCover">${icon('image')}${$t('Обложка…')}</button>
+        <button class="btn" id="alColors" title="${$t('Свои цвета альбома')}">${icon('palette')}${$t('Цвета…')}</button>
         <button class="btn" id="alFolder">${icon('folder')}${$t('Папка')}</button>
         <button class="btn toggle-btn" id="alDetails" aria-pressed="false" title="${$t('Подробнее об альбоме (I)')}">${icon('info')}${$t('Подробнее\u0004album')}</button>
       </div>
@@ -1238,10 +1395,12 @@ export async function openAlbum(a) {
   $('albumHero').prepend(backButton('library'));
   $('alPlay').onclick = () => playAlbumRow(a);
   $('alQueue').onclick = () => queueAlbum(a);
-  $('alCover').onclick = () => router.go('covers', { manual: CF.jobFromAlbum(a) });
+  $('alCover').onclick = () => CoverPick.open(a);
+  $('alColors').onclick = () => AC.open(a);
   $('alFolder').onclick = () => call('shell.showInExplorer', { path: a.firstTrackAbsolutePath });
-  $('albumArtistLink').onclick = () => router.go('artist', a.albumArtist || a.artist);
+  $('albumArtistLink').onclick = (e) => { const l = e.target.closest('[data-ar]'); if (l) router.go('artist', a.artists && a.artists.length > 1 ? l.dataset.ar : a.albumArtist || a.artist); };
   $('alDetails').onclick = toggleAlbumDetails;
+  $('albumHero').querySelectorAll('.al-eds [data-ed]').forEach((b) => { b.onclick = () => { const o = LIB.index && LIB.index.get(b.dataset.ed); if (o) router.go('album', o); }; });
   $('albumMore').onclick = toggleAlbumDetails;
   $('albumMore').onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleAlbumDetails(); } };
   ALB.a = a; ALB.tracks = null; ALB.ext = null; ALB.token = token; ALB.loading = null; ALB.plainOnce = false; ALB.cx = null; ALB.cxv = null;
@@ -1252,11 +1411,7 @@ export async function openAlbum(a) {
     if (u && token === albumToken) setImg(albumView.querySelector('.album-cover img'), u);
   }
   // scoped palette: the album page previews this album's colours without re-theming the app
-  paletteForAlbum(a.albumArtist, a.name, a.firstTrackAbsolutePath).then((p) => {
-    if (token !== albumToken) return;
-    albumView.style.setProperty('--a-accent', p.accent.css);
-    albumView.style.setProperty('--a-glow', p.glow.css);
-  });
+  paintAlbumColors(a, token);
   const tracks = await albumTracks(a);
   if (token !== albumToken) return;
   const list = $('albumList');
@@ -1268,6 +1423,19 @@ export async function openAlbum(a) {
   $('albumScroller').scrollTop = 0;
   renderSimilar(a, token);
 }
+
+/** the album page previews this album's colours (yours, or the cover's) without re-theming the app */
+function paintAlbumColors(a, token = albumToken) {
+  paletteForAlbum(a.albumArtist, a.name, a.firstTrackAbsolutePath, a.edKey || '').then((p) => {
+    if (token !== albumToken) return;
+    albumView.style.setProperty('--a-accent', p.accent.css);
+    albumView.style.setProperty('--a-glow', p.glow.css);
+    $('alColors')?.classList.toggle('on', AC.has(a));
+  });
+}
+AC.events.addEventListener('change', (e) => { if (ALB.a && AC.keyOf(ALB.a) === e.detail.key) paintAlbumColors(ALB.a); });
+// a track's edition, for the colours (each edition has its own cover and may have its own colours)
+setEditionKeyResolver((t) => (editionOfPath(t.handle) || editionOfPath(t.path) || editionOfPath(t.absolutePath))?.edKey || '');
 
 /* ---------------------------------------------------------------- album details (album-details.js)
    Off by default; «Details», a click on the track count, or I. The choice is remembered. */
@@ -1321,7 +1489,7 @@ function renderAlbumRows() {
     if (cx.length) { const token = ALB.token; Cx.values(tracks.map((t) => trackHandle(t)), cx).then((v) => { if (token !== ALB.token || ALB.cx !== cx) return; ALB.cxv = v; list.querySelectorAll('.vrow').forEach((r) => Cx.fill(r, v[+r.dataset.i])); }); }
   }
   const cxCells = (i) => (cx.length ? Cx.cellsHtml(cx, ALB.cxv && ALB.cxv[i]) : '');
-  const artistCell = (t) => (t.artist ? `<span class="lnk" data-go="artist">${esc(t.artist)}</span>` : '');
+  const artistCell = (t) => artistLinks(t.artist || '');
   list.style.height = tracks.length * ROW + 24 + 'px';
   let disc = -1;
   const multiDisc = new Set(tracks.map((t) => t.discNumber || 0)).size > 1;

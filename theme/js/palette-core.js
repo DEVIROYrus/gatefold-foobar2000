@@ -215,7 +215,9 @@
 
   /**
    * Build a complete UI palette from clusters.
-   * opts: { mode: 'auto'|'dark'|'light', intensity: 0..1.5 }
+   * opts: { mode: 'auto'|'dark'|'light', intensity: 0..1.5,
+   *         accent?: {L,C,h}, accent2?: {L,C,h}, bg?: {L,C,h} } — colours you chose (an album's own colours,
+   *         «Своя тема»); they are taken as they are, only moved as far as readability needs
    */
   function buildPalette(clusters, opts) {
     opts = opts || {};
@@ -235,6 +237,7 @@
 
     let dark = true;
     if (opts.mode === 'light') dark = false;
+    else if (opts.bg && opts.mode !== 'dark') dark = opts.bg.L < 0.62;
     else if (opts.mode === 'auto') dark = !(avgL > 0.74 && dom.L > 0.78 && dom.share > 0.35);
 
     // ---- accent: vivid, sufficiently present, not near-black/white ----
@@ -247,15 +250,18 @@
     const ranked = clusters.map((c) => ({ c, s: scoreAccent(c) })).filter((x) => x.s > 0).sort((a, b) => b.s - a.s);
     const monochrome = ranked.length === 0;
     let acc = monochrome ? { L: 0.8, C: Math.min(0.03, dom.C + 0.01), h: dom.C > 0.01 ? dom.h : 250 } : { ...ranked[0].c };
+    if (opts.accent) acc = { ...opts.accent };
     const acc2Src = ranked.find((x) => hueDist(x.c.h, acc.h) > 28);
-    let acc2 = acc2Src ? { ...acc2Src.c } : { L: acc.L, C: acc.C * 0.85, h: (acc.h + 38) % 360 };
+    let acc2 = opts.accent2 ? { ...opts.accent2 } : acc2Src && !opts.accent ? { ...acc2Src.c } : { L: acc.L, C: acc.C * 0.85, h: (acc.h + 38) % 360 };
 
     // ---- background: tinted by dominant hue, or by colourful mass when dominant is grey ----
     const bgHue = dom.C > 0.025 ? dom.h : (colorfulness > 0.02 ? massHue : acc.h);
     const bgChromaSrc = Math.max(dom.C, colorfulness * 0.8);
-    const bg = dark
+    let bg = dark
       ? { L: clamp(0.155 + dom.L * 0.06, 0.15, 0.215), C: clamp(bgChromaSrc * 0.42 * intensity, 0.006, 0.052), h: bgHue }
       : { L: clamp(0.955 + (dom.L - 0.9) * 0.08, 0.93, 0.975), C: clamp(bgChromaSrc * 0.22 * intensity, 0.004, 0.03), h: bgHue };
+    // your background: kept within what text can be read on (a dark theme stays dark, a light one light)
+    if (opts.bg) bg = dark ? { L: clamp(opts.bg.L, 0.1, 0.32), C: clamp(opts.bg.C, 0, 0.09), h: opts.bg.h } : { L: clamp(opts.bg.L, 0.88, 0.99), C: clamp(opts.bg.C, 0, 0.05), h: opts.bg.h };
     const bgRgb = lchToSrgb(bg.L, bg.C, bg.h);
 
     const sign = dark ? 1 : -1;
@@ -278,12 +284,15 @@
     // Fill accent (seek bar, play button, selection) may stay vivid; "ink" accent
     // is used for text/icons on the background and must meet 4.5:1.
     // Light mode keeps yellows/limes bright for fills instead of turning them olive.
-    acc = dark
-      ? { L: clamp(acc.L, 0.7, 0.86), C: accC, h: acc.h }
+    // A colour you chose keeps its lightness and chroma unless the background needs more contrast.
+    const asked = opts.accent ? { ...acc } : null;
+    acc = asked ? { L: acc.L, C: clamp(acc.C, 0, 0.26), h: acc.h }
+      : dark ? { L: clamp(acc.L, 0.7, 0.86), C: accC, h: acc.h }
       : { L: clamp(acc.L, 0.5, 0.78), C: accC, h: acc.h };
     acc = enforceContrast(acc, worst, dark ? 3.2 : 2.1, sign);
+    const moved = asked ? Math.hypot(acc.L - asked.L, (acc.C - asked.C) * 2) : 0;
     const accInk = enforceContrast({ L: acc.L, C: acc.C, h: acc.h }, worst, 4.6, sign);
-    acc2 = dark
+    acc2 = opts.accent2 ? { L: acc2.L, C: clamp(acc2.C, 0, 0.26), h: acc2.h } : dark
       ? { L: clamp(acc2.L, 0.66, 0.84), C: clamp(acc2.C * intensity, 0.04, 0.19), h: acc2.h }
       : { L: clamp(acc2.L, 0.44, 0.6), C: clamp(acc2.C * intensity, 0.04, 0.19), h: acc2.h };
     acc2 = enforceContrast(acc2, worst, 2.6, sign);
@@ -311,6 +320,8 @@
       dark,
       monochrome,
       stats: { avgL, colorfulness, clusters: clusters.length },
+      // how far your accent had to move to stay readable (0 = as chosen), and the contrast it ended with
+      adjusted: +moved.toFixed(3), accentContrast: +contrast(accRgb, bgRgb).toFixed(2),
       bg: pack(bg), surface: pack(surface), surface2: pack(surface2),
       text: pack(text), text2: pack(text2), text3: pack(text3),
       accent: pack(acc), accentInk: pack(accInk), accent2: pack(acc2), onAccent: pack(onAccent), glow: pack(glow),

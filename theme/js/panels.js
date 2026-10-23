@@ -1,9 +1,9 @@
 /* Gatefold · panels.js — Settings and Covers screens */
 import * as LYS from './lyrics-sources.js';
-import { esc, fmtTime, plural } from './bridge.js';
+import { esc, fmtTime, plural, call, ok } from './bridge.js';
 import { settings, setSetting, resetSettings, DEFAULTS } from './settings.js';
 import { router, $, h, icon, toast } from './ui.js';
-import { current, FIXED } from './theme.js';
+import { current, FIXED, customPalette } from './theme.js';
 import * as CF from './coverfetch.js';
 import * as AA from './artistart.js';
 import { openFolder as openArtistFolder, loadArtists, artistsState } from './artists.js';
@@ -20,6 +20,9 @@ import { fb2kGroups } from './fb2kprefs.js';
 import * as SoundUI from './ml/sound-ui.js';
 import * as LoudUI from './loudness-ui.js';
 import * as Cx from './columns.js';
+import * as CoverPick from './coverpick.js';
+import * as Own from './ownart.js';
+import * as Names from './artistnames.js';
 const CF_pl = (n) => plural(n, 'файл', 'файла', 'файлов');
 
 // ---------------------------------------------------------------- control builders
@@ -74,6 +77,102 @@ function lsToggle(label, hint, get, set) {
   const inp = el.querySelector('input'); inp.checked = !!get(); inp.onchange = () => set(inp.checked);
   return el;
 }
+/* «A; B» is two artists. «;» and multi-value tags by default; «/ , & feat.» on demand, after a look at
+   every name in the library they would split — with a «never split» mark for AC/DC and its kind. */
+function artistSplitRows() {
+  const draft = { ids: [...(settings.artistSplit || [';'])], keep: [...(settings.artistKeep || [])] };
+  const chips = h(`<div class="row"><div class="lbl"><b>${$t('Разделители')}</b></div><div class="seg multi" role="group"></div></div>`);
+  const note = h(`<div class="row st-note"><div class="lbl"><small>${$t('Значения многозначного тега (несколько полей «album artist») — всегда разные исполнители. Альбом «A; B» появится и у A, и у B.')}</small></div></div>`);
+  const list = h(`<div class="row sep-pv"><div class="lbl"><b class="sep-pv-t"></b><div class="sep-pv-l"></div></div></div>`);
+  const acts = actions();
+  const apply = button($t('Применить'), async () => {
+    setSetting('artistSplit', draft.ids); setSetting('artistKeep', draft.keep);
+    apply.disabled = true;
+    await Lib.rebuildLibrary(); await loadArtists(true);
+    apply.disabled = false; paint();
+    toast($t('Исполнители пересобраны'));
+  }, 'primary');
+  acts.append(apply);
+  const same = () => JSON.stringify([draft.ids.slice().sort(), draft.keep.slice().sort()]) === JSON.stringify([(settings.artistSplit || [';']).slice().sort(), (settings.artistKeep || []).slice().sort()]);
+  const box = chips.querySelector('.seg');
+  for (const sp of Names.SEPARATORS) {
+    const b = h(`<button aria-pressed="false">${esc(sp.label)}</button>`);
+    b.onclick = () => { const i = draft.ids.indexOf(sp.id); if (i >= 0) draft.ids.splice(i, 1); else draft.ids.push(sp.id); paint(); };
+    b.dataset.id = sp.id; box.append(b);
+  }
+  function paint() {
+    box.querySelectorAll('button').forEach((b) => { const on = draft.ids.includes(b.dataset.id); b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+    const pv = Names.preview(Lib.artistNamesSeen(), draft.ids, draft.keep);
+    const split = pv.filter((x) => !draft.keep.some((k) => k.toLowerCase() === x.name.toLowerCase()));
+    list.querySelector('.sep-pv-t').textContent = pv.length ? $t('Будут разделены: {0}', split.length) : $t('В медиатеке нет имён, которые эти разделители разделят');
+    const l = list.querySelector('.sep-pv-l'); l.innerHTML = '';
+    for (const x of pv.slice(0, 80)) {
+      const kept = draft.keep.some((k) => k.toLowerCase() === x.name.toLowerCase());
+      const it = h(`<label class="sep-pv-i${kept ? ' kept' : ''}"><input type="checkbox"${kept ? '' : ' checked'}><span class="nm"></span><span class="arrow">→</span><span class="parts"></span></label>`);
+      it.querySelector('.nm').textContent = x.name;
+      it.querySelector('.parts').textContent = x.parts.join(' · ');
+      it.title = $t('Снимите флажок, чтобы это имя никогда не разделялось');
+      it.querySelector('input').onchange = (e) => { draft.keep = draft.keep.filter((k) => k.toLowerCase() !== x.name.toLowerCase()); if (!e.target.checked) draft.keep.push(x.name); paint(); };
+      l.append(it);
+    }
+    if (pv.length > 80) l.append(h(`<small class="dim">${$t('…и ещё {0}', pv.length - 80)}</small>`));
+    apply.disabled = same();
+  }
+  paint();
+  // the names of every track arrive with the library: paint again once it is read
+  if (!Lib.artistNamesSeen().length) Lib.getAllAlbums().then(paint);
+  return [chips, note, list, acts];
+}
+/* «Своя тема»: your background and accents; the palette builder keeps text readable and moves an accent
+   that would vanish on the background (and says so). Export / import as a small .json file. */
+const seedTheme = () => { const p = current.palette; return p ? { bg: p.bg.hex, accent: p.accent.hex, accent2: p.accent2.hex } : { bg: '#1c1f2b', accent: '#8f9cff', accent2: '#6cc4d8' }; };
+function customThemeRows() {
+  const t = settings.customTheme || seedTheme();
+  const p = customPalette(t);
+  const rows = [];
+  const color = (key, label) => {
+    const v = t[key] || '';
+    const el = h(`<div class="row ct-row"><div class="lbl"><b>${label}</b></div><div class="ct-in"><span class="ct-hex">${esc(v || '—')}</span><label class="ct-sw" style="--c:${esc(v || 'transparent')}"><input type="color" value="${esc(v || p.accent2.hex)}"></label></div></div>`);
+    const inp = el.querySelector('input'); let tm = 0;
+    inp.oninput = () => {
+      el.querySelector('.ct-sw').style.setProperty('--c', inp.value); el.querySelector('.ct-hex').textContent = inp.value;
+      clearTimeout(tm); tm = setTimeout(() => { setSetting('customTheme', { ...(settings.customTheme || t), [key]: inp.value }); }, 80);
+    };
+    inp.onchange = () => setTimeout(renderSettings, 120);
+    return el;
+  };
+  rows.push(color('bg', $t('Фон')), color('accent', $t('Акцент')), color('accent2', $t('Второй акцент')));
+  if (p && p.adjusted > 0.02) rows.push(h(`<div class="row st-note"><div class="lbl"><small>${$t('Акцент чуть изменён, чтобы оставаться заметным на фоне')} · ${$t('Контраст {0}:1', p.accentContrast.toFixed(1))}</small></div></div>`));
+  rows.push(actions(
+    button($t('Экспорт…'), async () => {
+      const r = await call('dialog.saveFile', { defaultName: 'gatefold-theme.json', filters: [{ name: 'Gatefold theme', extensions: ['json'] }] });
+      if (!ok(r) || r.canceled || !r.filePath) return;
+      const w = await call('file.write', { path: r.filePath, content: JSON.stringify({ gatefoldTheme: 1, ...(settings.customTheme || t) }, null, 2) });
+      toast(ok(w) ? $t('Тема сохранена') : esc(w.error || ''));
+    }),
+    button($t('Импорт…'), async () => {
+      const r = await call('dialog.openFile', { filters: [{ name: 'Gatefold theme', extensions: ['json'] }] });
+      const path = ok(r) && !r.canceled && (r.filePath || (r.filePaths || [])[0]);
+      if (!path) return;
+      const f = await call('file.read', { path });
+      const x = parseTheme(ok(f) ? f.content : '');
+      if (!x) { toast($t('Это не файл темы Gatefold')); return; }
+      setSetting('customTheme', x); setSetting('colorSource', 'custom'); setTimeout(renderSettings, 60);
+      toast($t('Тема загружена'));
+    }),
+    button($t('Сбросить'), () => { setSetting('customTheme', seedTheme()); setTimeout(renderSettings, 60); })));
+  return rows;
+}
+/** a theme file (or text): { bg, accent, accent2? } as #rrggbb, or null */
+export function parseTheme(text) {
+  let o; try { o = JSON.parse(text); } catch { return null; }
+  if (!o || typeof o !== 'object') return null;
+  const hex = (v) => (typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v.trim()) ? v.trim().toLowerCase() : '');
+  const t = { bg: hex(o.bg), accent: hex(o.accent), accent2: hex(o.accent2) };
+  if (!t.accent || !t.bg) return null;
+  if (!t.accent2) delete t.accent2;
+  return t;
+}
 const group = (title, ...rows) => { const g = h(`<div class="card st-group">${title ? `<div class="st-gt">${title}</div>` : ''}</div>`); g.append(...rows.filter(Boolean)); return g; };
 const actions = (...btns) => { const r = h('<div class="row st-acts"></div>'); r.append(...btns.filter(Boolean)); return r; };
 const button = (html, fn, cls = '') => { const b = h(`<button class="btn sm ${cls}">${html}</button>`); b.onclick = fn; return b; };
@@ -117,19 +216,21 @@ export function renderSettings() {
   };
 
   // ---- Оформление
-  const albumColors = !FIXED[settings.colorSource];
+  const albumColors = !FIXED[settings.colorSource] && settings.colorSource !== 'custom';
   /* colour source: the playing cover, or one of three calm fixed themes; each card is a tiny live preview */
   const sourcePicker = () => {
     const el = h(`<div class="row st-src"><div class="lbl"><b>${$t('Цвета интерфейса')}</b></div><div class="src-cards" role="radiogroup"></div></div>`);
     const box = el.querySelector('.src-cards');
     const pv = (k) => { const d = FIXED[k]; const c = (v) => `oklch(${v[0] * 100}% ${v[1]} ${v[2]})`; return `--pv-bg:${c(d.bg)};--pv-s:${c(d.surface2)};--pv-t:${c(d.text)};--pv-t3:${c(d.text3)};--pv-a:${c(d.accent)}`; };
-    const items = [['album', $t('Из обложки'), ''], ...Object.keys(FIXED).map((k) => [k, FIXED[k].name, pv(k)])];
+    const cp = customPalette(settings.customTheme || seedTheme());
+    const pvc = cp ? `--pv-bg:${cp.bg.css};--pv-s:${cp.surface2.css};--pv-t:${cp.text.css};--pv-t3:${cp.text3.css};--pv-a:${cp.accent.css}` : '';
+    const items = [['album', $t('Из обложки'), ''], ...Object.keys(FIXED).map((k) => [k, FIXED[k].name, pv(k)]), ['custom', $t('Своя'), pvc]];
     for (const [id, name, style] of items) {
       const on = (settings.colorSource || 'album') === id;
       const b = h(`<button class="src-card${on ? ' on' : ''}${id === 'album' ? ' album' : ''}" role="radio" aria-checked="${on}" style="${style}">
         <span class="pv"><i class="pv-side"></i><i class="pv-l1"></i><i class="pv-l2"></i><i class="pv-btn"></i></span><span class="nm">${name}</span></button>`);
       if (id === 'album' && current.palette && !current.palette.fixed) b.style.cssText = `--pv-bg:${current.palette.bg.css};--pv-s:${current.palette.surface2.css};--pv-t:${current.palette.text.css};--pv-t3:${current.palette.text3.css};--pv-a:${current.palette.accent.css}`;
-      b.onclick = () => { if (on) return; setSetting('colorSource', id); setTimeout(renderSettings, 60); };
+      b.onclick = () => { if (on) return; if (id === 'custom' && !settings.customTheme) setSetting('customTheme', seedTheme()); setSetting('colorSource', id); setTimeout(renderSettings, 60); };
       box.append(b);
     }
     return el;
@@ -143,7 +244,8 @@ export function renderSettings() {
         seg('themeMode', $t('Яркость'), '' /* «Авто» — светлая только для светлых обложек */, [['auto', $t('Авто')], ['dark', $t('Тёмная')], ['light', $t('Светлая')]]),
         range('colorIntensity', $t('Насыщенность'), '' /* Насколько сильно цвет альбома окрашивает интерфейс */, 0.4, 1.5, 0.05, (v) => Math.round(v * 100) + '%'),
         range('transitionMs', $t('Смена цветов'), '' /* Плавность перехода к новому альбому */, 200, 2600, 100, (v) => (v / 1000).toFixed(1) + $t(' с')),
-        sw] : [])),
+        sw] : []),
+      ...(settings.colorSource === 'custom' ? customThemeRows() : [])),
     group($t('Текст'),
       seg('fontMode', $t('Шрифт'), '' /* «Гибрид»: Segoe UI для текста, Inter для заголовков */, [['hybrid', $t('Гибрид')], ['system', 'Segoe UI'], ['inter', 'Inter']]),
       seg('baseSize', $t('Размер текста'), '' /* Целые пиксели — буквы ложатся на сетку экрана без размытия. Строки списков растут вместе с текстом */, [13, 14, 15, 16, 17, 18, 19, 20].map((n) => [n, String(n)])),
@@ -197,6 +299,13 @@ export function renderSettings() {
   );
   const pr = secs[secs.length - 1].el.querySelector('.st-group .row:last-child');
   pr.append(button($t('Сбросить'), () => { Lib.resetPlaylistViews(); toast($t('Вид плейлистов сброшен')); }));
+
+  // ---- Медиатека: editions and artist names (library.js, artistnames.js)
+  section('library', 'grid', $t('Медиатека'), '',
+    group($t('Альбомы'),
+      toggle('splitEditions', $t('Разные издания — отдельными альбомами'), '' /* Альбом 2014 года и его переиздание 2016-го с другими треками — две плитки с подписью издания */, () => Lib.rebuildLibrary().then(() => loadArtists(true)))),
+    group($t('Несколько исполнителей в одном имени'), ...artistSplitRows()),
+  );
 
   // ---- Текст песен
   const provs = settings.lyricsOnline ? LYS.PROVIDERS.map((p) => {
@@ -441,7 +550,7 @@ export function renderCovers(arg) {
     seg('coverMinSize', $t('Минимальный размер'), '' /* Отбраковка мелких картинок */, [[500, '500'], [600, '600'], [800, '800'], [1000, '1000']]),
     seg('coverMaxSize', $t('Максимальный размер'), '' /* Крупнее — уменьшается (JPEG 93%) */, [[0, $t('Оригинал')], [3000, '3000'], [2000, '2000'], [1400, '1400']]),
     seg('coverThreshold', $t('Строгость совпадения'), '' /* Ниже порога — в «Требуют подтверждения» */, [[0.78, $t('Мягко')], [0.82, $t('Норма')], [0.88, $t('Строго')]]),
-    seg('coverTarget', $t('Куда сохранять'), '' /* Для папки с одним альбомом. «+ в теги» также встраивает обложку в первый трек */, [['file', 'cover.jpg'], ['all', $t('cover.jpg + теги')]]),
+    seg('coverTarget', $t('Куда сохранять найденные'), '' /* «Только в Gatefold» — файлы и папки с музыкой не меняются */, [['gatefold', $t('Только в Gatefold')], ['file', 'cover.jpg'], ['embedded', $t('В теги')], ['all', $t('cover.jpg + теги')]]),
     seg('coverSharedDir', $t('Папка с несколькими альбомами'), '' /* cover.jpg там нельзя — он лёг бы на все альбомы папки. Встраивание пишет обложку (до 1400 px) только в треки нужного альбома */, [['embed', $t('Встраивать в треки')], ['skip', $t('Пропускать')]]),
   );
   const src = card($t('Источники'), '');
@@ -455,6 +564,28 @@ export function renderCovers(arg) {
   ctry.querySelector('input').onchange = (e) => setSetting('coverCountries', e.target.value.toUpperCase());
   src.append(srcToggle('itunes', 'iTunes / Apple Music', $t('Лучшее качество, мейджоры и инди')), srcToggle('deezer', 'Deezer', $t('Широкий каталог, СНГ')), srcToggle('musicbrainz', 'MusicBrainz + Cover Art Archive', $t('Редкие издания, винил, бутлеги')), ctry);
   body.append(sc, src);
+
+  // your own covers: kept by Gatefold, and a path rule for libraries that keep covers elsewhere
+  const own = card($t('Ваши обложки'), '');
+  const nOwn = Own.all().length;
+  own.append(h(`<div class="row st-note"><div class="lbl"><small class="dim">${$t('Обложку альбома можно выбрать на его странице: «Обложка…» — с компьютера, перетаскиванием, из буфера, из папки или тегов альбома, из интернета. Выбранную вами Gatefold не заменит.')}${nOwn ? ' ' + $t('Сейчас ваших обложек: {0}.', nOwn) : ''}</small></div></div>`));
+  const rule = h(`<div class="row cx-rule"><div class="lbl"><b>${$t('Правило пути')}</b><small class="snd-status dim cp-rule-pv"></small></div><input class="st-input" spellcheck="false" placeholder="D:\\Covers\\%album artist% - %album%" aria-label="${$t('Правило пути')}"></div>`);
+  const ri = rule.querySelector('input'), pv = rule.querySelector('.cp-rule-pv');
+  ri.value = settings.coverPattern || '';
+  const preview = async () => {
+    const t = (await call('playback.getCurrentTrack')); const tr = ok(t) && t.found !== false ? (t.track || t) : null;
+    if (!ri.value.trim()) { pv.textContent = $t('Например: D:\\Covers\\%album artist% - %album% — расширение подбирается само (.jpg, .png, .webp…)'); return; }
+    const p = tr ? await CoverPick.patternFor(tr.absolutePath || tr.path, ri.value.trim()) : '';
+    pv.textContent = p ? $t('Для играющего альбома: {0}.*', p) : $t('Включите трек, чтобы увидеть путь');
+  };
+  ri.oninput = () => { setSetting('coverPattern', ri.value.trim()); preview(); };
+  preview();
+  const scanRow = h(`<div class="row"><div class="lbl"><small class="snd-status dim cp-scan"></small></div></div>`);
+  const paint = () => { const s = CoverPick.scanState; scanRow.querySelector('.cp-scan').textContent = s.running ? $t('Ищу по правилу: {0} из {1}, найдено {2}', s.done, s.total, s.found) : s.error ? s.error : s.total ? $t('Готово: найдено обложек — {0}', s.found) : ''; };
+  paint();
+  scanRow.append(button($t('Применить к медиатеке'), async () => { if (!settings.coverPattern) { toast($t('Сначала задайте правило пути')); return; } CoverPick.patternScan(await Lib.getAllAlbums(), { onProgress: paint }); paint(); }));
+  own.append(rule, scanRow);
+  body.append(own);
 
   // log
   const lg = card($t('Журнал'), '', true);
@@ -548,7 +679,7 @@ function candEl(job, cd) {
   el.onclick = async () => {
     el.style.opacity = '.5'; el.style.pointerEvents = 'none';
     try {
-      await CF.applyCandidate(job, cd);
+      await CF.applyCandidate(job, cd, { manual: true });
       if (manual && manual.job.key === job.key) manual = null;
       renderCovers();
     } catch (e) { toast($t('Не подошла: ') + esc(e.message)); el.style.opacity = ''; el.style.pointerEvents = ''; }

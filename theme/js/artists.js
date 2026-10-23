@@ -30,12 +30,15 @@ export async function loadArtists(force) {
   AR.src = albums;
   const map = new Map();
   for (const a of albums) {
-    const name = String(a.albumArtist || a.artist || '').trim() || $t('Неизвестный исполнитель');
-    const k = name.toLowerCase();
-    let x = map.get(k);
-    if (!x) map.set(k, x = { name, key: k, albums: [], tracks: 0, duration: 0, y0: 0, y1: 0 });
-    x.albums.push(a); x.tracks += a.trackCount || 0; x.duration += a.duration || 0;
-    const y = yearOf(a); if (y) { x.y0 = x.y0 ? Math.min(x.y0, y) : y; x.y1 = Math.max(x.y1, y); }
+    // «A; B» (or a multi-value tag) is listed under A and under B
+    const names = a.artists && a.artists.length > 1 ? a.artists : [String(a.albumArtist || a.artist || '').trim() || $t('Неизвестный исполнитель')];
+    for (const name of names) {
+      const k = name.toLowerCase();
+      let x = map.get(k);
+      if (!x) map.set(k, x = { name, key: k, albums: [], tracks: 0, duration: 0, y0: 0, y1: 0 });
+      x.albums.push(a); x.tracks += a.trackCount || 0; x.duration += a.duration || 0;
+      const y = yearOf(a); if (y) { x.y0 = x.y0 ? Math.min(x.y0, y) : y; x.y1 = Math.max(x.y1, y); }
+    }
   }
   AR.list = [...map.values()];
   for (const x of AR.list) SORT.sortDiscography(x.albums);
@@ -227,7 +230,7 @@ export async function openArtist(arg) {
     const ph2 = placeholder(a.name, a.albumArtist);
     const el = h(`<div class="tile static"><div class="cov"><div class="ph" style="background:${ph2.bg}">${esc(ph2.ini)}</div><img alt=""><button class="play" title="${$t('Слушать')}">${icon('play', 18)}</button></div><div class="tt"></div><div class="ta"></div></div>`);
     el.querySelector('.tt').textContent = a.name;
-    el.querySelector('.ta').textContent = [yearOf(a) || '', `${a.trackCount || 0} ${plural(a.trackCount || 0, 'трек', 'трека', 'треков')}`].filter(Boolean).join(' · ');
+    el.querySelector('.ta').textContent = [a.edition || yearOf(a) || '', `${a.trackCount || 0} ${plural(a.trackCount || 0, 'трек', 'трека', 'треков')}`].filter(Boolean).join(' · ');
     el.onclick = () => router.go('album', a);
     el.querySelector('.play').onclick = (e) => { e.stopPropagation(); Lib.playAlbumRow(a); };
     box.appendChild(el);
