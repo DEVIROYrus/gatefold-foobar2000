@@ -4,6 +4,25 @@ All notable changes are listed here. Versions follow [Semantic Versioning](https
 
 ## [Unreleased]
 
+## [1.4.0] — your covers, editions, several artists, your colours, sound
+
+**Covers your way.** «Cover…» on an album page (and in an album's menu, and on Now Playing) opens one sheet for the picture and where it goes.
+
+- **The picture:** a file from your computer, one dropped on the sheet or pasted (Ctrl+V), the images in the album's folder and in its tags (front, back, disc), or the web (iTunes, Deezer, MusicBrainz) — each with its real size.
+- **Where it goes, asked every time** (your last answer comes first): **only in Gatefold** — kept in Gatefold's own database, music files and folders untouched; **into the tracks' tags**; or **a file next to the tracks** under the name you give it.
+- **A cover you chose is yours:** Gatefold never searches for it or replaces it again, the quality check leaves it alone, and «Remove my cover» forgets it without touching any file.
+- **Covers kept elsewhere by a rule:** Settings → Covers → «Your covers» takes a path in title formatting (`D:\Covers\%album artist% - %album%`, the extension is found by itself), previews it on the playing album and applies it to the whole library.
+- **Covers found online** for an album without one go where Settings → Covers says — now also «only in Gatefold»; an album that has a cover gets another one only when you pick it.
+- **Not every cover is square:** an LP sleeve or a CD booklet is shown whole — on square tiles over a blurred copy of itself, on the album page and Now Playing in its own proportions — and no longer counts as a defect.
+
+**Editions are albums of their own.** foobar2000 groups an album by title and album artist, so a 2014 album and its 2016 reissue with remixes played as one album with every song twice. Now an album whose tracks lie in different release folders (CD1/CD2 sub-folders still belong together), or carry different years in one folder, is split into editions — unless the parts are only the discs of one release or share a MusicBrainz release id. Each edition has its own tile, tracks, cover and colours, is named by its edition tag (`%edition%`, `%version%`, `%releasecomment%`), what its folder name adds, or its year («2016 · Deluxe»), and its page links the «Other editions». A track opens the edition it is on. Settings → Library can turn it off.
+
+**Several artists in one name.** «Alpha; Beta» — or a multi-value «album artist» tag — is two artists: the album is listed under each in Artists, its page links each name, and playlist rows and the player bar link every artist to its own page. «;» and multi-value tags are split by default; «/», «,», «&» and «feat.» can be added in Settings → Library, with a preview of every name in your library they would split and a tick to keep a name whole (AC/DC, Simon & Garfunkel).
+
+**Your colours.** «Colours…» on an album page: pick the accent from the cover's own colours or any colour, and the background tint if you like; the album shows them on its page and the whole interface takes them while it plays. **«Custom»** joins the fixed themes in Settings → Look: your background and two accents, with export and import as a small file. Whatever you pick, text keeps its contrast, and an accent that would vanish on the background is moved just enough to be seen — the sheet says when.
+
+**Sound.** A new button in the player bar opens your DSP presets (Headphones, Speakers, Night…) for one-click switching, shows the chain playing now (lit while one is active), and opens foobar2000's own equalizer and DSP Manager. An equalizer drawn in the theme needs foo_ui_webview2 to expose DSP settings; the request is written up in `docs/upstream/dsp-config-request.md`.
+
 **The radio keeps to the seed's music.** Real radios still let in about one stranger in five (anime and K-pop songs, prog bands, the same famous names on every radio), and played the seed's artist and single albums too often. Now:
 
 - **Your playlists count only a little**, and only when an artist sits next to the seed in two playlists or more; playlists of favourites from everywhere (over 120 artists) do not count at all. One mixed playlist used to make everything in it «related».
