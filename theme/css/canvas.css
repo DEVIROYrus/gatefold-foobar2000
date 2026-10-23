@@ -190,3 +190,7 @@ body.canvas-open #toasts { z-index: 950; }
 .cv[data-layout='visual'] .cv-seg button.on { color: #fff; background: rgb(255 255 255 / .18); }
 .cv[data-layout='visual'] .cv-hint { background: rgb(0 0 0 / .5); color: #fff; backdrop-filter: blur(12px); }
 @media (max-aspect-ratio: 5/4) { .cv[data-layout='visual'] .cv-stage { grid-template-rows: none; padding-top: 12px; justify-items: start; } .cv[data-layout='visual'] .cv-side { text-align: left; } }
+.cv-visname { display: none; }
+.cv[data-layout='visual'] .cv-visname { display: block; margin-top: 8px; font-size: clamp(11px, .75vw, 13px); font-weight: 600; letter-spacing: .02em; color: rgb(255 255 255 / .5);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40vw; }
+.cv-md { pointer-events: none; }

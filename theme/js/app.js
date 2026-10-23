@@ -28,7 +28,7 @@ import * as CF from './coverfetch.js';
 import * as Lib from './library.js';
 import * as SoundPanel from './soundpanel.js';
 import * as Folders from './folders.js';
-import * as MD from './milkdrop.js';
+import * as VIS from './visual.js';
 import * as LY from './lyrics.js';
 import * as Canvas from './canvas.js';
 import * as Likes from './likes.js';
@@ -284,7 +284,6 @@ async function setTrack(t, { fromEvent = false } = {}) {
   app.track = t;
   const prevH = Lib.shared.nowHandle;
   Lib.shared.nowHandle = t ? t.handle || t.path || '' : ''; Folders.nowPlaying();
-  if (npMd && npMd.on && t && prevH && prevH !== Lib.shared.nowHandle && settings.mdChange !== 'time' && settings.mdChange !== 'manual') npMd.next('track');
   if (!t) {
     $('npTitle').textContent = 'Gatefold'; $('npArtist').textContent = ''; $('npAlbum').textContent = ''; $('npYear').textContent = '';
     $('pbTitle').textContent = '—'; $('pbArtist').textContent = ''; $('npBadges').innerHTML = ''; $('npActions').innerHTML = '';
@@ -812,22 +811,24 @@ Canvas.setHost({
   onSeek: (p) => Pos.seeked(p),
   onFullscreen: (fs) => { app.fullscreen = fs; body.classList.toggle('fullscreen', fs); },
 });
-/* ---------------------------------------------------------------- MilkDrop behind Now Playing (milkdrop.js) */
+/* ---------------------------------------------------------------- the visualiser behind Now Playing (visual.js) */
 let npMd = null;
 function syncNowMilk() {
-  const want = !!settings.milkdrop && !!settings.mdNow && MD.supported() && router.current === 'now' && !Canvas.opened() && !document.hidden;
-  if (want && !npMd) npMd = new MD.Stage($('npMd'), { kind: 'backdrop', playing: () => Lib.shared.isPlaying, track: () => app.track });
+  const eng = VIS.engine();
+  const want = eng !== 'off' && !!settings.visNow && router.current === 'now' && !Canvas.opened() && !document.hidden;
+  if (npMd && npMd.engine !== eng) { npMd.destroy(); npMd = null; }
+  if (want && !npMd) npMd = VIS.createStage($('npMd'), { kind: 'backdrop', playing: () => Lib.shared.isPlaying, track: () => app.track, cover: () => (app.art && app.art.available ? app.art.url : '') });
   if (npMd) { if (want) npMd.start(); else npMd.stop(); }
-  $('npMd').classList.toggle('tinted', !!settings.mdTint);
+  $('npMd').classList.toggle('tinted', eng === 'milkdrop' && !!settings.mdTint);
   body.classList.toggle('with-np-md', want);
 }
 onRoute(syncNowMilk);
-onSettings((k) => { if (k === '*' || k === 'milkdrop' || /^md/.test(k)) syncNowMilk(); });
+onSettings((k) => { if (k === '*' || /^(visual|visNow|md|gf)/.test(k)) syncNowMilk(); });
 document.addEventListener('visibilitychange', syncNowMilk);
 Canvas.canvasEvents.addEventListener('open', syncNowMilk);
 Canvas.canvasEvents.addEventListener('close', syncNowMilk);
 /* the character of a track for the choice of presets: 0 calm … 1 vivid (from the sound analysis) */
-MD.setMoodProvider((t) => {
+VIS.setMoodProvider((t) => {
   const r = Sound.get(t); if (!r) return null;
   const up = (Sound.mood(r, 'aggressive') * 1.2 + Sound.mood(r, 'party') + Sound.mood(r, 'danceable') + Sound.mood(r, 'electronic') * 0.5) / 3.7;
   const down = (Sound.mood(r, 'relaxed') + Sound.mood(r, 'sad') * 0.8 + Sound.mood(r, 'acoustic') * 0.7) / 2.5;

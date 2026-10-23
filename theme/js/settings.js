@@ -66,17 +66,18 @@ export const DEFAULTS = {
   lyricsSave: 'none',       // what to do with downloaded lyrics: 'none' (Gatefold cache only) | 'file' (.lrc beside the track) | 'embedded'
   lyricsSize: 'm',          // 's' | 'm' | 'l'
   // canvas (fullscreen)
-  canvasLayout: 'cover',    // 'cover' | 'lyrics' | 'minimal'
+  canvasLayout: 'cover',    // 'cover' | 'lyrics' | 'minimal' | 'visual'
   canvasMotion: true,       // slow Ken Burns drift of the cover
   canvasLyrics: true,
   canvasClock: false,
   canvasIdleMin: 5,         // enter Canvas after N idle minutes while playing and focused (0 = off)
-  milkdrop: false,          // MilkDrop visuals (milkdrop.js): Canvas → «Visual», optionally behind Now Playing
+  visual: 'gatefold',       // the visualiser of Canvas → «Visual» (visual.js): 'gatefold' (aura.js) | 'milkdrop' | 'off'
+  visNow: false,            //   also behind Now Playing
+  gfScene: 'auto',          // Gatefold's: 'auto' (by the track) | 'liquid' | 'nebula' | 'halo'
   mdPresets: 'calm',        //   'calm' (calm + flowing presets) | 'all' (vivid ones too)
   mdChange: 'track',        //   a new preset: 'track' | 'time' (every 30 s) | 'manual'
   mdMood: true,             //   presets by the track's character (sound analysis)
   mdTint: false,            //   in the colours of the cover
-  mdNow: false,             //   also behind Now Playing
   mdLock: '',               //   a preset kept (B in Canvas)
   soundAI: false,          // sound analysis with a neural network (ml/sound.js): models downloaded on request
   soundPaused: false,
