@@ -31,6 +31,8 @@ import * as Own from './ownart.js';
 import * as CoverPick from './coverpick.js';
 import * as Names from './artistnames.js';
 import * as Folders from './folders.js';
+import * as TS from './trackstore.js';
+import * as Tracks from './tracks.js';
 const ownRg = () => performance.now() < Loud.writingUntil;   // Gatefold's own ReplayGain tag writes change nothing shown
 const dpr = () => Math.min(2, window.devicePixelRatio || 1);
 /** A track as the host's context-menu/handle APIs want it: path, or path|subsong:N. */
@@ -128,7 +130,7 @@ Own.events.addEventListener('change', () => {
 });
 export function forgetCover(path) { for (const k of coverCache.keys()) if (k.startsWith(path + '@')) coverCache.delete(k); TC.forget(path); }
 
-function setImg(img, url, onFail) {
+export function setImg(img, url, onFail) {
   if (!url) { img.style.display = 'none'; if (onFail) onFail(); return; }
   img.style.display = '';
   if (img.getAttribute('src') === url) return;
@@ -647,7 +649,7 @@ function updateSelBar() {
   selBar.hidden = n < 2;
   if (n >= 2) selBar.querySelector('.n').textContent = $t('Выбрано: {0}', n);
 }
-async function playlistTargets() {
+export async function playlistTargets() {
   const all = await call('playlist.getAll');
   const list = ((ok(all) && all.playlists) || []).filter((p) => p.guid !== PL.guid && !p.isAutoplaylist);
   return [{ id: 'new', label: $t('Новый плейлист…') }, ...(list.length ? [{ type: 'sep' }] : []), ...list.map((p) => ({ id: 'pl:' + p.guid + '\u0001' + p.name, label: p.name }))];
@@ -1027,8 +1029,7 @@ export const tileKey = (a) => a.name + '\u0001' + a.albumArtist + (a.edKey ? '\u
 /** every track of the library, once per load: editions and the artists of each album come from it */
 async function enrichAlbums(rows) {
   if (!rows.length) return rows;
-  const r = await bgCall('library.query', { query: 'ALL', limit: 1000000, fields: ['album', 'albumArtists', 'artists', 'title', 'absolutePath', 'subsong', 'date', 'discNumber', 'duration'] }, 'normal');
-  const tracks = ok(r) ? r.tracks || [] : [];
+  const tracks = await TS.all();                     // shared with Folders and Tracks (trackstore.js)
   if (!tracks.length) return rows.map(withNames);
   const index = indexFrom(rows);
   const byRow = new Map(), seen = new Set();
@@ -1255,7 +1256,7 @@ function layoutLib() {
 let libRaf = 0, relayout = false;
 function scheduleLib(re) { relayout = relayout || re; if (!libRaf) libRaf = requestAnimationFrame(() => { libRaf = 0; renderLib(relayout); relayout = false; }); }
 libScroller.addEventListener('scroll', () => scheduleLib(false), { passive: true });
-new ResizeObserver(() => { if (router.current === 'library' && !Folders.active()) layoutLib(); }).observe(libScroller);
+new ResizeObserver(() => { if (router.current === 'library' && !Folders.active() && !Tracks.active()) layoutLib(); }).observe(libScroller);
 
 function renderLib(re) {
   if (router.current !== 'library' || !LIB.view.length) return;
@@ -1289,7 +1290,7 @@ function renderLib(re) {
   }
 }
 
-$('libFilter').addEventListener('input', debounce(() => { if (Folders.active()) Folders.filter($('libFilter').value); else applyFilter(); }, 160));
+$('libFilter').addEventListener('input', debounce(() => { if (Folders.active()) Folders.filter($('libFilter').value); else if (Tracks.active()) Tracks.filter($('libFilter').value); else applyFilter(); }, 120));
 $('libSort').addEventListener('change', async (e) => {
   setSetting('librarySort', e.target.value);
   if (!LIB.loaded) return loadLibrary(true);
@@ -1345,7 +1346,8 @@ async function queueAlbum(a) {
 }
 
 /** Plays a list of paths according to settings.albumTarget. */
-export async function playPaths(paths, start = 0, label = '') {
+/** the playlist an album or a list is played in: the active one, or Gatefold's own (Settings → Behaviour) */
+export async function playTarget() {
   let guid = '';
   if (settings.albumTarget === 'active') {
     const a = await call('playlist.getActive'); guid = ok(a) && a.found !== false ? a.guid : '';
@@ -1356,6 +1358,11 @@ export async function playPaths(paths, start = 0, label = '') {
     if (ex) guid = ex.guid;
     else { const c = await call('playlist.create', { name: 'Gatefold' }); guid = ok(c) ? c.guid : ''; }
   }
+  return guid;
+}
+export async function playPaths(paths, start = 0, label = '') {
+  shared.playGen = (shared.playGen || 0) + 1;            // a list still being filled in the background (tracks.js) stops
+  const guid = await playTarget();
   if (!guid) { toast($t('Не удалось подготовить плейлист')); return; }
   await call('playlist.clear', { playlistGuid: guid });
   const add = await call('library.addToPlaylist', { paths, playlistGuid: guid });
@@ -1740,13 +1747,14 @@ router.on('playlist', (guid) => { openPlaylist(guid || PL.guid || '').then(() =>
 router.on('library', (arg) => {
   // Library has two modes: albums (the grid) and folders (folders.js); a folder is a screen of its own
   if (arg && arg.folder !== undefined) { Folders.show(arg.folder, arg.focus || ''); return; }
+  if ((arg && arg.tracks) || (!(arg && arg.albums) && settings.libMode === 'tracks')) { Tracks.show(arg && arg.focus); return; }
   if (!(arg && arg.albums) && settings.libMode === 'folders') { Folders.show(); return; }
   Folders.setMode(false);
   loadLibrary(false);
   if (LIB.loaded) requestAnimationFrame(layoutLib);
 });
 document.querySelectorAll('#view-library .lib-mode button').forEach((b) => {
-  b.onclick = () => { if (b.classList.contains('on')) return; router.go('library', b.dataset.m === 'folders' ? { folder: settings.libFolder || '' } : { albums: true }); };
+  b.onclick = () => { if (b.classList.contains('on')) return; router.go('library', b.dataset.m === 'folders' ? { folder: settings.libFolder || '' } : b.dataset.m === 'tracks' ? { tracks: true } : { albums: true }); };
 });
 libEvents.addEventListener('changed', () => Folders.invalidate());
 router.on('album', (a) => openAlbum(a));

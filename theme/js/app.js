@@ -28,6 +28,7 @@ import * as CF from './coverfetch.js';
 import * as Lib from './library.js';
 import * as SoundPanel from './soundpanel.js';
 import * as Folders from './folders.js';
+import * as Tracks from './tracks.js';
 import * as LY from './lyrics.js';
 import * as Canvas from './canvas.js';
 import * as Likes from './likes.js';
@@ -281,7 +282,7 @@ function updateSpectrum() {
 async function setTrack(t, { fromEvent = false } = {}) {
   const prevKey = app.track ? albumKeyOf(app.track.albumArtist, app.track.album) : '';
   app.track = t;
-  Lib.shared.nowHandle = t ? t.handle || t.path || '' : ''; Folders.nowPlaying();
+  Lib.shared.nowHandle = t ? t.handle || t.path || '' : ''; Folders.nowPlaying(); Tracks.nowPlaying();
   if (!t) {
     $('npTitle').textContent = 'Gatefold'; $('npArtist').textContent = ''; $('npAlbum').textContent = ''; $('npYear').textContent = '';
     $('pbTitle').textContent = '—'; $('pbArtist').textContent = ''; $('npBadges').innerHTML = ''; $('npActions').innerHTML = '';
@@ -810,13 +811,23 @@ Canvas.setHost({
   onFullscreen: (fs) => { app.fullscreen = fs; body.classList.toggle('fullscreen', fs); },
 });
 Canvas.canvasEvents.addEventListener('error', (e) => toast($t('Не удалось открыть окно: ') + esc(e.detail)));
-let lastInput = Date.now();
+/* Canvas by itself, like a screensaver: only after N minutes in which foobar2000's window was the active
+   one and nobody touched it. Time spent in another program does not count — the page alone cannot tell
+   (in WebView2's visual hosting it keeps its focus when you switch away), so the host says when the
+   window is activated or left, and is asked once more before the Canvas opens. */
+let lastInput = Date.now(), winActive = true;
 ['pointermove', 'pointerdown', 'keydown', 'wheel'].forEach((ev) => addEventListener(ev, () => { lastInput = Date.now(); }, { passive: true, capture: true }));
-setInterval(() => {
+on('window:activated', (d) => { winActive = !!(d && d.active); lastInput = Date.now(); });
+addEventListener('focus', () => { lastInput = Date.now(); });
+setInterval(async () => {
   const m = +settings.canvasIdleMin;
   if (!m || Canvas.opened() || app.state !== 'playing' || document.visibilityState !== 'visible' || !document.hasFocus()) return;
+  if (!winActive) { lastInput = Date.now(); return; }
   if (document.querySelector('.menu, .modal')) return; // never over an open menu/dialog
-  if (Date.now() - lastInput >= m * 60000) Canvas.open({ auto: true, fullscreen: false });
+  if (Date.now() - lastInput < m * 60000) return;
+  const st = await call('window.getState');
+  if (ok(st) && (st.focused ?? st.isFocused) === false) { winActive = false; lastInput = Date.now(); return; }
+  if (!Canvas.opened() && Date.now() - lastInput >= m * 60000) Canvas.open({ auto: true, fullscreen: false });
 }, 15000);
 
 Lib.shared.onPlayAlbum = () => { if (router.current !== 'now') toast($t('Воспроизведение начато')); };

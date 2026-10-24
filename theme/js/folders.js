@@ -18,11 +18,10 @@
 import { call, ok, esc, fmtTime, fmtDuration, plural, log } from './bridge.js';
 import { router, $, h, icon, toast, placeholder, popupMenu } from './ui.js';
 import { settings, setSetting } from './settings.js';
-import { bgCall } from './sched.js';
 import { $t } from './i18n.js';
 import * as Lib from './library.js';
+import * as TS from './trackstore.js';
 
-const FIELDS = ['handle', 'title', 'artist', 'album', 'albumArtist', 'absolutePath', 'subsong', 'trackNumber', 'discNumber', 'duration', 'codec', 'sampleRate', 'date'];
 const AUDIO = /\.(flac|mp3|m4a|m4b|mp4|aac|ogg|oga|opus|wav|wv|ape|aiff?|dsf|dff|mpc|tak|tta|wma|mka|alac|caf|spx|ofr|ofs)$/i;
 const SEP = /[\\/]+/;
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
@@ -56,8 +55,7 @@ async function load() {
   if (F.tree && !F.stale) return F.tree;
   if (F.loading) return F.loading;
   F.loading = (async () => {
-    const r = await bgCall('library.query', { query: 'ALL', limit: 1000000, fields: FIELDS }, 'normal');
-    const tracks = ok(r) ? r.tracks || [] : [];
+    const tracks = await TS.all();                   // shared with the album grid and Tracks (trackstore.js)
     const root = mk('', '', null);
     tracks.forEach((t, i) => {
       const parts = segs(t.absolutePath); if (!parts) return;
@@ -146,11 +144,14 @@ export function reveal(path) {
   const parts = segs(path); if (!parts) return;
   router.go('library', { folder: parts.reduce(join, '') || '', focus: path });
 }
-export function setMode(on) {
-  view.classList.toggle('folders', on);
-  view.querySelectorAll('.lib-mode button').forEach((b) => { const m = b.dataset.m === (on ? 'folders' : 'albums'); b.classList.toggle('on', m); b.setAttribute('aria-pressed', String(m)); });
-  view.querySelector('.view-head h2').textContent = on ? $t('Папки') : $t('Альбомы');
-  if (settings.libMode !== (on ? 'folders' : 'albums')) setSetting('libMode', on ? 'folders' : 'albums');
+export function setMode(on) { setLibMode(on ? 'folders' : 'albums'); }
+/** Library's three modes: 'albums' (the grid), 'tracks' (tracks.js), 'folders' (here) */
+export function setLibMode(m) {
+  view.classList.toggle('folders', m === 'folders');
+  view.classList.toggle('tracks', m === 'tracks');
+  view.querySelectorAll('.lib-mode button').forEach((b) => { const on = b.dataset.m === m; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+  view.querySelector('.view-head h2').textContent = m === 'folders' ? $t('Папки') : m === 'tracks' ? $t('Треки') : $t('Альбомы');
+  if (settings.libMode !== m) setSetting('libMode', m);
 }
 export function invalidate() { F.stale = true; if (active()) show(F.node ? F.node.path : '', ''); }
 
