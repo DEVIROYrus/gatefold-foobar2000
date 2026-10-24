@@ -73,7 +73,9 @@ export const DEFAULTS = {
   canvasIdleMin: 5,         // enter Canvas after N idle minutes while playing and focused (0 = off)
   visual: 'gatefold',       // the visualiser of Canvas → «Visual» (visual.js): 'gatefold' (aura.js) | 'milkdrop' | 'off'
   visNow: false,            //   also behind Now Playing
-  gfScene: 'auto',          // Gatefold's: 'auto' (by the track) | 'liquid' | 'nebula' | 'halo'
+  gfScene: 'auto',          // Gatefold's camera shot: 'auto' (the director) | 'face' | 'land' | 'orbit' | 'macro'
+  gfEnergy: 'live',         //   how much the music moves the picture: 'calm' | 'live' | 'wild'
+  gfWords: true,            //   the lines of synced lyrics written with the cover's particles
   mdPresets: 'calm',        //   'calm' (calm + flowing presets) | 'all' (vivid ones too)
   mdChange: 'track',        //   a new preset: 'track' | 'time' (every 30 s) | 'manual'
   mdMood: true,             //   presets by the track's character (sound analysis)

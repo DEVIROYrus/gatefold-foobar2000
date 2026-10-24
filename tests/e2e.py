@@ -1427,11 +1427,14 @@ async def test_visuals(browser, port):
     segs = await pg.evaluate("[...document.querySelectorAll('#st-canvas .row')].filter(r => r.querySelector('.seg')).map(r => [r.querySelector('b').textContent, [...r.querySelectorAll('.seg button')].map(b => b.textContent)])")
     S = dict((a, b) for a, b in segs)
     check(S.get('Visualiser') == ['Gatefold', 'MilkDrop', 'None'] and 'Visual' in S.get('Layout', []), f'Settings → Canvas: the visualiser (Gatefold by default) and the «Visual» layout {segs}')
-    check(S.get('Scene') == ['Auto', 'Liquid cover', 'Nebula', 'Halo'], f'Gatefold\'s scenes {S.get("Scene")}')
+    check(S.get('Camera') == ['Director', 'Face', 'Landscape', 'Orbit', 'Macro'] and S.get('Energy') == ['Calm', 'Lively', 'Explosive'], f'Gatefold\'s camera shots and energy {S.get("Camera")} {S.get("Energy")}')
     await pg.evaluate("import('./js/settings.js').then(m => m.setSetting('canvasLayout', 'visual'))")
     await pg.keyboard.press('f'); await pg.wait_for_timeout(2500)
     v = await pg.evaluate(V)
-    check(v and v['on'] and v['engine'] == 'gatefold' and v['preset'] in ('liquid', 'nebula', 'halo'), f'Canvas «Visual» runs Gatefold\'s visualiser {v}')
+    check(v and v['on'] and v['engine'] == 'gatefold' and v['preset'] in ('face', 'land', 'orbit', 'macro'), f'Canvas «Visual» runs Gatefold\'s visualiser {v}')
+    # the mouse: WebGL draws off screen, the page shows plain pictures (no live WebGL surface to take the input)
+    check(await pg.evaluate("(() => { const c = document.querySelector('.cv-md canvas'); return !!c && c.getContext('webgl2') === null && c.getContext('bitmaprenderer') !== null; })()"), 'the visualiser is shown as pictures, not a WebGL canvas')
+    check(await pg.evaluate("import('./js/aura.js').then(m => m.Stage.last.writeLine('Мы смотрим на огни'))"), 'a line of lyrics can be written with particles')
     check(any(c[0] == 'audio.subscribeStream' and c[1] == 'gatefold-visual' for c in await pg.evaluate("window.__calls")), 'it listens to what foobar2000 plays')
     check(bool(await pg.evaluate("document.querySelector('.cv-visname').textContent")), 'the card names the scene')
     from PIL import Image
@@ -1471,6 +1474,12 @@ async def test_visuals(browser, port):
     await pg.keyboard.press('v'); await pg.wait_for_timeout(3000)
     v = await pg.evaluate(V)
     check(v and v['on'] and v['engine'] == 'milkdrop' and v['preset'], f'MilkDrop in its place {v}')
+    for _ in range(20):                                  # Butterchurn through the off-screen canvas: a picture arrives
+        png = await pg.screenshot(clip={'x': 300, 'y': 100, 'width': 1000, 'height': 500})
+        ext = Image.open(io.BytesIO(png)).convert('L').getextrema()
+        if ext[1] - ext[0] > 30: break
+        await pg.wait_for_timeout(500)
+    check(ext[1] - ext[0] > 30, f'MilkDrop draws {ext}')
     p0 = v['preset']
     await pg.evaluate("window.__setAlbum(6)"); await pg.wait_for_timeout(1200)
     p1 = (await pg.evaluate(V))['preset']
@@ -1510,7 +1519,7 @@ TESTS = [*((f'language_{l}', (lambda l: lambda b, p: test_language(b, p, l))(l))
 DURATIONS = {'language_ru': 13, 'language_en': 18, 'language_de': 18, 'language_es': 18, 'language_zh': 18, 'playlists': 10, 'youtube': 14,
              'youtube_captions': 29, 'columns': 23, 'settings': 6, 'updates': 20, 'tooltips': 9, 'canvas_volume': 4, 'fb2k_prefs': 9, 'welcome': 24,
              'playlist_editing': 14, 'windows': 13, 'vu': 32, 'smart_color_radio': 27, 'lyrics_sync': 11, 'album_details': 20, 'level': 7,
-             'sound_offer': 14, 'similar_albums': 3, 'editions_artists': 20, 'colors': 16, 'sound_panel': 8, 'cover_pick': 12, 'folders': 18, 'visuals': 45, 'sound_ai': 58, 'layout': 60, 'stability': 70}
+             'sound_offer': 14, 'similar_albums': 3, 'editions_artists': 20, 'colors': 16, 'sound_panel': 8, 'cover_pick': 12, 'folders': 18, 'visuals': 66, 'sound_ai': 58, 'layout': 60, 'stability': 70}
 DEFAULT_S = 20
 
 def shards(n):

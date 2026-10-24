@@ -22,8 +22,8 @@ export function createStage(host, opts) {
   s.engine = e;
   return s;
 }
-const SCENE = () => ({ liquid: $t('Жидкая обложка'), nebula: $t('Туманность'), halo: $t('Ореол') });
-/** what shows, for people: «Liquid cover» or «dedicated to the sherwin maxawow — Flexi, martin + geiss» */
+const SCENE = () => ({ face: $t('Фас'), land: $t('Ландшафт'), orbit: $t('Облёт'), macro: $t('Макро') });
+/** what shows, for people: «Orbit» or «dedicated to the sherwin maxawow — Flexi, martin + geiss» */
 export function nameOf(eng, id) {
   if (!id) return '';
   if (eng === 'gatefold') return SCENE()[id] || id;
