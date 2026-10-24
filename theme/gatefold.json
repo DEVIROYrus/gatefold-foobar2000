@@ -1,5 +1,5 @@
 {
   "name": "Gatefold",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "requires": { "foo_ui_webview2": "2.0.0" }
 }

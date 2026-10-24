@@ -4,6 +4,8 @@ All notable changes are listed here. Versions follow [Semantic Versioning](https
 
 ## [Unreleased]
 
+## [1.4.2] — every song in one list
+
 - **Library → Tracks:** every song in one list — sort by artist, title, album, year, genre, length or play statistics, filter as you type, a letter index, Shift/Ctrl selection; a double click plays the list from that song (a big list starts at once and fills in the background).
 - **Canvas no longer opens by itself while you work in another program:** only idle time in foobar2000's own window counts.
 - **No more clipped letters:** descenders and accents of big titles (Now Playing, playlist name) keep their room.
