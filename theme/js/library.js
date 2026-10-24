@@ -5,7 +5,7 @@
  * Virtualisation keeps the DOM at ~40–80 nodes regardless of list size, so a
  * 50 000-track playlist scrolls exactly like a 50-track one.
  */
-import { call, on, ok, normTrack, esc, fmtTime, fmtDuration, plural, debounce, log, sleep, artUrl, albumKeyOf } from './bridge.js';
+import { call, on, ok, normTrack, esc, fmtTime, fmtDuration, plural, debounce, settle, log, sleep, artUrl, albumKeyOf } from './bridge.js';
 import { settings, setSetting } from './settings.js';
 import { router, onRoute, $, h, icon, toast, placeholder, popupMenu, backButton } from './ui.js';
 import { idle, slot, spent } from './sched.js';
@@ -1295,7 +1295,7 @@ $('libSort').addEventListener('change', async (e) => {
   if (!LIB.loaded) return loadLibrary(true);
   await sortLib(); applyFilter(); libScroller.scrollTop = 0;
 });
-['library:itemsAdded', 'library:itemsRemoved', 'library:itemsModified'].forEach((ev) => on(ev, debounce(() => { if (ev === 'library:itemsModified' && ownRg()) return; LIB.stale = true; if (router.current === 'library') idle(4000).then(() => loadLibrary(true)); }, ev === 'library:itemsModified' ? 6000 : 2000)));
+['library:itemsAdded', 'library:itemsRemoved', 'library:itemsModified'].forEach((ev) => on(ev, settle(() => { if (ev === 'library:itemsModified' && ownRg()) return; LIB.stale = true; if (router.current === 'library') idle(4000).then(() => loadLibrary(true)); }, ev === 'library:itemsModified' ? 6000 : 3000, 30000)));
 CF.events.addEventListener('saved', (e) => {
   const p = e.detail.job.path; forgetCover(p);
   for (const a of LIB.albums) if (a.firstTrackAbsolutePath === p) {

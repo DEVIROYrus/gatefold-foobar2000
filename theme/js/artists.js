@@ -1,6 +1,6 @@
 /* Gatefold · artists.js — Artists grid → artist page → albums */
 import * as SORT from './sorting.js';
-import { call, ok, on, esc, plural, fmtDuration, debounce } from './bridge.js';
+import { call, ok, on, esc, plural, fmtDuration, debounce, settle } from './bridge.js';
 import { settings, setSetting } from './settings.js';
 import { router, $, h, icon, toast, placeholder, popupMenu, backButton } from './ui.js';
 import * as Lib from './library.js';
@@ -251,7 +251,7 @@ import('./coverfetch.js').then((CF) => CF.events.addEventListener('repaired', ()
   if (router.current === 'artists') layout();
 }));
 router.on('artist', (x) => openArtist(x));
-['library:itemsAdded', 'library:itemsRemoved', 'library:itemsModified'].forEach((ev) => on(ev, debounce(() => { if (ev === 'library:itemsModified' && performance.now() < Loud.writingUntil) return; AR.loaded = false; if (router.current === 'artists') loadArtists(true); }, 3000)));
+['library:itemsAdded', 'library:itemsRemoved', 'library:itemsModified'].forEach((ev) => on(ev, settle(() => { if (ev === 'library:itemsModified' && performance.now() < Loud.writingUntil) return; AR.loaded = false; if (router.current === 'artists') loadArtists(true); }, 3000, 30000)));
 /* the library list came back different from the on-disk snapshot → rebuild */
 Lib.libEvents.addEventListener('changed', () => { AR.loaded = false; if (router.current === 'artists') loadArtists(true); });
 export const artistsState = AR;

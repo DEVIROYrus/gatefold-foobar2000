@@ -187,6 +187,25 @@ async function maybeDownscale(img) {
 }
 
 export const psq = (s) => "'" + String(s).replace(/'/g, "''") + "'";
+/** PowerShell, started without making foobar2000 wait for it: a wait inside the host (waitForExitMs)
+ *  blocks foobar2000's UI thread for as long as the command runs — up to the whole download, the window
+ *  «Not responding». The result is checked from here instead: `done()` every 700 ms, until it says yes
+ *  or `ms` pass. → whether `done()` said yes */
+export async function powershell(cmd, ms, done) {
+  const sp = await call('shell.spawn', { executable: 'powershell.exe', args: ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', cmd], hidden: true });
+  if (!ok(sp)) return false;
+  for (const t0 = Date.now(); Date.now() - t0 < ms;) { await sleep(700); if (await done()) return true; }
+  return false;
+}
+/** a file that exists, is not empty and has stopped growing (a download or a copy that has finished) */
+export function fileSettled(path, since = 0) {
+  let last = -1;
+  return async () => {
+    const i = await call('file.getInfo', { path });
+    if (!ok(i) || !i.exists || !(i.size > 0) || (since && (i.modified || 0) + 1000 < since)) return false;
+    const same = i.size === last; last = i.size; return same;
+  };
+}
 // ------------------------------------------------------------------ folder ownership
 /*
  * foobar2000 resolves external art per DIRECTORY: a cover.jpg applies to every
@@ -275,24 +294,39 @@ async function keepInGatefold(job, img, { lock = false, src = 'web' } = {}) {
 
 async function save(job, img, url) {
   if (settings.coverTarget === 'gatefold') return keepInGatefold(job, img);
-  if (settings.coverTarget === 'embedded') { if (!img.b64) img = { ...img, b64: await blobToB64(img.blob) }; return embedIntoAlbum(job, img); }
+  if (settings.coverTarget === 'embedded') {
+    if (job.fromSweep) return keepInGatefold(job, img);          // the sweep does not rewrite tracks (see below)
+    if (!img.b64) img = { ...img, b64: await blobToB64(img.blob) }; return embedIntoAlbum(job, img);
+  }
   const others = await otherAlbumsInDir(job);
   if (others > 0) {
+    // a folder shared by several albums (a folder of singles, a «Downloads»): the background sweep never
+    // rewrites those tracks one by one — on a big library that was thousands of files rewritten on
+    // foobar2000's UI thread. It keeps the cover in Gatefold; the playing album follows your setting.
+    if (job.fromSweep) return keepInGatefold(job, img);
     if (settings.coverSharedDir === 'skip') throw new Error($t('папка общая для {0} альбомов — cover.jpg испортил бы их обложки (включите встраивание в треки)', others + 1));
     return embedIntoAlbum(job, img);
   }
-  const target = settings.coverTarget === 'all' ? ['all'] : ['file'];
+  // the background sweep writes only cover.jpg (a small file); putting the picture into the tracks
+  // themselves rewrites every file on foobar2000's UI thread, so that is left to what you ask for
+  const target = settings.coverTarget === 'all' && !job.fromSweep ? ['all'] : ['file'];
   if (!img.b64) img = { ...img, b64: await blobToB64(img.blob) };
   const r = await bgCall('metadata.embedArtwork', { path: job.path, imageData: img.b64, type: 'front', target }, 'normal');
   if (ok(r)) return { via: 'foobar', savedTo: r.savedTo || (r.results && r.results.file && r.results.file.savedTo) || '' };
-  log('embedArtwork refused, falling back to PowerShell:', r.code, r.error);
   const dir = dirOf(job.path);
   const dest = dir + '\\cover.jpg';
+  // the picture is already here: written straight into the folder when the host allows it
+  const w = await bgCall('file.write', { path: dest, content: 'base64:' + img.b64, encoding: 'binary', atomic: true }, 'normal');
+  if (ok(w)) return { via: 'file', savedTo: dest };
+  // a folder foobar2000 cannot write to: the sweep keeps the cover in Gatefold (nothing else to try in
+  // the background); for the album you are looking at, PowerShell gets one go — without a wait in the host
+  if (job.fromSweep) { log('cover: folder not writable, kept in Gatefold', dir, r.code || r.error); return keepInGatefold(job, img); }
+  log('embedArtwork refused, falling back to PowerShell:', r.code, r.error);
+  const t0 = Date.now();
   const cmd = `$ProgressPreference='SilentlyContinue';[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12;` +
     `if(-not (Test-Path -LiteralPath ${psq(dest)})){Invoke-WebRequest -UseBasicParsing -Uri ${psq(url)} -OutFile ${psq(dest)}}`;
-  const sp = await call('shell.spawn', { executable: 'powershell.exe', args: ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', cmd], hidden: true, waitForExitMs: 45000 });
-  if (ok(sp) && (sp.exited === undefined || sp.exitCode === 0)) return { via: 'powershell', savedTo: dest };
-  throw new Error($t('не удалось сохранить: ') + (r.error || sp.error || 'unknown'));
+  if (await powershell(cmd, 45000, fileSettled(dest, t0))) return { via: 'powershell', savedTo: dest };
+  throw new Error($t('не удалось сохранить: ') + (r.error || w.error || 'unknown'));
 }
 
 // ------------------------------------------------------------------ diagnosis & repair of 1.1 damage
@@ -335,8 +369,7 @@ export async function recycle(path) {
   const r = await call('file.delete', { path, moveToTrash: true });
   if (ok(r)) return true;
   const cmd = `Add-Type -AssemblyName Microsoft.VisualBasic;[Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile(${psq(path)},'OnlyErrorDialogs','SendToRecycleBin')`;
-  const s = await call('shell.spawn', { executable: 'powershell.exe', args: ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', cmd], hidden: true, waitForExitMs: 15000 });
-  return ok(s) && (s.exited === undefined || s.exitCode === 0);
+  return powershell(cmd, 15000, async () => { const i = await call('file.getInfo', { path }); return ok(i) && !i.exists; });
 }
 
 /** Move wrongly placed covers to the Recycle Bin and re-queue the affected albums. */
@@ -369,6 +402,7 @@ export async function applyCandidate(job, cand, { manual = false } = {}) {
   const bad = validate(img);
   if (bad) throw new Error(bad);
   img = await maybeDownscale(img);
+  if (manual) job = { ...job, fromSweep: false };                  // your click: saved the way the settings say
   const saved = manual && settings.coverTarget === 'gatefold' ? await keepInGatefold(job, img, { lock: true, src: 'web' }) : await save(job, img, cand.url);
   if (manual && settings.coverTarget !== 'gatefold') await lockCover(job, settings.coverTarget === 'embedded' ? 'embedded' : 'file');
   const objUrl = URL.createObjectURL(img.blob);

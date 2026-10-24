@@ -1315,6 +1315,37 @@ async def test_sound_panel(browser, port):
     check(not errs, f'no page errors {errs}')
     await ctx.close()
 
+async def test_heavy_library(browser, port):
+    print('· a big library: nothing makes foobar2000\'s UI thread wait (HTTP stays async, no file rewrites from the background, quiet during an import)')
+    ctx, pg, errs = await page(browser, port, {'language': 'en'})
+    await pg.goto(f'http://127.0.0.1:{port}/theme/index.html?flat=1'); await pg.wait_for_timeout(1800)
+    # one request the host refuses must not turn every later download synchronous
+    sent = await pg.evaluate("""(async () => { const orig = window.fb2k.invoke.bind(window.fb2k); const got = []; let n = 0;
+      window.fb2k.invoke = (m, p) => { if (m === 'http.get') { got.push(p.async); if (n++ === 0) return Promise.resolve({ success: false, code: 'INVALID_PARAMS', error: 'Invalid URL' }); } return orig(m, p); };
+      const B = await import('./js/bridge.js');
+      const a = await B.httpGet({ url: 'https://example.com/a b' }); await B.httpGet({ url: 'https://example.com/b' }); await B.httpGet({ url: 'https://example.com/c' });
+      window.fb2k.invoke = orig; return [a.code, got]; })()""")
+    check(sent == ['INVALID_PARAMS', [True, True, True]], f'a refused request is just that one: the next ones stay asynchronous {sent}')
+    # the background sweep finds a cover for an album in a folder shared with others: kept in Gatefold, no track rewritten
+    await pg.evaluate("window.__calls.length = 0")
+    res = await pg.evaluate("""(async () => {
+      const CF = await import('./js/coverfetch.js'), B = await import('./js/bridge.js');
+      const r = await window.fb2k.invoke('library.getAlbums', { offset: 0, limit: 1 }); const a = r.albums[0];
+      const job = { key: B.albumKeyOf(a.albumArtist, a.name), album: a.name, artist: a.albumArtist, path: a.firstTrackAbsolutePath, fromSweep: true };
+      try { await CF.applyCandidate(job, { url: 'https://is1-ssl.mzstatic.com/image/thumb/Music/v4/aa/source/1200x1200bb.jpg', src: 'iTunes', score: 0.95 }); } catch (e) { return 'error: ' + e.message; }
+      const Own = await import('./js/ownart.js'); return Own.all().map((x) => [x.album, x.where]); })()""")
+    calls = await pg.evaluate("window.__calls")
+    check(not any(c[0] in ('metadata.embedArtwork', 'shell.spawn') for c in calls), 'the sweep rewrites no track and starts no PowerShell for a shared folder')
+    check(isinstance(res, list) and len(res) == 1 and res[0][1] == 'gatefold', f'the cover is kept in Gatefold instead {res}')
+    # foobar2000 importing files: background calls wait until the library is quiet
+    waited = await pg.evaluate("""(async () => { const S = await import('./js/sched.js');
+      window.__emit('library:itemsAdded', { count: 500 }); const t0 = performance.now();
+      setTimeout(() => window.__emit('library:itemsAdded', { count: 500 }), 3000);
+      const busy = S.libraryBusy(); await S.bgCall('playback.getVolume', {}, 'normal'); return [busy, Math.round(performance.now() - t0)]; })()""")
+    check(waited[0] and waited[1] >= 12500, f'background work waits for an import to settle ({waited[1]} ms)')
+    check(not errs, f'no page errors {errs}')
+    await ctx.close()
+
 async def test_cover_pick(browser, port):
     print('· your cover: from the computer, kept only in Gatefold and locked; whole, with a blurred backdrop on square tiles')
     ctx, pg, errs = await page(browser, port, {'language': 'en'}, pre='window.__pick = true;')
@@ -1420,13 +1451,13 @@ TESTS = [*((f'language_{l}', (lambda l: lambda b, p: test_language(b, p, l))(l))
          ('playlists', test_playlists), ('youtube', test_youtube), ('youtube_captions', test_youtube_captions), ('columns', test_columns), ('settings', test_settings), ('updates', test_updates),
          ('tooltips', test_tooltips), ('canvas_volume', test_canvas_volume), ('fb2k_prefs', test_fb2k_prefs), ('welcome', test_welcome),
          ('playlist_editing', test_playlist_editing), ('windows', test_windows), ('vu', test_vu), ('smart_color_radio', test_smart_color_radio),
-         ('lyrics_sync', test_lyrics_sync), ('album_details', test_album_details), ('level', test_level), ('sound_offer', test_sound_offer), ('similar_albums', test_similar_albums), ('editions_artists', test_editions_artists), ('colors', test_colors), ('sound_panel', test_sound_panel), ('cover_pick', test_cover_pick), ('folders', test_folders), ('sound_ai', test_sound_ai), ('layout', test_layout), ('stability', test_stability)]
+         ('lyrics_sync', test_lyrics_sync), ('album_details', test_album_details), ('level', test_level), ('sound_offer', test_sound_offer), ('similar_albums', test_similar_albums), ('editions_artists', test_editions_artists), ('colors', test_colors), ('sound_panel', test_sound_panel), ('cover_pick', test_cover_pick), ('heavy_library', test_heavy_library), ('folders', test_folders), ('sound_ai', test_sound_ai), ('layout', test_layout), ('stability', test_stability)]
 # seconds each test takes on a CI runner (from the « (N s)» lines of a run); only used to share the tests
 # out evenly between parallel parts — a test missing here counts as DEFAULT_S and still runs
 DURATIONS = {'language_ru': 13, 'language_en': 18, 'language_de': 18, 'language_es': 18, 'language_zh': 18, 'playlists': 10, 'youtube': 14,
              'youtube_captions': 29, 'columns': 23, 'settings': 6, 'updates': 20, 'tooltips': 9, 'canvas_volume': 4, 'fb2k_prefs': 9, 'welcome': 24,
              'playlist_editing': 14, 'windows': 13, 'vu': 32, 'smart_color_radio': 27, 'lyrics_sync': 11, 'album_details': 20, 'level': 7,
-             'sound_offer': 14, 'similar_albums': 3, 'editions_artists': 20, 'colors': 16, 'sound_panel': 8, 'cover_pick': 12, 'folders': 16, 'sound_ai': 58, 'layout': 60, 'stability': 70}
+             'sound_offer': 14, 'similar_albums': 3, 'editions_artists': 20, 'colors': 16, 'sound_panel': 8, 'cover_pick': 12, 'heavy_library': 22, 'folders': 16, 'sound_ai': 58, 'layout': 60, 'stability': 70}
 DEFAULT_S = 20
 
 def shards(n):
