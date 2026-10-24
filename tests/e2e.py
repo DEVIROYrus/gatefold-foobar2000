@@ -1382,6 +1382,9 @@ async def test_tracks(browser, port):
     await pg.keyboard.press('Control+a'); await pg.wait_for_timeout(200)
     check(await pg.evaluate("document.querySelector('.tr-selbar .n').textContent") == f'Selected: {total:,}', 'Ctrl+A selects every song')
     await pg.keyboard.press('Escape')
+    await pg.click('.lib-mode [data-m=albums]'); await pg.wait_for_timeout(600)
+    check(re.match(r'^\d+ albums?$', await pg.evaluate("document.getElementById('libSub').textContent")), 'back in Albums: the line under the title counts albums again')
+    await pg.click('.lib-mode [data-m=tracks]'); await pg.wait_for_timeout(800)
     # remembered: Library opens in Tracks next time
     await nav(pg, 'now', 600); await nav(pg, 'library', 1500)
     check(await pg.evaluate("document.getElementById('view-library').classList.contains('tracks')"), 'Library opens where you left it')

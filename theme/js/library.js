@@ -1750,6 +1750,7 @@ router.on('library', (arg) => {
   if ((arg && arg.tracks) || (!(arg && arg.albums) && settings.libMode === 'tracks')) { Tracks.show(arg && arg.focus); return; }
   if (!(arg && arg.albums) && settings.libMode === 'folders') { Folders.show(); return; }
   Folders.setMode(false);
+  if (LIB.loaded) showCounts();                         // the line under the title said folders or tracks a moment ago
   loadLibrary(false);
   if (LIB.loaded) requestAnimationFrame(layoutLib);
 });
