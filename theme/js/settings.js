@@ -66,6 +66,8 @@ export const DEFAULTS = {
   lyricsSave: 'none',       // what to do with downloaded lyrics: 'none' (Gatefold cache only) | 'file' (.lrc beside the track) | 'embedded'
   lyricsSize: 'm',          // 's' | 'm' | 'l'
   // canvas (fullscreen)
+  tracksSort: 'artist',     // Library → Tracks: 'artist' | 'title' | 'album' | 'year' | 'genre' | 'duration' | 'added' | 'played' | 'plays'
+  tracksDir: 1,             //   1 or -1 (the other way round)
   canvasLayout: 'cover',    // 'cover' | 'lyrics' | 'minimal'
   canvasMotion: true,       // slow Ken Burns drift of the cover
   canvasLyrics: true,

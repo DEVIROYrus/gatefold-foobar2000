@@ -1201,5 +1201,21 @@ export default {
  "Новый плейлист «{0}»": "Neue Playlist „{0}“",
  "Добавлено в «{0}»: {1}": "Zu „{0}“ hinzugefügt: {1}",
  "Показать папку в медиатеке": "Ordner in der Mediathek zeigen",
- "Вид медиатеки": "Mediathek-Ansicht"
+ "Вид медиатеки": "Mediathek-Ansicht",
+ "По альбому": "Nach Album",
+ "По жанру": "Nach Genre",
+ "По длительности": "Nach Länge",
+ "Часто слушаемые": "Am meisten gehört",
+ "из {0}": "von {0}",
+ "Обновляю список…": "Liste wird aktualisiert…",
+ "Сортировка": "Sortierung",
+ "Обратный порядок": "Umgekehrte Reihenfolge",
+ "Прямой порядок": "Normale Reihenfolge",
+ "Сортировать": "Sortieren",
+ "Каждое слово ищется в названии, исполнителе, альбоме, жанре и годе": "Jedes Wort wird in Titel, Interpret, Album, Genre und Jahr gesucht",
+ "Всё в очередь ({0})": "Alle in die Warteschlange ({0})",
+ "Всё в плейлист": "Alle in eine Playlist",
+ "Слушать выбранные ({0})": "Auswahl abspielen ({0})",
+ "Исполнитель: {0}": "Interpret: {0}",
+ "Показать в папке": "Im Ordner zeigen"
 };

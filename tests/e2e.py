@@ -1315,6 +1315,116 @@ async def test_sound_panel(browser, port):
     check(not errs, f'no page errors {errs}')
     await ctx.close()
 
+async def test_tracks(browser, port):
+    print('· Library → Tracks: every song in one list — sort, filter, select, play the list from a song (a big one in parts), letters, menus')
+    ctx, pg, errs = await page(browser, port, {'language': 'en'})
+    await pg.evaluate("window.__inv = []; const o = window.fb2k.invoke.bind(window.fb2k); window.fb2k.invoke = (m, p) => { if (/^(playlist[.](clear|playTrack|insertTracks|addHandles)|library[.]addToPlaylist|queue[.]addPaths)$/.test(m)) window.__inv.push([m, p]); return o(m, p); }")
+    await nav(pg, 'library', 1500)
+    await pg.click('.lib-mode [data-m=tracks]'); await pg.wait_for_timeout(2200)
+    n = await pg.evaluate("document.querySelectorAll('.tr-row').length")
+    sub = await pg.evaluate("document.getElementById('libSub').textContent")
+    check(n > 10 and re.match(r'^[\d,]+ tracks · ', sub), f'the list is drawn ({n} rows on screen, «{sub}»)')
+    check(await pg.evaluate("document.querySelector('#view-library .view-head h2').textContent") == 'Tracks', 'the header says Tracks')
+    check(await pg.evaluate("!!document.querySelector('.tr-row .c-cov') && !!document.querySelector('.tr-row .c-tt b')"), 'rows: cover, title, artist')
+    total = int(re.match(r'^([\d,]+)', sub).group(1).replace(',', ''))
+    # sorting: a column name, then again for the other way round; the menu on top follows
+    titles = lambda: pg.evaluate("[...document.querySelectorAll('.tr-row')].sort((a, b) => a.dataset.r - b.dataset.r).map(r => r.querySelector('.c-tt b').textContent)")
+    await pg.click('.tr-head [data-sort=title]'); await pg.wait_for_timeout(500)
+    t1 = await titles()
+    check(t1[:8] == sorted(t1[:8], key=lambda x: x.lower()), f'a click on «Title» sorts by title {t1[:4]}')
+    check(await pg.evaluate("document.querySelector('.tr-sort').value") == 'title', 'the sort menu follows')
+    check(await pg.evaluate("!document.querySelector('.tr-rail').hidden"), 'a letter index while sorted by a name')
+    await pg.click('.tr-head [data-sort=title]'); await pg.wait_for_timeout(500)
+    t2 = await titles()
+    check(t2[:5] == sorted(t2[:5], key=lambda x: x.lower(), reverse=True), f'again: the other way round {t2[:3]}')
+    await pg.click('.tr-head [data-sort=duration]'); await pg.wait_for_timeout(500)
+    check(await pg.evaluate("document.querySelector('.tr-rail').hidden"), 'no letters for a sort by length')
+    await choose(pg, '.tr-sort', 'artist'); await pg.wait_for_timeout(500)
+    # the filter: every word in title / artist / album / genre / year, marked
+    await pg.fill('#libFilter', 'nightdrive lumen 2021'); await pg.wait_for_timeout(600)
+    sub2 = await pg.evaluate("document.getElementById('libSub').textContent")
+    rows = await pg.evaluate("[...document.querySelectorAll('.tr-row')].map(r => r.textContent)")
+    check(rows and all('Nightdrive' in r for r in rows) and f'of {total:,}' in sub2, f'the filter narrows the list ({sub2})')
+    check(await pg.evaluate("!!document.querySelector('.tr-row mark')"), 'what matched is marked')
+    await pg.fill('#libFilter', 'zzzz-nothing'); await pg.wait_for_timeout(500)
+    check(await pg.evaluate("!!document.querySelector('.tr-empty')"), 'nothing found: said so')
+    await pg.fill('#libFilter', ''); await pg.wait_for_timeout(500)
+    # selection: Shift extends, the bar counts, Esc clears
+    await pg.click('.tr-row[data-r="1"] .c-title'); await pg.click('.tr-row[data-r="4"] .c-title', modifiers=['Shift']); await pg.wait_for_timeout(300)
+    check(await pg.evaluate("document.querySelectorAll('.tr-row.sel').length") == 4 and await pg.evaluate("document.querySelector('.tr-selbar .n').textContent") == 'Selected: 4', 'Shift selects a range; the bar counts it')
+    await pg.keyboard.press('Escape'); await pg.wait_for_timeout(200)
+    check(await pg.evaluate("document.querySelectorAll('.tr-row.sel').length") == 0, 'Esc clears it')
+    # a double click plays the list as shown, from that song — also on the album's link
+    await pg.evaluate("window.__inv.length = 0")
+    await pg.dblclick('.tr-row[data-r="3"] .c-album'); await pg.wait_for_timeout(1200)
+    inv = await pg.evaluate("window.__inv")
+    add = next((c for c in inv if c[0] == 'library.addToPlaylist'), None)
+    play = next((c for c in inv if c[0] == 'playlist.playTrack'), None)
+    check(add and len(add[1]['paths']) == total and play and play[1]['index'] == 3, f'a double click plays the whole list from that song ({len(add[1]["paths"]) if add else 0} of {total}, index {play and play[1]["index"]})')
+    check(await pg.evaluate("document.getElementById('view-library').classList.contains('active') || !document.getElementById('view-album').classList.contains('active')"), 'the album link did not open the album')
+    # a big list: the songs from the chosen one first, the rest around it in the background
+    await pg.evaluate("import('./js/tracks.js').then(m => Object.assign(m.CFG, { chunk: 20, first: 8, step: 10 }))")
+    await pg.evaluate("window.__inv.length = 0")
+    await pg.dblclick('.tr-row[data-r="15"] .c-title'); await pg.wait_for_timeout(9000)
+    inv = await pg.evaluate("window.__inv")
+    adds = [c[1]['paths'] for c in inv if c[0] == 'library.addToPlaylist']
+    ins = [c[1] for c in inv if c[0] == 'playlist.insertTracks']
+    play = next((c for c in inv if c[0] == 'playlist.playTrack'), None)
+    allp = await pg.evaluate("import('./js/trackstore.js').then(async (TS) => { const T = await TS.all(); return T.length; })")
+    check(adds and len(adds[0]) == 8 and play and play[1]['index'] == 0, f'a big list starts at once with the chosen song ({len(adds[0]) if adds else 0} first, index {play and play[1]["index"]})')
+    check(sum(len(a) for a in adds) == total - 15 and sum(len(i['handles']) for i in ins) == 15 and all(i['position'] == 0 for i in ins), f'the rest follows in parts, the beginning inserted before it ({sum(len(a) for a in adds)} + {sum(len(i["handles"]) for i in ins)} of {total})')
+    await pg.evaluate("import('./js/tracks.js').then(m => Object.assign(m.CFG, { chunk: 3000, first: 1000, step: 2500 }))")
+    # the context menu
+    await pg.click('.tr-row[data-r="2"] .c-title', button='right'); await pg.wait_for_timeout(400)
+    items = await pg.evaluate("[...document.querySelectorAll('#layer .menu .mi')].map(x => x.textContent.trim())")
+    check(any('Open album' in x for x in items) and any('Show in folder' in x for x in items) and any('foobar2000' in x for x in items), f'the menu: album, folder, foobar2000 actions {items[:9]}')
+    await pg.keyboard.press('Escape'); await pg.wait_for_timeout(200)
+    await pg.keyboard.press('Control+a'); await pg.wait_for_timeout(200)
+    check(await pg.evaluate("document.querySelector('.tr-selbar .n').textContent") == f'Selected: {total:,}', 'Ctrl+A selects every song')
+    await pg.keyboard.press('Escape')
+    # remembered: Library opens in Tracks next time
+    await nav(pg, 'now', 600); await nav(pg, 'library', 1500)
+    check(await pg.evaluate("document.getElementById('view-library').classList.contains('tracks')"), 'Library opens where you left it')
+    eng = [x for x in await pg.evaluate(SCAN) if not any(d in x for d in DATA) and len(x) > 1]      # single letters: the index of Cyrillic names
+    check(not eng, f'no Russian left in English {eng[:5]}')
+    if os.environ.get('SHOTS'): await pg.screenshot(path=os.environ['SHOTS'] + '/tracks.png')
+    check(not errs, f'no page errors {errs}')
+    await ctx.close()
+
+async def test_text_clipping(browser, port):
+    print('· text is never cut: descenders and accents keep their room wherever a box clips its text')
+    AUD = (FIX / 'clip-audit.js').read_text(encoding='utf-8')
+    found = []
+    for lang in ('en', 'ru'):
+        ctx, pg, errs = await page(browser, port, {'language': lang})
+        for w in (1600, 1100):
+            await pg.set_viewport_size({'width': w, 'height': 900}); await pg.wait_for_timeout(500)
+            for v in ['now', 'playlist', 'artists', 'library', 'queue', 'covers', 'settings']:
+                await nav(pg, v, 900)
+                if v == 'now': await pg.evaluate("document.querySelector('.np-title').textContent = 'We Disintegrate · Йоги, Ёлки и Ångström'"); await pg.wait_for_timeout(200)
+                found += [f'{lang}/{w}/{v}: {f["where"]} «{f["text"]}» {f["px"]}px {f["side"]}' for f in await pg.evaluate(AUD) if 'lyr' not in f['clip']]
+            await nav(pg, 'library', 800)
+            await pg.click('.lib-mode [data-m=tracks]'); await pg.wait_for_timeout(1200)
+            found += [f'{lang}/{w}/tracks: {f["where"]} «{f["text"]}» {f["px"]}px' for f in await pg.evaluate(AUD) if 'lyr' not in f['clip']]
+            await pg.click('.lib-mode [data-m=albums]'); await pg.wait_for_timeout(600)
+        await ctx.close()
+    check(not found, f'no clipped letters {found[:6]}')
+
+async def test_canvas_idle(browser, port):
+    print('· Canvas by itself: only after minutes in foobar2000\'s own window — time in another program does not count')
+    ctx, pg, errs = await page(browser, port, {'language': 'en', 'canvasIdleMin': 2}, pre="window.__dt = 0; { const n = Date.now; Date.now = () => n() + window.__dt; }")
+    opened = "import('./js/canvas.js').then(m => m.opened())"
+    await pg.evaluate("window.__emit('window:activated', { active: false })")
+    await pg.evaluate("window.__dt = 10 * 60000"); await pg.wait_for_timeout(16000)
+    check(not await pg.evaluate(opened), 'ten minutes in another program: no Canvas')
+    await pg.evaluate("window.__emit('window:activated', { active: true })")
+    await pg.evaluate("window.__dt += 60000"); await pg.wait_for_timeout(16000)
+    check(not await pg.evaluate(opened), 'back for a minute: still no Canvas')
+    await pg.evaluate("window.__dt += 2 * 60000"); await pg.wait_for_timeout(16000)
+    check(await pg.evaluate(opened), 'three untouched minutes in its own window: the Canvas opens')
+    check(not errs, f'no page errors {errs}')
+    await ctx.close()
+
 async def test_heavy_library(browser, port):
     print('· a big library: nothing makes foobar2000\'s UI thread wait (HTTP stays async, no file rewrites from the background, quiet during an import)')
     ctx, pg, errs = await page(browser, port, {'language': 'en'})
@@ -1451,13 +1561,13 @@ TESTS = [*((f'language_{l}', (lambda l: lambda b, p: test_language(b, p, l))(l))
          ('playlists', test_playlists), ('youtube', test_youtube), ('youtube_captions', test_youtube_captions), ('columns', test_columns), ('settings', test_settings), ('updates', test_updates),
          ('tooltips', test_tooltips), ('canvas_volume', test_canvas_volume), ('fb2k_prefs', test_fb2k_prefs), ('welcome', test_welcome),
          ('playlist_editing', test_playlist_editing), ('windows', test_windows), ('vu', test_vu), ('smart_color_radio', test_smart_color_radio),
-         ('lyrics_sync', test_lyrics_sync), ('album_details', test_album_details), ('level', test_level), ('sound_offer', test_sound_offer), ('similar_albums', test_similar_albums), ('editions_artists', test_editions_artists), ('colors', test_colors), ('sound_panel', test_sound_panel), ('cover_pick', test_cover_pick), ('heavy_library', test_heavy_library), ('folders', test_folders), ('sound_ai', test_sound_ai), ('layout', test_layout), ('stability', test_stability)]
+         ('lyrics_sync', test_lyrics_sync), ('album_details', test_album_details), ('level', test_level), ('sound_offer', test_sound_offer), ('similar_albums', test_similar_albums), ('editions_artists', test_editions_artists), ('colors', test_colors), ('sound_panel', test_sound_panel), ('cover_pick', test_cover_pick), ('heavy_library', test_heavy_library), ('tracks', test_tracks), ('text_clipping', test_text_clipping), ('canvas_idle', test_canvas_idle), ('folders', test_folders), ('sound_ai', test_sound_ai), ('layout', test_layout), ('stability', test_stability)]
 # seconds each test takes on a CI runner (from the « (N s)» lines of a run); only used to share the tests
 # out evenly between parallel parts — a test missing here counts as DEFAULT_S and still runs
 DURATIONS = {'language_ru': 13, 'language_en': 18, 'language_de': 18, 'language_es': 18, 'language_zh': 18, 'playlists': 10, 'youtube': 14,
              'youtube_captions': 29, 'columns': 23, 'settings': 6, 'updates': 20, 'tooltips': 9, 'canvas_volume': 4, 'fb2k_prefs': 9, 'welcome': 24,
              'playlist_editing': 14, 'windows': 13, 'vu': 32, 'smart_color_radio': 27, 'lyrics_sync': 11, 'album_details': 20, 'level': 7,
-             'sound_offer': 14, 'similar_albums': 3, 'editions_artists': 20, 'colors': 16, 'sound_panel': 8, 'cover_pick': 12, 'heavy_library': 22, 'folders': 16, 'sound_ai': 58, 'layout': 60, 'stability': 70}
+             'sound_offer': 14, 'similar_albums': 3, 'editions_artists': 20, 'colors': 16, 'sound_panel': 8, 'cover_pick': 12, 'heavy_library': 22, 'tracks': 30, 'text_clipping': 60, 'canvas_idle': 52, 'folders': 16, 'sound_ai': 58, 'layout': 60, 'stability': 70}
 DEFAULT_S = 20
 
 def shards(n):
