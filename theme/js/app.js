@@ -28,7 +28,6 @@ import * as CF from './coverfetch.js';
 import * as Lib from './library.js';
 import * as SoundPanel from './soundpanel.js';
 import * as Folders from './folders.js';
-import * as VIS from './visual.js';
 import * as LY from './lyrics.js';
 import * as Canvas from './canvas.js';
 import * as Likes from './likes.js';
@@ -282,7 +281,6 @@ function updateSpectrum() {
 async function setTrack(t, { fromEvent = false } = {}) {
   const prevKey = app.track ? albumKeyOf(app.track.albumArtist, app.track.album) : '';
   app.track = t;
-  const prevH = Lib.shared.nowHandle;
   Lib.shared.nowHandle = t ? t.handle || t.path || '' : ''; Folders.nowPlaying();
   if (!t) {
     $('npTitle').textContent = 'Gatefold'; $('npArtist').textContent = ''; $('npAlbum').textContent = ''; $('npYear').textContent = '';
@@ -810,29 +808,6 @@ Canvas.setHost({
   isFullscreen: () => app.fullscreen,
   onSeek: (p) => Pos.seeked(p),
   onFullscreen: (fs) => { app.fullscreen = fs; body.classList.toggle('fullscreen', fs); },
-});
-/* ---------------------------------------------------------------- the visualiser behind Now Playing (visual.js) */
-let npMd = null;
-function syncNowMilk() {
-  const eng = VIS.engine();
-  const want = eng !== 'off' && !!settings.visNow && router.current === 'now' && !Canvas.opened() && !document.hidden;
-  if (npMd && npMd.engine !== eng) { npMd.destroy(); npMd = null; }
-  if (want && !npMd) npMd = VIS.createStage($('npMd'), { kind: 'backdrop', playing: () => Lib.shared.isPlaying, track: () => app.track, cover: () => (app.art && app.art.available ? app.art.url : '') });
-  if (npMd) { if (want) npMd.start(); else npMd.stop(); }
-  $('npMd').classList.toggle('tinted', eng === 'milkdrop' && !!settings.mdTint);
-  body.classList.toggle('with-np-md', want);
-}
-onRoute(syncNowMilk);
-onSettings((k) => { if (k === '*' || /^(visual|visNow|md|gf)/.test(k)) syncNowMilk(); });
-document.addEventListener('visibilitychange', syncNowMilk);
-Canvas.canvasEvents.addEventListener('open', syncNowMilk);
-Canvas.canvasEvents.addEventListener('close', syncNowMilk);
-/* the character of a track for the choice of presets: 0 calm … 1 vivid (from the sound analysis) */
-VIS.setMoodProvider((t) => {
-  const r = Sound.get(t); if (!r) return null;
-  const up = (Sound.mood(r, 'aggressive') * 1.2 + Sound.mood(r, 'party') + Sound.mood(r, 'danceable') + Sound.mood(r, 'electronic') * 0.5) / 3.7;
-  const down = (Sound.mood(r, 'relaxed') + Sound.mood(r, 'sad') * 0.8 + Sound.mood(r, 'acoustic') * 0.7) / 2.5;
-  return Math.max(0, Math.min(1, 0.5 + (up - down) * 0.9));
 });
 Canvas.canvasEvents.addEventListener('error', (e) => toast($t('Не удалось открыть окно: ') + esc(e.detail)));
 let lastInput = Date.now();

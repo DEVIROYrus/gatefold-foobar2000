@@ -1416,110 +1416,17 @@ async def test_folders(browser, port):
     check(not errs, f'no page errors {errs}')
     await ctx.close()
 
-async def test_visuals(browser, port):
-    print('· visuals: Gatefold\'s own (scenes by the track, N / P / B / V, buttons keep working), MilkDrop (a new preset per track, the flash guard), behind Now Playing')
-    ctx, pg, errs = await page(browser, port, {'language': 'en'})
-    await pg.evaluate("(() => { const b = window.fb2k.invoke.bind(window.fb2k); window.fb2k.invoke = (m, p) => { if (/^playback\\.(next|previous|playOrPause)$/.test(m)) window.__calls.push([m]); return b(m, p); }; })()")
-    V = "import('./js/canvas.js').then(m => m.visual())"
-    check(await pg.evaluate("typeof window.butterchurn") == 'undefined', 'MilkDrop is not loaded unless chosen')
-    await nav(pg, 'settings', 900)
-    await pg.evaluate("document.getElementById('st-canvas').scrollIntoView()"); await pg.wait_for_timeout(200)
-    segs = await pg.evaluate("[...document.querySelectorAll('#st-canvas .row')].filter(r => r.querySelector('.seg')).map(r => [r.querySelector('b').textContent, [...r.querySelectorAll('.seg button')].map(b => b.textContent)])")
-    S = dict((a, b) for a, b in segs)
-    check(S.get('Visualiser') == ['Gatefold', 'MilkDrop', 'None'] and 'Visual' in S.get('Layout', []), f'Settings → Canvas: the visualiser (Gatefold by default) and the «Visual» layout {segs}')
-    check(S.get('Camera') == ['Director', 'Face', 'Landscape', 'Orbit', 'Macro'] and S.get('Energy') == ['Calm', 'Lively', 'Explosive'], f'Gatefold\'s camera shots and energy {S.get("Camera")} {S.get("Energy")}')
-    await pg.evaluate("import('./js/settings.js').then(m => m.setSetting('canvasLayout', 'visual'))")
-    await pg.keyboard.press('f'); await pg.wait_for_timeout(2500)
-    v = await pg.evaluate(V)
-    check(v and v['on'] and v['engine'] == 'gatefold' and v['preset'] in ('face', 'land', 'orbit', 'macro'), f'Canvas «Visual» runs Gatefold\'s visualiser {v}')
-    # the mouse: WebGL draws off screen, the page shows plain pictures (no live WebGL surface to take the input)
-    check(await pg.evaluate("(() => { const c = document.querySelector('.cv-md canvas'); return !!c && c.getContext('webgl2') === null && c.getContext('bitmaprenderer') !== null; })()"), 'the visualiser is shown as pictures, not a WebGL canvas')
-    check(await pg.evaluate("import('./js/aura.js').then(m => m.Stage.last.writeLine('Мы смотрим на огни'))"), 'a line of lyrics can be written with particles')
-    check(any(c[0] == 'audio.subscribeStream' and c[1] == 'gatefold-visual' for c in await pg.evaluate("window.__calls")), 'it listens to what foobar2000 plays')
-    check(bool(await pg.evaluate("document.querySelector('.cv-visname').textContent")), 'the card names the scene')
-    from PIL import Image
-    import io
-    for _ in range(20):                                  # software WebGL on a busy machine: give it time
-        png = await pg.screenshot(clip={'x': 300, 'y': 100, 'width': 1000, 'height': 500})
-        ext = Image.open(io.BytesIO(png)).convert('L').getextrema()
-        if ext[1] - ext[0] > 30: break
-        await pg.wait_for_timeout(500)
-    check(ext[1] - ext[0] > 30, f'something is drawn {ext}')
-    if os.environ.get('SHOTS'): await pg.screenshot(path=os.environ['SHOTS'] + '/visual-gatefold.png')
-    s0 = v['preset']
-    await pg.keyboard.press('n'); await pg.wait_for_timeout(300)
-    s1 = (await pg.evaluate(V))['preset']
-    check(s1 != s0 and bool(await pg.evaluate("document.querySelector('.cv-hint').textContent")), f'N: the next scene, named ({s0} → {s1})')
-    await pg.evaluate("window.__setAlbum(3)")
-    for _ in range(25):                                  # the stage notices the track on its next frame
-        await pg.wait_for_timeout(200); s2 = (await pg.evaluate(V))['preset']
-        if s2 != s1: break
-    check(s2 != s1, f'a new track: another scene ({s1} → {s2})')
-    await pg.keyboard.press('b'); await pg.wait_for_timeout(200)
-    check(await pg.evaluate("JSON.parse(localStorage.getItem('aurora.settings.v1')).gfScene") == s2, 'B keeps the scene')
-    await pg.evaluate("window.__setAlbum(5)"); await pg.wait_for_timeout(900)
-    check((await pg.evaluate(V))['preset'] == s2, 'a kept scene stays with the next track')
-    await pg.keyboard.press('b'); await pg.wait_for_timeout(200)
-    check(await pg.evaluate("JSON.parse(localStorage.getItem('aurora.settings.v1')).gfScene") == 'auto', 'B again: «Auto»')
-    # the buttons work on top of the visuals
-    await pg.mouse.move(700, 500); await pg.wait_for_timeout(200)
-    r = await pg.evaluate("(() => { const b = document.querySelector('.cv [data-a=next]').getBoundingClientRect(); return [b.x + b.width / 2, b.y + b.height / 2]; })()")
-    n0 = len(await pg.evaluate("window.__calls"))
-    await pg.mouse.move(r[0], r[1]); await pg.mouse.click(r[0], r[1]); await pg.wait_for_timeout(400)
-    check(['playback.next'] in (await pg.evaluate("window.__calls"))[n0:], 'the Canvas buttons work over the visuals')
-    await pg.keyboard.press('v'); await pg.wait_for_timeout(400)
-    check(await pg.evaluate("document.querySelector('.cv').dataset.layout") == 'cover' and not (await pg.evaluate(V))['on'], 'V: back to the cover, the visuals stopped')
-    # MilkDrop instead: a new preset with each track
-    await pg.evaluate("import('./js/settings.js').then(m => m.setSetting('visual', 'milkdrop'))")
-    await pg.keyboard.press('v'); await pg.wait_for_timeout(3000)
-    v = await pg.evaluate(V)
-    check(v and v['on'] and v['engine'] == 'milkdrop' and v['preset'], f'MilkDrop in its place {v}')
-    for _ in range(20):                                  # Butterchurn through the off-screen canvas: a picture arrives
-        png = await pg.screenshot(clip={'x': 300, 'y': 100, 'width': 1000, 'height': 500})
-        ext = Image.open(io.BytesIO(png)).convert('L').getextrema()
-        if ext[1] - ext[0] > 30: break
-        await pg.wait_for_timeout(500)
-    check(ext[1] - ext[0] > 30, f'MilkDrop draws {ext}')
-    p0 = v['preset']
-    await pg.evaluate("window.__setAlbum(6)"); await pg.wait_for_timeout(1200)
-    p1 = (await pg.evaluate(V))['preset']
-    check(p1 != p0, f'a new track: another preset ({p0[:30]} → {p1[:30]})')
-    await pg.keyboard.press('n'); await pg.wait_for_timeout(300)
-    check((await pg.evaluate(V))['preset'] != p1, 'N: another preset')
-    await pg.keyboard.press('Escape'); await pg.wait_for_timeout(600)
-    check(not (await pg.evaluate(V))['on'], 'closing Canvas stops them')
-    # the flash guard: a picture flashing six times a second gets its preset replaced
-    why = await pg.evaluate("""import('./js/milkdrop.js').then((M) => {
-      const d = document.createElement('div'); document.body.append(d);
-      const s = new M.Stage(d, { kind: 'canvas', playing: () => true }); let got = '';
-      s.next = (w) => { got = w; }; s.cur = 'test preset';
-      for (let i = 0; i < 8; i++) s.flashSample(1000 + i * 170, i % 2 ? 0.9 : 0.02);
-      const calm = new M.Stage(d, { kind: 'canvas', playing: () => true }); let got2 = ''; calm.next = (w) => { got2 = w; };
-      for (let i = 0; i < 8; i++) calm.flashSample(1000 + i * 170, 0.13 + i * 0.01);
-      d.remove(); return [got, got2];
-    })""")
-    check(why == ['flash', ''], f'the flash guard replaces a flashing preset, and only that {why}')
-    # behind Now Playing (Gatefold's)
-    await pg.evaluate("import('./js/settings.js').then(m => { m.setSetting('visual', 'gatefold'); m.setSetting('visNow', true); })")
-    await nav(pg, 'now', 2500)
-    check(await pg.evaluate("document.getElementById('npMd').classList.contains('md-on')"), 'behind Now Playing when asked')
-    if os.environ.get('SHOTS'): await pg.screenshot(path=os.environ['SHOTS'] + '/visual-now.png')
-    await nav(pg, 'library', 800)
-    check(not await pg.evaluate("document.getElementById('npMd').classList.contains('md-on')"), 'and only there')
-    check(not errs, f'no page errors {errs}')
-    await ctx.close()
-
 TESTS = [*((f'language_{l}', (lambda l: lambda b, p: test_language(b, p, l))(l)) for l in ('ru', 'en', 'de', 'es', 'zh')),
          ('playlists', test_playlists), ('youtube', test_youtube), ('youtube_captions', test_youtube_captions), ('columns', test_columns), ('settings', test_settings), ('updates', test_updates),
          ('tooltips', test_tooltips), ('canvas_volume', test_canvas_volume), ('fb2k_prefs', test_fb2k_prefs), ('welcome', test_welcome),
          ('playlist_editing', test_playlist_editing), ('windows', test_windows), ('vu', test_vu), ('smart_color_radio', test_smart_color_radio),
-         ('lyrics_sync', test_lyrics_sync), ('album_details', test_album_details), ('level', test_level), ('sound_offer', test_sound_offer), ('similar_albums', test_similar_albums), ('editions_artists', test_editions_artists), ('colors', test_colors), ('sound_panel', test_sound_panel), ('cover_pick', test_cover_pick), ('folders', test_folders), ('visuals', test_visuals), ('sound_ai', test_sound_ai), ('layout', test_layout), ('stability', test_stability)]
+         ('lyrics_sync', test_lyrics_sync), ('album_details', test_album_details), ('level', test_level), ('sound_offer', test_sound_offer), ('similar_albums', test_similar_albums), ('editions_artists', test_editions_artists), ('colors', test_colors), ('sound_panel', test_sound_panel), ('cover_pick', test_cover_pick), ('folders', test_folders), ('sound_ai', test_sound_ai), ('layout', test_layout), ('stability', test_stability)]
 # seconds each test takes on a CI runner (from the « (N s)» lines of a run); only used to share the tests
 # out evenly between parallel parts — a test missing here counts as DEFAULT_S and still runs
 DURATIONS = {'language_ru': 13, 'language_en': 18, 'language_de': 18, 'language_es': 18, 'language_zh': 18, 'playlists': 10, 'youtube': 14,
              'youtube_captions': 29, 'columns': 23, 'settings': 6, 'updates': 20, 'tooltips': 9, 'canvas_volume': 4, 'fb2k_prefs': 9, 'welcome': 24,
              'playlist_editing': 14, 'windows': 13, 'vu': 32, 'smart_color_radio': 27, 'lyrics_sync': 11, 'album_details': 20, 'level': 7,
-             'sound_offer': 14, 'similar_albums': 3, 'editions_artists': 20, 'colors': 16, 'sound_panel': 8, 'cover_pick': 12, 'folders': 18, 'visuals': 66, 'sound_ai': 58, 'layout': 60, 'stability': 70}
+             'sound_offer': 14, 'similar_albums': 3, 'editions_artists': 20, 'colors': 16, 'sound_panel': 8, 'cover_pick': 12, 'folders': 16, 'sound_ai': 58, 'layout': 60, 'stability': 70}
 DEFAULT_S = 20
 
 def shards(n):
