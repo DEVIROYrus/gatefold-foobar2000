@@ -4,6 +4,8 @@ All notable changes are listed here. Versions follow [Semantic Versioning](https
 
 ## [Unreleased]
 
+## [1.4.1] — big libraries, folders, sharper text
+
 - **Library → Folders:** browse the library by its folders — play, shuffle, queue or send a whole folder, filter everything below it, show an album's folder; optionally files not yet in the library.
 - **Sharper text (ClearType) everywhere except Now Playing:** the background stands still there instead of drifting under the text.
 - **Big libraries: no more «Not responding».** Background work never makes foobar2000 wait: no blocking PowerShell fallbacks, downloads stay asynchronous, the cover sweep no longer rewrites tracks (covers for shared folders are kept in Gatefold), and background work pauses while foobar2000 imports files.
