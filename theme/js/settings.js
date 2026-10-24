@@ -66,21 +66,11 @@ export const DEFAULTS = {
   lyricsSave: 'none',       // what to do with downloaded lyrics: 'none' (Gatefold cache only) | 'file' (.lrc beside the track) | 'embedded'
   lyricsSize: 'm',          // 's' | 'm' | 'l'
   // canvas (fullscreen)
-  canvasLayout: 'cover',    // 'cover' | 'lyrics' | 'minimal' | 'visual'
+  canvasLayout: 'cover',    // 'cover' | 'lyrics' | 'minimal'
   canvasMotion: true,       // slow Ken Burns drift of the cover
   canvasLyrics: true,
   canvasClock: false,
   canvasIdleMin: 5,         // enter Canvas after N idle minutes while playing and focused (0 = off)
-  visual: 'gatefold',       // the visualiser of Canvas → «Visual» (visual.js): 'gatefold' (aura.js) | 'milkdrop' | 'off'
-  visNow: false,            //   also behind Now Playing
-  gfScene: 'auto',          // Gatefold's camera shot: 'auto' (the director) | 'face' | 'land' | 'orbit' | 'macro'
-  gfEnergy: 'live',         //   how much the music moves the picture: 'calm' | 'live' | 'wild'
-  gfWords: true,            //   the lines of synced lyrics written with the cover's particles
-  mdPresets: 'calm',        //   'calm' (calm + flowing presets) | 'all' (vivid ones too)
-  mdChange: 'track',        //   a new preset: 'track' | 'time' (every 30 s) | 'manual'
-  mdMood: true,             //   presets by the track's character (sound analysis)
-  mdTint: false,            //   in the colours of the cover
-  mdLock: '',               //   a preset kept (B in Canvas)
   soundAI: false,          // sound analysis with a neural network (ml/sound.js): models downloaded on request
   soundPaused: false,
   soundGenresOnline: true,  // genres of artists and albums from MusicBrainz (ml/genres.js), only with soundAI on
@@ -114,6 +104,7 @@ const subs = new Set();
 function load() {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) || '{}');
+    if (raw.canvasLayout && !['cover', 'lyrics', 'minimal'].includes(raw.canvasLayout)) delete raw.canvasLayout;   // a layout that is gone (the visualiser)
     return { ...DEFAULTS, ...raw, coverSources: { ...DEFAULTS.coverSources, ...(raw.coverSources || {}) }, lyricsSources: { ...DEFAULTS.lyricsSources, ...(raw.lyricsSources || {}) } };
   } catch { return { ...DEFAULTS }; }
 }

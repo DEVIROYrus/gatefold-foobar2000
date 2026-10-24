@@ -1371,14 +1371,3 @@ body.fullscreen .np-art-wrap.nsq-true { width: calc(min(62vh, 44vw, 860px) * var
 .fd-empty { padding-top: 40px; }
 @container (max-width: 760px) { .fd-list .vrow, .fd-head { grid-template-columns: 34px minmax(0, 1.6fr) minmax(0, 1fr) 54px; } .fd-list .vrow .c-album, .fd-list .vrow .c-fmt, .fd-head > :nth-child(4), .fd-head > :nth-child(5) { display: none; } }
 #folderView { container-type: inline-size; }
-
-/* ---- MilkDrop behind Now Playing (milkdrop.js): small, blurred and dimmed — alive, but quiet to read over */
-.np-md { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; display: none;
-  -webkit-mask-image: radial-gradient(120% 115% at 58% 48%, #000 45%, transparent 100%); mask-image: radial-gradient(120% 115% at 58% 48%, #000 45%, transparent 100%); }
-body.with-np-md .np-md { display: block; }
-#view-now .np { position: relative; z-index: 1; }
-.np-md .md-canvas { position: absolute; inset: -6%; width: 112%; height: 112%; filter: blur(26px) saturate(1.2); opacity: 0; transition: opacity 1.2s var(--ease); }
-.np-md.md-on .md-canvas { opacity: .46; }
-:root[data-scheme='light'] .np-md.md-on .md-canvas { opacity: .32; }
-.np-md .md-tint { position: absolute; inset: 0; mix-blend-mode: color; opacity: 0; background: radial-gradient(120% 90% at 20% 15%, var(--blob-1), transparent 70%), radial-gradient(110% 90% at 85% 90%, var(--blob-3), transparent 70%), var(--accent); }
-.np-md.tinted .md-tint { opacity: .7; }

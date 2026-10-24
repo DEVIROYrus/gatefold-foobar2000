@@ -53,7 +53,7 @@ Covers and titles belong to their authors and are shown under these licences. Th
 - **Now playing** — a large cover, a spectrum, format badges (codec, bit depth / sample rate, bitrate, DR, ReplayGain, play count), the track's genres and mood, synced lyrics and up next. The interface takes its colours from the cover (an album can have colours of your choice), or keeps a fixed Dark, Light or Grey theme, or your own.
 - **Sound** — DSP presets and the chain playing now, one click from the player bar, with foobar2000's equalizer and DSP Manager a click away.
 - **Volume levelling** — one switch in Settings: albums play equally loud while each keeps its own quiet and loud moments (or per track, or «smart»), at −18, −16, −14 or −23 LUFS. Tracks without ReplayGain values are measured in the background like the ReplayGain 2.0 scanner does (EBU R128, true peak, whole albums at once) and get the standard tags; foobar2000 applies them, gapless, with clipping prevention.
-- **Canvas** — full-screen Now playing, also on a second monitor, with music visuals (Gatefold's own, or MilkDrop); a **mini player** above other windows; taskbar buttons and progress; an optional tray icon.
+- **Canvas** — full-screen Now playing, also on a second monitor; a **mini player** above other windows; taskbar buttons and progress; an optional tray icon.
 - **«More like this» radio** without sound analysis too: artists related to the seed that you actually have.
 - **Liked** — a heart in the player and on every row, kept in an ordinary foobar2000 playlist.
 - **YouTube** — paste a link, or search with your own YouTube Data API key. Subtitles on or off with one button, in the language you pick.

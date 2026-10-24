@@ -13,8 +13,6 @@ Gatefold itself is MIT-licensed (see `LICENSE`). It ships the following third-pa
 | `fonts/skins/shantell-sans-*` | Shantell Sans — © 2022 The Shantell Sans Project Authors | SIL OFL 1.1 | `fonts/skins/LICENSE-shantell-sans.txt` |
 | `fonts/skins/tiny5-*` | Tiny5 — © 2022–2024 The Tiny5 Project Authors | SIL OFL 1.1 | `fonts/skins/LICENSE-tiny5.txt` |
 | `js/vendor/ort/*` | ONNX Runtime Web 1.22.0 — © Microsoft Corporation | MIT | `js/vendor/ort/LICENSE` |
-| `js/vendor/milkdrop/butterchurn.min.js` | Butterchurn 2.6.7 (WebGL MilkDrop) — © 2013–2018 Jordan Berg | MIT | `js/vendor/milkdrop/LICENSE-butterchurn` |
-| `js/vendor/milkdrop/presets.json` | MilkDrop presets selected from butterchurn-presets 2.4.7 (each by its author, named in the file) | MIT | `js/vendor/milkdrop/LICENSE-presets` |
 
 Software the installer downloads (not bundled in the theme):
 
