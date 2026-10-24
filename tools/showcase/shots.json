@@ -65,6 +65,32 @@
    ]
   },
   {
+   "name": "tracks-en",
+   "steps": [
+    {
+     "nav": "library",
+     "wait": 1500
+    },
+    {
+     "js": "document.querySelector('.lib-mode [data-m=tracks]').click()",
+     "wait": 3500
+    }
+   ]
+  },
+  {
+   "name": "folders-en",
+   "steps": [
+    {
+     "nav": "library",
+     "wait": 800
+    },
+    {
+     "js": "document.querySelector('.lib-mode [data-m=folders]').click()",
+     "wait": 3500
+    }
+   ]
+  },
+  {
    "name": "colors-en",
    "steps": [
     {
@@ -155,6 +181,14 @@
     "wait": 2500
    },
    {
+    "js": "document.querySelector('.lib-mode [data-m=folders]').click()",
+    "wait": 3000
+   },
+   {
+    "js": "document.querySelector('.lib-mode [data-m=albums]').click()",
+    "wait": 800
+   },
+   {
     "js": "window.__setAlbum('Calls and Echoes')",
     "wait": 800
    },
@@ -176,20 +210,45 @@
   ],
   "steps": [
    {
-    "cap": "Gatefold — foobar2000 that understands your music",
-    "hold": 2800
+    "cap": "Gatefold — foobar2000, reimagined",
+    "hold": 2600
    },
    {
-    "cap": "It listens to your library on your PC: genre and mood of every track",
-    "hold": 3000
+    "cap": "Every screen takes its colours from what's playing",
+    "js": "window.__setAlbum('Calls and Echoes')",
+    "wait": 1900
    },
    {
-    "cap": "Radio and Similar tracks that go by the sound",
-    "hover": "#npActions .btn:has-text('Similar')",
-    "wait": 2600
+    "js": "window.__setAlbum('Slam Funk')",
+    "wait": 1900
    },
    {
-    "cap": "Mood playlists from your own files — no server, no subscription",
+    "js": "window.__setAlbum('Cold Wave')",
+    "wait": 1600
+   },
+   {
+    "cap": "Your library as albums, every song, or your folders",
+    "nav": "library",
+    "wait": 1800
+   },
+   {
+    "js": "document.querySelector('.lib-mode [data-m=tracks]').click()",
+    "wait": 2300
+   },
+   {
+    "js": "document.querySelector('.lib-mode [data-m=folders]').click()",
+    "wait": 3400
+   },
+   {
+    "js": "document.querySelector('.lib-mode [data-m=albums]').click()",
+    "wait": 300
+   },
+   {
+    "cap": "Playlists by how your music sounds, analysed on your PC",
+    "nav": "playlist",
+    "wait": 300
+   },
+   {
     "js": "import('/theme/js/smartpl.js').then(m => m.open('ai-calm'))",
     "wait": 1800
    },
@@ -199,10 +258,6 @@
    },
    {
     "js": "(c => { c?.scrollIntoView({ block: 'nearest' }); c?.click(); })(document.querySelector('.sp-card[data-id=ai-energy]'))",
-    "wait": 1700
-   },
-   {
-    "js": "(c => { c?.scrollIntoView({ block: 'nearest' }); c?.click(); })(document.querySelector('.sp-card[data-id=ai-acoustic]'))",
     "wait": 1700
    },
    {
@@ -228,17 +283,9 @@
     "wait": 2600
    },
    {
-    "cap": "And it looks the part",
+    "cap": "And a full screen for when you just listen",
     "nav": "now",
-    "wait": 400
-   },
-   {
-    "js": "window.__setAlbum('Calls and Echoes')",
-    "wait": 1900
-   },
-   {
-    "js": "window.__setAlbum('Slam Funk')",
-    "wait": 1900
+    "wait": 600
    },
    {
     "js": "document.querySelector('#btnFull').click()",
