@@ -186,8 +186,10 @@ function visualRows() {
   if (v === 'off') return rows;
   if (v === 'gatefold') {
     rows.push(
-      h(`<div class="row st-note"><div class="lbl"><small>${$t('Свет из самой обложки и её цветов, которым движет музыка: обложка, тающая в потоке, туманность в цветах альбома или ореол из спектра вокруг пластинки. Сцена подбирается под характер трека.')}</small></div></div>`),
-      seg('gfScene', $t('Сцена'), '', [['auto', $t('Авто')], ...VIS.sceneLabels()]),
+      h(`<div class="row st-note"><div class="lbl"><small>${$t('Обложка из 65 тысяч частиц света в 3D. Каждая полоса обложки отвечает своей частоте; громкие места растворяют её в жидкий дым, тихие собирают обратно; на новом треке старая обложка рассыпается и собирается в новую. Строки песни пишутся частицами самой обложки, камера меняет план по музыкальным фразам.')}</small></div></div>`),
+      seg('gfEnergy', $t('Энергия'), '', [['calm', $t('Спокойно')], ['live', $t('Живо')], ['wild', $t('Взрывно')]]),
+      seg('gfScene', $t('Камера'), '', [['auto', $t('Режиссёр')], ...VIS.sceneLabels()]),
+      toggle('gfWords', $t('Строки песни из частиц'), $t('Если есть синхронный текст')),
     );
   } else {
     rows.push(
@@ -201,7 +203,7 @@ function visualRows() {
   rows.push(
     toggle('visNow', $t('Фоном на «Сейчас играет»'), ''),
     actions(button($t('{0}Открыть «Визуал»', icon('canvas')), () => { setSetting('canvasLayout', 'visual'); Canvas.open(); }, 'primary')),
-    h(`<div class="row st-note"><div class="lbl"><small>${$t('В «Холсте»: V — визуализация, N / P — следующая / предыдущая сцена или пресет, B — закрепить.')}</small></div></div>`),
+    h(`<div class="row st-note"><div class="lbl"><small>${$t('В «Холсте»: V — визуализация, N / P — следующий / предыдущий план или пресет, B — закрепить.')}</small></div></div>`),
   );
   return rows;
 }

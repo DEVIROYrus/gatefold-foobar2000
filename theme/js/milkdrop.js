@@ -25,6 +25,7 @@
 import { log } from './bridge.js';
 import { settings, setSetting } from './settings.js';
 import * as AF from './audiofeed.js';
+import { surface } from './present.js';
 
 const BASE = new URL('./vendor/milkdrop/', import.meta.url);
 let loading = null, Butterchurn = null, PRESETS = null;
@@ -73,7 +74,7 @@ export class Stage {
   /** host: the element to fill; opts: { kind: 'canvas' | 'backdrop', playing(), track(), onPreset(name, why) } */
   constructor(host, opts) {
     this.host = host; this.o = opts; this.on = false; this.viz = null; this.raf = 0; this.idx = -1; this.hist = -1;
-    this.cv = document.createElement('canvas'); this.cv.className = 'md-canvas';
+    this.sf = surface(); this.cv = this.sf.vis;              // drawn off screen, shown as a picture (present.js)
     this.tint = document.createElement('div'); this.tint.className = 'md-tint';
     host.append(this.cv, this.tint);
     this.ro = new ResizeObserver(() => this.size());
@@ -88,7 +89,8 @@ export class Stage {
     if (!this.on) return;
     if (!this.viz) {
       const { w, h } = this.dims();
-      this.viz = Butterchurn.createVisualizer(null, this.cv, { width: w, height: h, pixelRatio: 1, textureRatio: 1, meshWidth: this.o.kind === 'backdrop' ? 32 : 48, meshHeight: this.o.kind === 'backdrop' ? 24 : 36 });
+      this.sf.resize(w, h);
+      this.viz = Butterchurn.createVisualizer(null, this.sf.target, { width: w, height: h, pixelRatio: 1, textureRatio: 1, meshWidth: this.o.kind === 'backdrop' ? 32 : 48, meshHeight: this.o.kind === 'backdrop' ? 24 : 36 });
       const t0 = this.o.track && this.o.track(); this.key = t0 ? String(t0.handle || t0.path || t0.title || '') : '';
       this.next('start', 0);
       // a preset builds its picture from feedback over a second or so: draw that before showing anything
@@ -138,8 +140,8 @@ export class Stage {
   size() {
     if (!this.viz) return;
     const { w, h } = this.dims();
-    if (this.cv.width === w && this.cv.height === h) return;
-    this.cv.width = w; this.cv.height = h;
+    if (this.sf.target.width === w && this.sf.target.height === h) return;
+    this.sf.resize(w, h);
     this.viz.setRendererSize(w, h);
   }
   loop() {
@@ -150,7 +152,7 @@ export class Stage {
       const playing = this.o.playing();
       const dt = this.last ? Math.min(0.1, (now - this.last) / 1000) : 1 / 60;
       this.last = now;
-      try { this.viz.render({ audioLevels: levels(playing), elapsedTime: dt }); } catch (e) { log('milkdrop: render', e.message); this.next('error'); }
+      try { this.viz.render({ audioLevels: levels(playing), elapsedTime: dt }); this.sf.show(); } catch (e) { log('milkdrop: render', e.message); this.next('error'); }
       if (this.o.kind === 'canvas') this.checkFlash(now);
       this.govern(now, dt);
       // a new track: a new preset (watched here too, so no host has to remember to say so)

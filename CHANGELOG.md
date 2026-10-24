@@ -4,7 +4,7 @@ All notable changes are listed here. Versions follow [Semantic Versioning](https
 
 ## [Unreleased]
 
-- **Visuals in Canvas** (Canvas → «Visual», V): Gatefold's own visualiser — light made of the cover and its palette, moved by the music, in three scenes (Liquid cover, Nebula, Halo) chosen by the track — or the classic MilkDrop (100 curated presets, a flash guard, a new preset per track). Optionally behind Now Playing. N / P / B in Canvas; the resolution adapts to the GPU.
+- **Visuals in Canvas** (Canvas → «Visual», V): Gatefold's own visualiser — the cover as 65 000 particles in 3D, played by the music (a relief by frequency, a fluid that dissolves it on loud passages, synced lyrics written with its particles, camera shots by phrase) — or MilkDrop (curated presets, flash guard). Optionally behind Now Playing. Drawn off screen, so the mouse keeps working.
 - **Library → Folders:** browse the library by its folders — play, shuffle, queue or send a whole folder, filter everything below it, show an album's folder; optionally files not yet in the library.
 - **Sharper text (ClearType) everywhere except Now Playing:** the background stands still there instead of drifting under the text.
 

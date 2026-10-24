@@ -133,11 +133,13 @@ function syncMilk() {
       playing: () => host.state() === 'playing',
       track: () => host.track(),
       cover: () => { const a = host.art(); return a && a.available ? a.url : ''; },
+      lyric: visLine,
       onPreset: (name, why) => {
         const e2 = md ? md.engine : eng, n = VIS.nameOf(e2, name);
         const kept = e2 === 'milkdrop' ? settings.mdLock === name : settings.gfScene === name;
         el.querySelector('.cv-visname').textContent = kept ? `${n} · ${$t('закреплено')}` : n;
-        if (why !== 'start') { hint(n); if (why === 'track') freshCard(); }
+        if (why === 'next' || why === 'prev') hint(n);                     // the director's own cuts need no caption
+        if (why === 'track') freshCard();
       },
     });
   }
@@ -161,7 +163,7 @@ function applySettings() {
   if (view && view.doc) { view.cur = -2; requestAnimationFrame(() => view && view.tick(true)); }
   syncMilk();
 }
-onSettings((k) => { if (/^(canvas|visual|md|gf)/.test(k) || k === '*') { applySettings(); if (isOpen && (k === 'canvasLyrics' || k === 'canvasLayout')) loadLyrics(true); } });
+onSettings((k) => { if (/^(canvas|visual|md|gf)/.test(k) || k === '*') { applySettings(); if (isOpen && (k === 'canvasLyrics' || k === 'canvasLayout' || k === 'gfWords')) loadLyrics(true); } });
 
 // ---------------------------------------------------------------- open / close
 export async function open(opts = {}) {
@@ -291,8 +293,33 @@ async function setBackdrop(img) {
   show.classList.add('on'); hide.classList.remove('on');
 }
 
+/* «Visual»: the lines of synced lyrics for the visualiser to write (aura.js), not shown as text */
+let visLyr = null;
+async function loadVisLyrics(t) {
+  if (!t || settings.gfWords === false || VIS.engine() !== 'gatefold') { visLyr = null; return; }
+  const k = LY.trackKey(t);
+  if (visLyr && visLyr.key === k) return;
+  visLyr = { key: k, doc: null, offset: 0 };
+  const doc = await LY.getLyrics(t).catch(() => null);
+  if (!visLyr || visLyr.key !== k) return;
+  if (doc && doc.synced && !doc.instrumental && doc.lines.length) { visLyr.offset = await LY.getOffset(t).catch(() => 0); visLyr.doc = doc; }
+}
+/** the line sung now ('' before the first, in a long instrumental gap, or without synced lyrics) */
+function visLine() {
+  const t = host.track();
+  if (!visLyr || !visLyr.doc || !t || visLyr.key !== LY.trackKey(t)) return '';
+  const L = visLyr.doc.lines, pos = host.getPos() - (visLyr.offset || 0);
+  let lo = 0, hi = L.length - 1, i = -1;
+  while (lo <= hi) { const mid = (lo + hi) >> 1; if (L[mid].t <= pos) { i = mid; lo = mid + 1; } else hi = mid - 1; }
+  if (i < 0) return '';
+  const nx = L[i + 1];
+  if (pos - L[i].t > 7 && (!nx || nx.t - L[i].t > 10)) return '';
+  return String(L[i].text || '').replace(/<\d+:\d+(?:\.\d+)?>/g, '').replace(/\s+/g, ' ').trim();
+}
+
 async function loadLyrics(force) {
   const t = host.track();
+  if (layoutOf() === 'visual') { el.classList.add('no-text'); view.message(''); lyrKey = ''; loadVisLyrics(t); return; }
   if (!settings.canvasLyrics || layoutOf() === 'minimal' || layoutOf() === 'visual' || !t) { el.classList.add('no-text'); view.message(''); lyrKey = ''; return; }
   const k = LY.trackKey(t);
   if (!force && k === lyrKey) { view.kick(); return; }
