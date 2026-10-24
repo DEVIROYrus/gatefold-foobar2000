@@ -24,6 +24,21 @@ for (const f of files(path.join(THEME, 'js'))) {
   }
 }
 console.log(`✓ ${asts.size} scripts parse`);
+// calls that make foobar2000's UI thread wait (the window «Not responding» while music plays): never from the theme
+{
+  const blocking = [];
+  for (const f of fs.readdirSync(path.join(THEME, 'js'), { recursive: true })) {
+    if (!/\.js$/.test(f) || /vendor/.test(f)) continue;
+    const src = fs.readFileSync(path.join(THEME, 'js', f), 'utf8');
+    src.split('\n').forEach((l, i) => {
+      if (/waitForExitMs\s*:\s*[1-9]/.test(l)) blocking.push(`${f}:${i + 1} shell.spawn waits in the host`);
+      if (/async\s*:\s*false/.test(l) && /http/.test(l) && !/\/\//.test(l.split('async')[0])) blocking.push(`${f}:${i + 1} synchronous HTTP`);
+    });
+  }
+  const allowed = ['bridge.js'];        // the one fallback for a host without async HTTP (never taken on 2.0+)
+  const left = blocking.filter((b) => !allowed.some((a) => b.startsWith(a + ':') && /synchronous HTTP/.test(b)));
+  if (left.length) fail('blocking host calls: ' + left.join('; ')); else console.log('✓ no host calls that block foobar2000\'s UI thread');
+}
 
 // 2. version
 const ver = (fs.readFileSync(path.join(THEME, 'js', 'version.js'), 'utf8').match(/VERSION = '([^']+)'/) || [])[1];

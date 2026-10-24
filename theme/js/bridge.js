@@ -96,6 +96,12 @@ export const albumKeyOf = (artist, album) =>
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/** like debounce, but while the calls keep coming (an import of thousands of files arrives in many
+ *  batches) `fn` runs at most once every `every` ms: the last call after a quiet `quiet` ms */
+export function settle(fn, quiet, every) {
+  let t = 0, last = -1e9;
+  return (...a) => { clearTimeout(t); t = setTimeout(() => { last = performance.now(); fn(...a); }, Math.max(quiet, last + every - performance.now())); };
+}
 export function debounce(fn, ms) {
   let t = 0;
   return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
@@ -153,7 +159,7 @@ export function artUrl(u) {
    a background thread and delivers an 'http:response' event (body serialised off
    the UI thread too). Falls back to the synchronous form if the host can't. */
 const httpWait = new Map(), httpEarly = new Map();
-let httpWired = false, asyncHttp = true;
+let httpWired = false;
 const normHttp = (d) => ({ success: d.success !== false && !d.cancelled, status: d.status, headers: d.headers || {}, body: d.body, error: d.error, code: d.code || (d.cancelled ? 'CANCELLED' : undefined) });
 function wireHttp() {
   if (httpWired) return;
@@ -168,7 +174,7 @@ function wireHttp() {
 export const httpGet = (params) => httpReq('http.get', params);
 export const httpPost = (params) => httpReq('http.post', params);
 async function httpReq(method, params) {
-  if (asyncHttp && native) {
+  if (native) {
     wireHttp();
     const r = await call(method, { ...params, async: true });
     if (ok(r) && r.requestId && r.body === undefined && r.status === undefined) {
@@ -179,9 +185,11 @@ async function httpReq(method, params) {
         httpWait.set(r.requestId, { res, t });
       });
     }
-    if (ok(r)) return r;                                   // host answered inline anyway
-    if (r.code === 'INVALID_PARAMS' || /async/i.test(r.error || '')) { asyncHttp = false; log('async http unsupported → sync', r.error); }
-    else return r;
+    // the host answered inline anyway, or refused this one request (a malformed URL, a bad header):
+    // that is this request's answer. Never switch to the synchronous form for the rest of the session —
+    // it runs WinHTTP on foobar2000's UI thread, and one bad URL from a lookup used to make every later
+    // download freeze the player («Not responding») until restart. Every supported host (2.0+) is async.
+    return r;
   }
   return call(method, { ...params, async: false });
 }

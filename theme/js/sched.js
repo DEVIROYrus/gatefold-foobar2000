@@ -15,7 +15,13 @@
  *      thread (12 % low / 25 % normal; 50 % while the window is minimised);
  * Foreground calls (what the user just clicked) never go through here.
  */
-import { call, sleep } from './bridge.js';
+import { call, sleep, on } from './bridge.js';
+
+/* foobar2000 is adding (or dropping) files: while it reads tags it is busy enough. Background work waits
+   until the library has been quiet for 10 s (at most 2 minutes, so nothing waits forever). */
+let hostBusyAt = -1e9;
+for (const ev of ['library:itemsAdded', 'library:itemsRemoved']) on(ev, () => { hostBusyAt = performance.now(); });
+export const libraryBusy = () => performance.now() - hostBusyAt < 10000;
 
 let lastInput = -1e9, nextAt = 0;
 const mark = () => { lastInput = performance.now(); };
@@ -34,12 +40,13 @@ export async function slot(priority = 'low', exclusive = false) {
     const now = performance.now();
     const wInput = hidden() || now - t0 > 8000 ? 0 : quiet - (now - lastInput);
     const wDuty = nextAt - now;
-    if (wInput <= 0 && wDuty <= 0) {
+    const wHost = now - t0 > 120000 ? 0 : 10000 - (now - hostBusyAt);
+    if (wInput <= 0 && wDuty <= 0 && wHost <= 0) {
       if (holder) continue;
       if (exclusive) { let rel; holder = new Promise((r) => { rel = r; }); holder.rel = rel; }
       return;
     }
-    await sleep(Math.min(400, Math.max(16, wInput, wDuty)));
+    await sleep(Math.min(400, Math.max(16, wInput, wDuty, wHost)));
   }
 }
 

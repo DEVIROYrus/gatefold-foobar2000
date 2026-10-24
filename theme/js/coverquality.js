@@ -347,10 +347,11 @@ async function writeBinary(dest, b64, { allowFoobarWriter = false, trackPath = '
   if (!ok(w)) throw new Error($t('запись запрещена: ') + (r.error || r.code));
   const src = await absPath(tmp);
   const cmd = `Copy-Item -LiteralPath ${CF.psq(src)} -Destination ${CF.psq(dest)} -Force`;
-  const sp = await call('shell.spawn', { executable: 'powershell.exe', args: ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', cmd], hidden: true, waitForExitMs: 20000 });
+  const bytes = Math.floor(b64.replace(/=+$/, '').length * 3 / 4);
+  const done = await CF.powershell(cmd, 20000, async () => { const i = await call('file.getInfo', { path: dest }); return ok(i) && i.exists && i.size === bytes; });
   call('file.delete', { path: tmp, moveToTrash: false });
-  if (ok(sp) && (sp.exited === undefined || sp.exitCode === 0)) return 'powershell';
-  throw new Error($t('не удалось записать файл: ') + (r.error || sp.error || 'unknown'));
+  if (done) return 'powershell';
+  throw new Error($t('не удалось записать файл: ') + (r.error || 'PowerShell'));
 }
 
 /** Does foobar now serve the new picture? (compares pixel size of the original) */
