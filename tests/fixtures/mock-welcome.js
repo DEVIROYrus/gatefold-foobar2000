@@ -5,7 +5,7 @@
   if (!window.__emptyMusic) return;
   const base = window.fb2k.invoke.bind(window.fb2k);
   const ok = (x) => Promise.resolve({ success: true, ...x });
-  const W = window.__wl = { lib: 0, pls: [{ index: 0, guid: '{D}', name: 'Default', trackCount: 0, isActive: true }] };
+  const W = window.__wl = { lib: 0, noMusic: false, pls: [{ index: 0, guid: '{D}', name: 'Default', trackCount: 0, isActive: true }] };
   const rec = (m, p) => window.__calls.push([m, JSON.stringify(p)]);
   window.fb2k.invoke = async (m, p = {}) => {
     switch (m) {
@@ -27,6 +27,11 @@
       case 'playlist.addPathsAsync': { rec(m, p); const pl = W.pls.find((x) => x.guid === p.playlistGuid);
         setTimeout(() => { pl.trackCount = 12; window.__emit('playlist:addComplete', { operationId: 'op1', playlistGuid: p.playlistGuid, success: true, addedCount: 12, totalCount: 1 }); window.__emit('playlist:itemsAdded', { playlistGuid: p.playlistGuid }); }, 60);
         return ok({ operationId: 'op1', playlistGuid: p.playlistGuid, status: 'pending', totalCount: p.paths.length, invalidCount: 0 }); }
+      case 'playlist.addPaths': { rec(m, p); const pl = W.pls.find((x) => x.guid === p.playlistGuid);
+        if (W.noMusic) return { success: false, code: 'NOT_FOUND', error: 'Nothing was added' };
+        const before = pl.trackCount; pl.trackCount += 12; setTimeout(() => window.__emit('playlist:itemsAdded', { playlistGuid: p.playlistGuid }), 30);
+        return ok({ playlistGuid: p.playlistGuid, requestedPaths: p.paths.length, addedCount: 12, invalidCount: 0, countBefore: before, totalCount: pl.trackCount }); }
+      case 'playlist.remove': { rec(m, p); W.pls = W.pls.filter((x) => x.guid !== p.playlistGuid); return ok({}); }
       case 'playlist.setActive': rec(m, p); W.pls.forEach((x) => (x.isActive = x.guid === p.playlistGuid)); return ok({});
       case 'playlist.playTrack': rec(m, p); W.playing = true; return ok({});
     }
