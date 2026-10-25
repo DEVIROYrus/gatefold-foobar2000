@@ -7,7 +7,7 @@ import './i18n-boot.js';
 import './input-guard.js';
 import './tooltip.js';
 import './coverfit.js';
-import { waitForBridge, call, on, ok, normTrack, artUrl, log } from './bridge.js';
+import { waitForBridge, call, on, ok, normTrack, artUrl, log, coverPx } from './bridge.js';
 import * as Theme from './theme.js';
 import * as Canvas from './canvas.js';
 import { setFullscreen, unpin } from './winfs.js';
@@ -50,7 +50,7 @@ async function loadArt() {
     return;
   }
   const [big, small] = await Promise.all([
-    call('artwork.getFb2kUrl', { type: 'front', maxSize: Math.min(2000, Math.round(Math.min(screen.width, screen.height) * 0.75 * (devicePixelRatio || 1))) }),
+    call('artwork.getFb2kUrl', { type: 'front', maxSize: coverPx() }),
     call('artwork.getFb2kUrl', { type: 'front', maxSize: 128 }),
   ]);
   let url = ok(big) && big.available !== false && big.dataUrl ? artUrl(big.dataUrl) : '';

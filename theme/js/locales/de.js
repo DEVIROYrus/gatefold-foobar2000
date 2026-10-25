@@ -131,6 +131,7 @@ export default {
  "Исправление общих папок: в Корзину {0}, ошибок {1}": "Reparatur gemeinsamer Ordner: {0} in den Papierkorb verschoben, {1} Fehler",
  "уже есть файл в папке — проверьте шаблоны Album art": "im Ordner liegt bereits eine Datei — prüfe die Album-art-Muster",
  "все кандидаты отклонены": "alle Kandidaten verworfen",
+ "{0} {1}×{2} растянута из меньшей": "{0} {1}×{2} ist ein kleineres, hochskaliertes Bild",
  "у альбома больше нет обложки": "das Album hat kein Cover mehr",
  "та же картинка, но совпадение альбома ниже порога": "gleiches Bild, aber die Album-Übereinstimmung liegt unter der Schwelle",
  "найденная картинка похожа, но не идентична": "das gefundene Bild ist ähnlich, aber nicht identisch",

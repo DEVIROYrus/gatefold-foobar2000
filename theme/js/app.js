@@ -15,7 +15,7 @@ import * as Ambient from './ambient.js';
 import * as Sound from './ml/sound.js';
 import * as SoundUI from './ml/sound-ui.js';
 import * as Genres from './ml/genres.js';
-import { waitForBridge, call, on, ok, normTrack, esc, fmtTime, debounce, log, albumKeyOf, hasBridge, artUrl, plural } from './bridge.js';
+import { waitForBridge, call, on, ok, normTrack, esc, fmtTime, debounce, log, albumKeyOf, hasBridge, artUrl, plural, coverPx } from './bridge.js';
 import { settings, setSetting, onSettings } from './settings.js';
 import { router, onRoute, $, h, icon, toast, popupMenu, closeMenus } from './ui.js';
 import * as Theme from './theme.js';
@@ -368,7 +368,7 @@ async function prefetchNext() {
   if (!next || app.track !== cur) return;
   if (albumKeyOf(next.albumArtist, next.album) === albumKeyOf(cur.albumArtist, cur.album)) return;
   const raw = next.rawPath || next.path;
-  const big = Math.min(1600, Math.round(640 * Math.min(2, devicePixelRatio)));
+  const big = coverPx();
   const b = await bgCall('artwork.getFb2kUrlByPathBatch', { items: [{ path: raw, maxSize: big }, { path: raw, maxSize: 128 }], type: 'front' });
   const rows = (ok(b) && b.artworks) || [];
   const [ub, us] = [rows[0], rows[1]].map((x) => (x && x.available !== false && x.dataUrl ? artUrl(x.dataUrl) : ''));
@@ -396,7 +396,7 @@ async function loadArt(t) {
     return;
   }
   const [big, small] = await Promise.all([
-    call('artwork.getFb2kUrl', { type: 'front', maxSize: Math.min(1600, Math.round(640 * Math.min(2, devicePixelRatio))) }),
+    call('artwork.getFb2kUrl', { type: 'front', maxSize: coverPx() }),
     call('artwork.getFb2kUrl', { type: 'front', maxSize: 128 }),
   ]);
   if (token !== artToken) return;
