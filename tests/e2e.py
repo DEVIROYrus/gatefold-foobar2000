@@ -1613,17 +1613,53 @@ async def test_cover_sharpness(browser, port):
     check(not errs, f'no page errors {errs[:2]}')
     await ctx.close()
 
+async def test_up_next(browser, port):
+    print('· Up next: what really plays next, in every playback order')
+    ctx, pg, errs = await page(browser, port, {'language': 'en'})
+    await pg.wait_for_timeout(900)
+    await pg.evaluate("""(() => { window.__q = []; const b = window.fb2k.invoke.bind(window.fb2k);
+      window.fb2k.invoke = async (m, p) => { if (m === 'queue.get') return { success: true, items: window.__q, count: window.__q.length };
+        if (m === 'playlist.getPlaying') return { success: true, found: true, index: 0, name: 'Energetic', trackCount: 99 }; return b(m, p); }; })()""")
+    async def state(order, queue=None):
+        await pg.evaluate(f"(async () => {{ const all = (await window.fb2k.invoke('playlist.getTracks', {{ playlist: 0, start: 0, count: 200 }})).tracks; window.__all = all;"
+                          f" window.__q = {json.dumps(queue or [])}.map(([i, pos]) => ({{ ...all[i], playlist: pos ? 0 : null, playlistItem: pos ? i : null }})); window.__emit('playback:orderChanged', {{ orderIndex: {order} }}); }})()")
+        await pg.wait_for_timeout(900)
+        return await pg.evaluate("""({ rows: [...document.querySelectorAll('#npPanel .up-row')].map(r => [r.querySelector('.t').lastChild.textContent, r.querySelector('.a').textContent, !!r.querySelector('.up-tag')]),
+          note: document.querySelector('#npPanel .up-note')?.textContent || '', cur: (async () => 0)() && null })""")
+    cur = await pg.evaluate("window.fb2k.invoke('playback.getCurrentTrackIndex').then(r => r.index)")
+    allt = await pg.evaluate("window.fb2k.invoke('playlist.getTracks', { playlist: 0, start: 0, count: 200 }).then(r => r.tracks)")
+    st = await state(0)
+    check([r[0] for r in st['rows'][:3]] == [t['title'] for t in allt[cur + 1:cur + 4]] and not st['note'], f'in order: the playlist after the playing track {st["rows"][:3]}')
+    st = await state(4)
+    check(not st['rows'] and 'random' in st['note'] and 'Energetic' in st['note'], f'shuffle: no made-up list, it says foobar2000 picks at random from the playlist {st}')
+    st = await state(4, [[40, True], [7, True]])
+    check([r[0] for r in st['rows']] == [allt[40]['title'], allt[7]['title']] and all(r[2] for r in st['rows']) and 'random' in st['note'], f'shuffle with a queue: the queued tracks first, marked, then the note {st}')
+    st = await state(0, [[40, True]])
+    check(st['rows'][0][2] and st['rows'][0][0] == allt[40]['title'] and st['rows'][1][0] == allt[41]['title'], f'in order with a queue: the queued track, then the playlist from its place {st["rows"][:2]}')
+    st = await state(2)
+    check(not st['rows'] and 'plays again' in st['note'], f'repeat track: the same track again {st}')
+    st = await state(5)
+    alb = allt[cur]['album']
+    check(st['rows'] and all(r[1].endswith(alb) for r in st['rows']) and 'random album' in st['note'], f'shuffle albums: the rest of this album, then a random one {st}')
+    await pg.evaluate("window.__track(window.__all.length - 1); window.__emit('playback:trackChanged', {})")
+    st = await state(1)
+    check(st['rows'] and st['rows'][0][0] == allt[0]['title'], f'repeat playlist: after the last track comes the first {st["rows"][:1]}')
+    st = await state(0)
+    check(not st['rows'] and 'last track' in (await pg.evaluate("document.querySelector('#npPanel').textContent")), 'in order at the end: says it is the last track')
+    check(not errs, f'no page errors {errs[:2]}')
+    await ctx.close()
+
 TESTS = [*((f'language_{l}', (lambda l: lambda b, p: test_language(b, p, l))(l)) for l in ('ru', 'en', 'de', 'es', 'zh')),
          ('playlists', test_playlists), ('youtube', test_youtube), ('youtube_captions', test_youtube_captions), ('columns', test_columns), ('settings', test_settings), ('updates', test_updates),
          ('tooltips', test_tooltips), ('canvas_volume', test_canvas_volume), ('fb2k_prefs', test_fb2k_prefs), ('welcome', test_welcome),
          ('playlist_editing', test_playlist_editing), ('windows', test_windows), ('vu', test_vu), ('smart_color_radio', test_smart_color_radio),
-         ('lyrics_sync', test_lyrics_sync), ('album_details', test_album_details), ('level', test_level), ('sound_offer', test_sound_offer), ('similar_albums', test_similar_albums), ('editions_artists', test_editions_artists), ('colors', test_colors), ('sound_panel', test_sound_panel), ('cover_pick', test_cover_pick), ('cover_sharpness', test_cover_sharpness), ('heavy_library', test_heavy_library), ('tracks', test_tracks), ('text_clipping', test_text_clipping), ('canvas_idle', test_canvas_idle), ('folders', test_folders), ('sound_ai', test_sound_ai), ('layout', test_layout), ('stability', test_stability)]
+         ('lyrics_sync', test_lyrics_sync), ('album_details', test_album_details), ('level', test_level), ('sound_offer', test_sound_offer), ('similar_albums', test_similar_albums), ('editions_artists', test_editions_artists), ('colors', test_colors), ('sound_panel', test_sound_panel), ('cover_pick', test_cover_pick), ('cover_sharpness', test_cover_sharpness), ('up_next', test_up_next), ('heavy_library', test_heavy_library), ('tracks', test_tracks), ('text_clipping', test_text_clipping), ('canvas_idle', test_canvas_idle), ('folders', test_folders), ('sound_ai', test_sound_ai), ('layout', test_layout), ('stability', test_stability)]
 # seconds each test takes on a CI runner (from the « (N s)» lines of a run); only used to share the tests
 # out evenly between parallel parts — a test missing here counts as DEFAULT_S and still runs
 DURATIONS = {'language_ru': 13, 'language_en': 18, 'language_de': 18, 'language_es': 18, 'language_zh': 18, 'playlists': 10, 'youtube': 14,
              'youtube_captions': 29, 'columns': 23, 'settings': 6, 'updates': 20, 'tooltips': 9, 'canvas_volume': 4, 'fb2k_prefs': 9, 'welcome': 26,
              'playlist_editing': 14, 'windows': 13, 'vu': 32, 'smart_color_radio': 27, 'lyrics_sync': 11, 'album_details': 20, 'level': 7,
-             'sound_offer': 14, 'similar_albums': 3, 'editions_artists': 20, 'colors': 16, 'sound_panel': 8, 'cover_pick': 12, 'cover_sharpness': 8, 'heavy_library': 22, 'tracks': 30, 'text_clipping': 60, 'canvas_idle': 52, 'folders': 16, 'sound_ai': 58, 'layout': 60, 'stability': 70}
+             'sound_offer': 14, 'similar_albums': 3, 'editions_artists': 20, 'colors': 16, 'sound_panel': 8, 'cover_pick': 12, 'cover_sharpness': 8, 'up_next': 14, 'heavy_library': 22, 'tracks': 30, 'text_clipping': 60, 'canvas_idle': 52, 'folders': 16, 'sound_ai': 58, 'layout': 60, 'stability': 70}
 DEFAULT_S = 20
 
 def shards(n):
