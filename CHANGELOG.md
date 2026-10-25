@@ -9,6 +9,7 @@ All notable changes are listed here. Versions follow [Semantic Versioning](https
 - Covers removed from a network share are kept in the profile first (a share has no Recycle Bin).
 - Albums subtitle is right again after switching Library modes.
 - **Sharper covers:** Now Playing and the Canvas ask foobar2000 for a cover as big as your screen shows it (it was stretched on big and high-DPI screens).
+- **Up next shows what really plays next:** the queue first, then the playlist order, wrapping round with «repeat playlist», the rest of the album with «shuffle albums». With «shuffle tracks» foobar2000 picks the next track only when it is time, so instead of the playlist order the panel says so.
 - **A stretched download is no longer taken for a big cover:** when a source serves a small picture blown up to 1000–3000 px, a sharper copy from another source wins, and «Improve covers» no longer replaces a cover with a blown-up one.
 
 ## [1.4.2] — every song in one list

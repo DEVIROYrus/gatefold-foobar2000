@@ -332,6 +332,10 @@ body.vu-on #viz { display: none; }
 .up-row .t { font-weight: 550; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .up-row .a { color: var(--text-3); font-size: var(--fs-sm); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .up-row .d { color: var(--text-3); font-size: var(--fs-sm); }
+.up-tag { display: inline-block; margin-right: 8px; padding: 1px 7px; border-radius: 999px; font-size: var(--fs-xs, 11px); font-weight: 600; vertical-align: 1px;
+  color: var(--accent-ink, var(--accent)); background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.up-note { display: flex; align-items: center; gap: 10px; padding: 12px 8px; color: var(--text-3); font-size: var(--fs-sm); }
+.up-note svg { flex: none; opacity: .8; }
 /* ---------- lyrics (lyrics.js · LyricView) ---------- */
 .np-panel.lyr-mode { flex: 0 1 clamp(220px, 36vh, 460px); min-height: 120px; overflow: hidden; padding: 0; display: flex; flex-direction: column; }
 .lyr-bar { display: flex; align-items: center; gap: 6px; padding: 8px 0 4px; flex: none; color: var(--text-3); font-size: var(--fs-xs); min-height: 34px; }

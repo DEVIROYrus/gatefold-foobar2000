@@ -350,21 +350,10 @@ function schedulePrefetch() { clearTimeout(prefT); prefT = setTimeout(prefetchNe
 async function prefetchNext() {
   const cur = app.track;
   if (!cur || app.state !== 'playing') return;
-  const ord = ORDERS[app.order] ? ORDERS[app.order][0] : 'default';
-  if (ord !== 'default' && ord !== 'repeat-playlist') return;
   await slot('low');
-  const F = ['title', 'artist', 'album', 'albumArtist', 'path', 'absolutePath', 'subsong'];
-  let next = null;
-  const q = await bgCall('queue.get', {});
-  const qi = ok(q) && (q.items || q.tracks || q.queue);
-  if (Array.isArray(qi) && qi.length) next = normTrack(qi[0]);
-  if (!next) {
-    const ci = await bgCall('playback.getCurrentTrackIndex', {});
-    if (!ok(ci) || ci.found === false) return;
-    let r = await bgCall('playlist.getTracks', { playlist: ci.playlist, start: ci.index + 1, count: 1, fields: F });
-    if (ok(r) && !(r.tracks || []).length && ord === 'repeat-playlist') r = await bgCall('playlist.getTracks', { playlist: ci.playlist, start: 0, count: 1, fields: F });
-    next = ok(r) && r.tracks && r.tracks[0] ? normTrack(r.tracks[0]) : null;
-  }
+  const ci = await bgCall('playback.getCurrentTrackIndex', {});
+  const up = await upNext(ci, 1, (m, p) => bgCall(m, p));
+  const next = up.rows[0] ? normTrack(up.rows[0].t) : null;
   if (!next || app.track !== cur) return;
   if (albumKeyOf(next.albumArtist, next.album) === albumKeyOf(cur.albumArtist, cur.album)) return;
   const raw = next.rawPath || next.path;
@@ -487,23 +476,87 @@ async function refreshPlayingIndex() {
   return r;
 }
 
+/* ---------------------------------------------------------------- what really plays next
+   foobar2000 plays its queue first, in any order. Then, from the last queued track's place (or the playing
+   one's): the playlist onwards (wrapping round with «repeat playlist»), the same track again («repeat
+   track»), the rest of the album or folder before a random next one («shuffle albums / folders»). With
+   «random» and «shuffle tracks» foobar2000 picks the track itself when the time comes and tells no one
+   beforehand, so there is nothing true to list: the panel says so instead of showing the playlist order. */
+const UPF = ['title', 'artist', 'album', 'albumArtist', 'duration', 'absolutePath', 'path', 'subsong'];
+const dirOfPath = (p) => String(p || '').replace(/[\\/][^\\/]*$/, '').toLowerCase();
+async function upNext(ci, limit = 15, ask = call) {
+  const ord = ORDERS[app.order] ? ORDERS[app.order][0] : 'default';
+  const rows = [];
+  const q = await ask('queue.get', {});
+  for (const it of (ok(q) && (q.items || q.tracks)) || []) { if (rows.length >= limit) break; rows.push({ t: it, queued: true, playlist: it.playlist ?? null, index: it.playlistItem ?? null }); }
+  let from = ok(ci) && ci.found !== false ? { playlist: ci.playlist, index: ci.index } : null;
+  const lastQ = [...rows].reverse().find((r) => r.playlist != null);
+  if (rows.length && lastQ) from = { playlist: lastQ.playlist, index: lastQ.index };
+  else if (rows.length) from = null;                 // queued by path: where playback goes on is not known
+  let note = '';
+  if (!from || rows.length >= limit) return { rows, note, ord };
+  const left = limit - rows.length;
+  if (ord === 'repeat-track') {
+    note = rows.length ? '' : 'repeat';
+  } else if (ord === 'random' || ord === 'shuffle-tracks') {
+    note = 'shuffle';
+  } else if (ord === 'shuffle-albums' || ord === 'shuffle-folders') {
+    // the rest of this album (folder) in playlist order, then foobar2000 picks another one at random
+    const cur = await ask('playlist.getTracks', { playlist: from.playlist, start: from.index, count: 1, fields: UPF });
+    const c = ok(cur) && cur.tracks && cur.tracks[0];
+    if (c) {
+      const same = ord === 'shuffle-albums'
+        ? (t) => lc(t.album) === lc(c.album) && lc(t.albumArtist || t.artist) === lc(c.albumArtist || c.artist)
+        : (t) => dirOfPath(t.absolutePath || t.path) === dirOfPath(c.absolutePath || c.path);
+      const r = await ask('playlist.getTracks', { playlist: from.playlist, start: from.index + 1, count: 300, fields: UPF });
+      for (const t of (ok(r) && r.tracks) || []) { if (rows.length - (limit - left) >= left) break; if (same(t)) rows.push({ t, playlist: from.playlist, index: t.index }); }
+    }
+    note = ord === 'shuffle-albums' ? 'albums' : 'folders';
+  } else {
+    const r = await ask('playlist.getTracks', { playlist: from.playlist, start: from.index + 1, count: left, fields: UPF });
+    const got = (ok(r) && r.tracks) || [];
+    for (const t of got) rows.push({ t, playlist: from.playlist, index: t.index });
+    if (ord === 'repeat-playlist' && got.length < left) {
+      const w = await ask('playlist.getTracks', { playlist: from.playlist, start: 0, count: Math.min(left - got.length, from.index + 1), fields: UPF });
+      for (const t of (ok(w) && w.tracks) || []) rows.push({ t, playlist: from.playlist, index: t.index });
+    }
+    if (!rows.length) note = 'end';
+  }
+  return { rows, note, ord };
+}
+const lc = (x) => String(x || '').toLowerCase();
+const upAgain = debounce(() => { if (npTab === 'next' && router.current === 'now') renderNpPanel(); }, 300);
+
 async function renderNpPanel() {
   const box = $('npPanel');
   if (npTab !== 'lyrics' && lyrView) { lyrView.destroy(); lyrView = null; lyrFor = ''; box.classList.remove('lyr-mode'); box.innerHTML = ''; }
   if (npTab === 'next') {
     const ci = await refreshPlayingIndex();
-    if (!ok(ci) || ci.found === false) { box.innerHTML = '<div class="empty" style="padding:20px">—</div>'; return; }
-    const r = await call('playlist.getTracks', { playlist: ci.playlist, start: ci.index + 1, count: 15, fields: ['title', 'artist', 'album', 'duration', 'absolutePath'] });
-    const rows = (ok(r) && r.tracks) || [];
+    if (!ok(ci) || ci.found === false) {
+      const q0 = await call('queue.get', {});
+      if (!((ok(q0) && (q0.items || q0.tracks)) || []).length) { box.innerHTML = '<div class="empty" style="padding:20px">—</div>'; return; }
+    }
+    const { rows, note } = await upNext(ci);
     if (npTab !== 'next') return;
-    if (!rows.length) { box.innerHTML = `<div class="empty" style="padding:20px">${$t('Это последний трек плейлиста')}</div>`; return; }
-    box.innerHTML = rows.map((t) => `<div class="up-row" data-i="${t.index}"><img alt="" style="visibility:hidden"><div style="min-width:0"><div class="t">${esc(t.title)}</div><div class="a">${esc(t.artist)} · ${esc(t.album)}</div></div><div class="d num">${fmtTime(t.duration)}</div></div>`).join('');
-    box.ondblclick = (e) => { const row = e.target.closest('.up-row'); if (row) call('playlist.playTrack', { playlist: ci.playlist, index: +row.dataset.i }); };
-    const paths = [...new Set(rows.map((t) => t.absolutePath))];
-    const a = await call('artwork.getFb2kUrlByPathBatch', { paths, maxSize: 80 });
+    let pl = '';
+    if (note === 'shuffle' || note === 'albums' || note === 'folders') { const g = await call('playlist.getPlaying'); pl = ok(g) && g.found !== false ? g.name || '' : ''; }
+    if (npTab !== 'next') return;
+    const NOTES = {
+      end: $t('Это последний трек плейлиста'),
+      repeat: $t('Повтор трека: дальше снова «{0}»', esc(app.track ? app.track.title : '')),
+      shuffle: pl ? $t('Вперемешку: следующий трек foobar2000 выберет случайно из «{0}»', esc(pl)) : $t('Вперемешку: следующий трек foobar2000 выберет случайно'),
+      albums: $t('Затем — случайный альбом'),
+      folders: $t('Затем — случайная папка'),
+    };
+    const noteHtml = note ? `<div class="up-note">${icon(note === 'shuffle' || note === 'albums' || note === 'folders' ? 'shuffle' : note === 'repeat' ? 'repeat1' : 'order', 16)}<span>${NOTES[note]}</span></div>` : '';
+    if (!rows.length) { box.innerHTML = noteHtml || `<div class="empty" style="padding:20px">${NOTES.end}</div>`; return; }
+    box.innerHTML = rows.map((r, i) => `<div class="up-row" data-k="${i}"><img alt="" style="visibility:hidden"><div style="min-width:0"><div class="t">${r.queued ? `<span class="up-tag">${$t('в очереди')}</span>` : ''}${esc(r.t.title)}</div><div class="a">${esc(r.t.artist)} · ${esc(r.t.album)}</div></div><div class="d num">${fmtTime(r.t.duration)}</div></div>`).join('') + noteHtml;
+    box.ondblclick = (e) => { const row = e.target.closest('.up-row'); const r = row && rows[+row.dataset.k]; if (r && r.playlist != null && r.index != null) call('playlist.playTrack', { playlist: r.playlist, index: r.index }); };
+    const paths = [...new Set(rows.map((r) => r.t.absolutePath).filter(Boolean))];
+    const a = paths.length ? await call('artwork.getFb2kUrlByPathBatch', { paths, maxSize: 80 }) : null;
     const arr = ok(a) && (a.artworks || a.items);
     const map = new Map(paths.map((p, i) => [p, Array.isArray(arr) && arr[i] && arr[i].available !== false ? artUrl(arr[i].dataUrl || arr[i].url) : '']));
-    box.querySelectorAll('.up-row').forEach((el, i) => { const u = map.get(rows[i].absolutePath); const img = el.querySelector('img'); if (u) { img.src = u; img.style.visibility = ''; } else img.replaceWith(h('<div class="ph"></div>')); });
+    box.querySelectorAll('.up-row').forEach((el) => { const u = map.get(rows[+el.dataset.k].t.absolutePath); const img = el.querySelector('img'); if (u) { img.src = u; img.style.visibility = ''; } else img.replaceWith(h('<div class="ph"></div>')); });
   } else if (npTab === 'lyrics') {
     await renderLyricsTab(false);
   } else {
@@ -720,11 +773,14 @@ function bindEvents() {
   on('playback:timeHighRes', Pos.fine);
   on('playback:seeked', (d) => { Pos.seeked(+d.position || 0); lyrKick(); Canvas.notify('seek'); });
   on('playback:volumeChanged', (d) => setVolumeUI(d.volume, d.isMuted ?? d.muted));
-  on('playback:orderChanged', (d) => setOrder(d.orderIndex ?? d.order));
+  on('playback:orderChanged', (d) => { setOrder(d.orderIndex ?? d.order); upAgain(); schedulePrefetch(); });
+  // what plays next changes with the queue and with the playing playlist
+  on('playback:queueChanged', () => { upAgain(); schedulePrefetch(); });
+  ['playlist:itemsAdded', 'playlist:itemsRemoved', 'playlist:itemsReplaced'].forEach((ev) => on(ev, upAgain));
   on('playback:stopAfterCurrentChanged', (d) => $('btnSac').classList.toggle('on', !!d.enabled));
   on('playback:dynamicInfoTrack', (d) => { if (app.track && d.title) { app.track.title = d.title; app.track.artist = d.artist || app.track.artist; $('npTitle').textContent = d.title; setPbMeta(app.track); $('npArtist').textContent = app.track.artist; } });
   on('playback:edited', (d) => { const t = normTrack(d); if (t) setTrack(t); });
-  on('playlist:itemsReordered', debounce(() => { if (npTab === 'next') renderNpPanel(); }, 300));
+  on('playlist:itemsReordered', upAgain);
   on('system:themeChanged', () => Theme.rebuild());
   document.addEventListener('visibilitychange', () => {
     Viz.vizState.windowVisible = document.visibilityState === 'visible';
