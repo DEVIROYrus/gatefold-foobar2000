@@ -210,15 +210,7 @@ export async function scan() {
 const mergeRows = (list) => [...list].sort((a, b) => severity(b) - severity(a));
 
 // ---------------------------------------------------------------- visual comparison
-const signature = (blob) => imgOp('signature', { blob });
-export async function compare(blobA, blobB) {
-  const [a, b] = await Promise.all([signature(blobA), signature(blobB)]);
-  let ham = 0; for (let i = 0; i < 64; i++) ham += a.bits[i] !== b.bits[i] ? 1 : 0;
-  let cd = 0; for (let i = 0; i < 16; i++) cd += Math.hypot(a.grid[i][0] - b.grid[i][0], a.grid[i][1] - b.grid[i][1], a.grid[i][2] - b.grid[i][2]);
-  cd /= 16;
-  const verdict = ham <= 10 && cd < 38 ? 'same' : ham <= 20 && cd < 70 ? 'similar' : 'different';
-  return { ham, cd: Math.round(cd), verdict };
-}
+export const compare = CF.compare;          // the same picture? (coverfetch.js)
 
 // ---------------------------------------------------------------- upgrade
 const sizeNeed = (r) => (r.flags.includes('lowres') ? Math.max(Math.round(Math.min(r.w, r.h) * 1.4), settings.coverMinSize || 600) : Math.round(Math.min(r.w, r.h) * 0.95));
@@ -252,6 +244,8 @@ export async function upgrade(row, { auto = false } = {}) {
           if (hq && hq.fmt === 'JPEG' && hq.q && hq.q < (r.q || 0) + 15) { tested.push({ ...slim(c), w: img.w, h: img.h, verdict: 'small' }); continue; }
         }
         const sim = await compare(oldBlob, img.blob);
+        // a bigger file that is the same picture stretched from something smaller than yours: no better
+        if (sim.verdict !== 'different' && r.w && await CF.stretched(img, { blob: oldBlob, w: r.w, h: r.h })) { tested.push({ ...slim(c), w: img.w, h: img.h, verdict: 'small' }); continue; }
         const prev = await previewUrl(img.blob);
         if (prev) previews.set(r.key + '|' + c.url, prev);
         tested.push({ ...slim(c), w: img.w, h: img.h, ...sim, _img: img });

@@ -1581,17 +1581,49 @@ async def test_folders(browser, port):
     check(not errs, f'no page errors {errs}')
     await ctx.close()
 
+async def test_cover_sharpness(browser, port):
+    print('· covers: a big file stretched from a small picture is told from a real one')
+    ctx, pg, errs = await page(browser, port, {'language': 'en'})
+    await pg.wait_for_timeout(600)
+    r = await pg.evaluate(r"""(async () => {
+      const draw = (n) => { const c = new OffscreenCanvas(n, n), x = c.getContext('2d'), k = n / 1000; let s = 7; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+        x.fillStyle = '#1b2440'; x.fillRect(0, 0, n, n);
+        for (let i = 0; i < 260; i++) { x.strokeStyle = `hsl(${rnd() * 360},70%,${40 + rnd() * 40}%)`; x.lineWidth = (1 + rnd() * 3) * k; x.beginPath(); x.arc(rnd() * n, rnd() * n, (5 + rnd() * 120) * k, 0, 7); x.stroke(); }
+        x.fillStyle = '#fff'; x.font = `bold ${60 * k}px sans-serif`; x.fillText('SHARP COVER', 80 * k, 900 * k); return c; };
+      const jpeg = (c, q) => c.convertToBlob({ type: 'image/jpeg', quality: q });
+      const up = (src, n) => { const c = new OffscreenCanvas(n, n), x = c.getContext('2d'); x.imageSmoothingQuality = 'high'; x.drawImage(src, 0, 0, n, n); return c; };
+      const b64 = async (b) => { const u = new Uint8Array(await b.arrayBuffer()); let s = ''; for (let i = 0; i < u.length; i += 8192) s += String.fromCharCode.apply(null, u.subarray(i, i + 8192)); return btoa(s); };
+      const files = { stretch: await b64(await jpeg(up(draw(400), 1500), 0.85)), real: await b64(await jpeg(draw(1500), 0.9)), dz: await b64(await jpeg(draw(1000), 0.9)),
+                      other: await b64(await jpeg((() => { const c = new OffscreenCanvas(1000, 1000), x = c.getContext('2d'); x.fillStyle = '#e8d8b0'; x.fillRect(0, 0, 1000, 1000); x.fillStyle = '#222'; for (let i = 0; i < 40; i++) x.fillRect(i * 25, 0, 9, 1000); return c; })(), 0.9)) };
+      const base = window.fb2k.invoke.bind(window.fb2k);
+      window.fb2k.invoke = async (m, p) => { const k = m === 'http.get' && (p.url.match(/x-test\/(\w+)/) || [])[1]; if (k) return { success: true, status: 200, body: files[k] }; return base(m, p); };
+      const CF = await import('./js/coverfetch.js');
+      const it = (k) => ({ src: 'iTunes US', url: 'https://is1-ssl.mzstatic.com/x-test/' + k, res: 3000, score: 0.95 });
+      const dz = (k = 'dz') => ({ src: 'Deezer', url: 'https://e-cdns-images.dzcdn.net/x-test/' + k, res: 1000, score: 0.95 });
+      const a = await CF.pickSharp([it('stretch'), dz()]);
+      const b = await CF.pickSharp([it('real'), dz()]);
+      const c = await CF.pickSharp([it('stretch'), dz('other')]);
+      const d = await CF.pickSharp([it('stretch'), { ...it('dz'), src: 'iTunes RU' }]);
+      return { a: [a.c.src, a.img.w, a.note || ''], b: [b.c.src, b.img.w], c: c.c.src, d: d.c.src };
+    })()""")
+    check(r['a'][0] == 'Deezer' and r['a'][1] == 1000 and '1500' in r['a'][2], f'a 1500 px file stretched from 400 px loses to a real 1000 px copy of the same cover {r["a"]}')
+    check(r['b'] == ['iTunes US', 1500], f'a real 1500 px picture is kept over the smaller copy {r["b"]}')
+    check(r['c'] == 'iTunes US', f'a different picture is not used to judge {r["c"]}')
+    check(r['d'] == 'iTunes US', f'only another source is asked for a smaller copy {r["d"]}')
+    check(not errs, f'no page errors {errs[:2]}')
+    await ctx.close()
+
 TESTS = [*((f'language_{l}', (lambda l: lambda b, p: test_language(b, p, l))(l)) for l in ('ru', 'en', 'de', 'es', 'zh')),
          ('playlists', test_playlists), ('youtube', test_youtube), ('youtube_captions', test_youtube_captions), ('columns', test_columns), ('settings', test_settings), ('updates', test_updates),
          ('tooltips', test_tooltips), ('canvas_volume', test_canvas_volume), ('fb2k_prefs', test_fb2k_prefs), ('welcome', test_welcome),
          ('playlist_editing', test_playlist_editing), ('windows', test_windows), ('vu', test_vu), ('smart_color_radio', test_smart_color_radio),
-         ('lyrics_sync', test_lyrics_sync), ('album_details', test_album_details), ('level', test_level), ('sound_offer', test_sound_offer), ('similar_albums', test_similar_albums), ('editions_artists', test_editions_artists), ('colors', test_colors), ('sound_panel', test_sound_panel), ('cover_pick', test_cover_pick), ('heavy_library', test_heavy_library), ('tracks', test_tracks), ('text_clipping', test_text_clipping), ('canvas_idle', test_canvas_idle), ('folders', test_folders), ('sound_ai', test_sound_ai), ('layout', test_layout), ('stability', test_stability)]
+         ('lyrics_sync', test_lyrics_sync), ('album_details', test_album_details), ('level', test_level), ('sound_offer', test_sound_offer), ('similar_albums', test_similar_albums), ('editions_artists', test_editions_artists), ('colors', test_colors), ('sound_panel', test_sound_panel), ('cover_pick', test_cover_pick), ('cover_sharpness', test_cover_sharpness), ('heavy_library', test_heavy_library), ('tracks', test_tracks), ('text_clipping', test_text_clipping), ('canvas_idle', test_canvas_idle), ('folders', test_folders), ('sound_ai', test_sound_ai), ('layout', test_layout), ('stability', test_stability)]
 # seconds each test takes on a CI runner (from the « (N s)» lines of a run); only used to share the tests
 # out evenly between parallel parts — a test missing here counts as DEFAULT_S and still runs
 DURATIONS = {'language_ru': 13, 'language_en': 18, 'language_de': 18, 'language_es': 18, 'language_zh': 18, 'playlists': 10, 'youtube': 14,
              'youtube_captions': 29, 'columns': 23, 'settings': 6, 'updates': 20, 'tooltips': 9, 'canvas_volume': 4, 'fb2k_prefs': 9, 'welcome': 26,
              'playlist_editing': 14, 'windows': 13, 'vu': 32, 'smart_color_radio': 27, 'lyrics_sync': 11, 'album_details': 20, 'level': 7,
-             'sound_offer': 14, 'similar_albums': 3, 'editions_artists': 20, 'colors': 16, 'sound_panel': 8, 'cover_pick': 12, 'heavy_library': 22, 'tracks': 30, 'text_clipping': 60, 'canvas_idle': 52, 'folders': 16, 'sound_ai': 58, 'layout': 60, 'stability': 70}
+             'sound_offer': 14, 'similar_albums': 3, 'editions_artists': 20, 'colors': 16, 'sound_panel': 8, 'cover_pick': 12, 'cover_sharpness': 8, 'heavy_library': 22, 'tracks': 30, 'text_clipping': 60, 'canvas_idle': 52, 'folders': 16, 'sound_ai': 58, 'layout': 60, 'stability': 70}
 DEFAULT_S = 20
 
 def shards(n):

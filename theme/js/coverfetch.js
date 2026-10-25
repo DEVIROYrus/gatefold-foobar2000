@@ -186,6 +186,49 @@ async function maybeDownscale(img) {
   return { ...img, ...(await imgOp('resize', { blob: img.blob, w: img.w, h: img.h, max, quality: 0.93, wantB64: true })) };
 }
 
+const signature = (blob) => imgOp('signature', { blob });
+export async function compare(blobA, blobB) {
+  const [a, b] = await Promise.all([signature(blobA), signature(blobB)]);
+  let ham = 0; for (let i = 0; i < 64; i++) ham += a.bits[i] !== b.bits[i] ? 1 : 0;
+  let cd = 0; for (let i = 0; i < 16; i++) cd += Math.hypot(a.grid[i][0] - b.grid[i][0], a.grid[i][1] - b.grid[i][1], a.grid[i][2] - b.grid[i][2]);
+  cd /= 16;
+  const verdict = ham <= 10 && cd < 38 ? 'same' : ham <= 20 && cd < 70 ? 'similar' : 'different';
+  return { ham, cd: Math.round(cd), verdict };
+}
+
+/* Does the bigger picture hold more than the smaller copy of the same cover? Below SHARP it is a smaller
+   picture the server stretched: brought down to the smaller copy's size it comes out softer (imgops.js). */
+const SHARP = 0.8;
+export async function stretched(big, small) {
+  if (Math.min(big.w, big.h) <= Math.min(small.w, small.h) * 1.05) return false;
+  const q = await imgOp('sharperAt', { big: big.blob, small: small.blob }).catch(() => null);
+  return q != null && q < SHARP;
+}
+const srcName = (c) => String(c.src || '').split(' ')[0];
+/** of the candidates (best first): the biggest that is not a stretched copy of something smaller; with the
+    picture already downloaded. A smaller copy from another source is fetched to tell, when there is one. */
+export async function pickSharp(cands) {
+  let lastErr = '';
+  const got = [];
+  for (const c of cands) {
+    if (got.length >= 2) break;
+    if (got.length && (c.res >= got[0].c.res || srcName(c) === srcName(got[0].c))) continue;
+    try {
+      const img = await download(c.url);
+      const bad = validate(img);
+      if (bad) throw new Error(bad);
+      got.push({ c, img });
+    } catch (e) { lastErr = e.message; log('candidate rejected', c.src, e.message); }
+  }
+  if (!got.length) throw new Error(lastErr || $t('все кандидаты отклонены'));
+  const [a, b] = got;
+  if (b && (await compare(a.img.blob, b.img.blob)).verdict !== 'different' && await stretched(a.img, b.img)) {
+    log('cover:', a.c.src, `${a.img.w}×${a.img.h} is stretched; ${b.c.src} ${b.img.w}×${b.img.h} is sharper`);
+    return { ...b, note: $t('{0} {1}×{2} растянута из меньшей', a.c.src, a.img.w, a.img.h) };
+  }
+  return a;
+}
+
 export const psq = (s) => "'" + String(s).replace(/'/g, "''") + "'";
 /** PowerShell, started without making foobar2000 wait for it: a wait inside the host (waitForExitMs)
  *  blocks foobar2000's UI thread for as long as the command runs — up to the whole download, the window
@@ -407,10 +450,12 @@ export async function repairSharedCovers({ includeForeign = false } = {}) {
 export async function lockCover(job, where) {
   await Own.set({ key: job.key, name: job.album, artist: job.artist, paths: await albumPaths(job), dirs: [] }, null, { where, src: 'manual', lock: true });
 }
-export async function applyCandidate(job, cand, { manual = false } = {}) {
-  let img = await download(cand.url);
-  const bad = validate(img);
-  if (bad) throw new Error(bad);
+export async function applyCandidate(job, cand, { manual = false, img = null, note = '' } = {}) {
+  if (!img) {
+    img = await download(cand.url);
+    const bad = validate(img);
+    if (bad) throw new Error(bad);
+  }
   img = await maybeDownscale(img);
   if (manual) job = { ...job, fromSweep: false };                  // your click: saved the way the settings say
   const saved = manual && settings.coverTarget === 'gatefold' ? await keepInGatefold(job, img, { lock: true, src: 'web' }) : await save(job, img, cand.url);
@@ -419,7 +464,7 @@ export async function applyCandidate(job, cand, { manual = false } = {}) {
   store.set(job.key, { s: 'ok', t: Date.now(), src: cand.src, w: img.w, h: img.h, sc: +(cand.score || 0).toFixed(3) });
   review.delete(job.key);
   state.sessionSaved++;
-  pushLog({ s: 'ok', artist: job.artist, album: job.album, src: cand.src, w: img.w, h: img.h, sc: cand.score, thumb: cand.thumb, via: saved.via });
+  pushLog({ s: 'ok', artist: job.artist, album: job.album, src: cand.src, w: img.w, h: img.h, sc: cand.score, thumb: cand.thumb, via: saved.via, err: note || undefined });
   emit('saved', { job, url: objUrl, cand, savedTo: saved.savedTo });
   setTimeout(() => URL.revokeObjectURL(objUrl), 120000);
   return { img, saved, url: objUrl };
@@ -485,11 +530,9 @@ async function processJob(job) {
       // within 0.04 of the best score, prefer the highest resolution source
       const top = good[0].score;
       const ordered = good.filter((c) => c.score >= top - 0.04).sort((a, b) => b.res - a.res).concat(good.filter((c) => c.score < top - 0.04));
-      let lastErr = '';
-      for (const c of ordered.slice(0, 4)) {
-        try { await applyCandidate(job, c); return; } catch (e) { lastErr = e.message; log('candidate rejected', c.src, e.message); }
-      }
-      throw new Error(lastErr || $t('все кандидаты отклонены'));
+      const p = await pickSharp(ordered.slice(0, 5));
+      await applyCandidate(job, p.c, { img: p.img, note: p.note });
+      return;
     }
     const maybe = cands.filter((c) => c.score >= 0.6);
     if (maybe.length) {

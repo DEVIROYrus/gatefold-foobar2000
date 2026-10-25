@@ -142,6 +142,15 @@ export function bumpArtFor(path) {
   dirN = Object.keys(dirV).length;
   try { localStorage.setItem('aurora.artv.dir', JSON.stringify(dirV)); } catch {}
 }
+/** the cover size to ask foobar2000 for, in pixels: as big as the cover can be shown on this screen — the
+    Canvas and full-screen Now Playing (up to 900 px, plus the slow zoom), times the display scaling — so a
+    big cover is never stretched from a smaller copy. Steps of 128 keep foobar's cache from fragmenting. */
+export function coverPx() {
+  const sw = (window.screen && screen.width) || innerWidth, sh = (window.screen && screen.height) || innerHeight;
+  const css = Math.min(900, 0.62 * Math.max(sh, 1), 0.62 * Math.max(sw, 1)) * 1.08;
+  const px = css * (window.devicePixelRatio || 1);
+  return Math.max(640, Math.min(2560, Math.ceil(px / 128) * 128));
+}
 export function artUrl(u) {
   if (!u || !/^fb2k:/i.test(u)) return u || '';
   let q = artV ? 'av=' + artV : '';

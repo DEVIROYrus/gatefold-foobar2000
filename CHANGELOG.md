@@ -8,6 +8,8 @@ All notable changes are listed here. Versions follow [Semantic Versioning](https
 - Added tracks start playing from the first new one; a folder without music leaves no empty playlist.
 - Covers removed from a network share are kept in the profile first (a share has no Recycle Bin).
 - Albums subtitle is right again after switching Library modes.
+- **Sharper covers:** Now Playing and the Canvas ask foobar2000 for a cover as big as your screen shows it (it was stretched on big and high-DPI screens).
+- **A stretched download is no longer taken for a big cover:** when a source serves a small picture blown up to 1000–3000 px, a sharper copy from another source wins, and «Improve covers» no longer replaces a cover with a blown-up one.
 
 ## [1.4.2] — every song in one list
 

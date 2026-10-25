@@ -39,6 +39,24 @@ async function resizeBlob(blob, w, h, { max = 0, quality = 0.92, square = false,
   return { blob: await c.convertToBlob({ type, quality }), w: ow, h: oh };
 }
 
+
+/* ---- how much fine detail a picture holds (sharperAt) ----
+   A cover served as 1000×1000 or 3000×3000 is sometimes a smaller picture stretched by the server. Its
+   size says nothing then; what tells is the detail. Brought down to the size of a smaller copy of the
+   same cover, a stretched one comes out softer than that copy, a real one does not. The measure: the
+   part of the picture lost when it is halved and enlarged again, relative to its contrast. */
+const lumOf = (x, c) => { const d = x.getImageData(0, 0, c, c).data; const o = new Float32Array(c * c); for (let i = 0, j = 0; j < o.length; i += 4, j++) o[j] = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; return o; };
+function fineDetail(cv, c) {
+  const L = lumOf(cv.getContext('2d', { willReadFrequently: true }), c);
+  const h = Math.round(c / 2), s = new OffscreenCanvas(h, h), sx = s.getContext('2d'); sx.imageSmoothingQuality = 'high'; sx.drawImage(cv, 0, 0, h, h);
+  const b = new OffscreenCanvas(c, c), bx = b.getContext('2d', { willReadFrequently: true }); bx.imageSmoothingQuality = 'high'; bx.drawImage(s, 0, 0, c, c);
+  const Y = lumOf(bx, c);
+  const m = Math.round(c * 0.03); let e = 0, n = 0, s1 = 0, s2 = 0;
+  for (let y = m; y < c - m; y++) for (let x = m; x < c - m; x++) { const k = y * c + x; e += Math.abs(L[k] - Y[k]); s1 += L[k]; s2 += L[k] * L[k]; n++; }
+  const sd = Math.sqrt(Math.max(0, s2 / n - (s1 / n) ** 2));
+  return { abs: e / n, rel: e / n / (sd + 4) };
+}
+
 export const ops = {
   /** network download (base64) → validated image facts */
   async decode({ b64, blob }) {
@@ -69,6 +87,21 @@ export const ops = {
     const head = String(dataUrl).slice(0, 40).match(/^data:([^;,]+)/);
     const bytes = b64ToBytes(s);
     return new Blob([bytes], { type: (head && head[1]) || mime || sniff(bytes) || 'image/jpeg' });
+  },
+  /** the bigger picture brought down to the smaller one's size: its fine detail relative to the smaller
+      one's (≈1 or more: as sharp; clearly below 1: a stretched copy of something smaller). null: no detail to judge by */
+  async sharperAt({ big, small, crop = 800 }) {
+    const A = await createImageBitmap(big), B = await createImageBitmap(small);
+    try {
+      const bw = B.width, bh = B.height, c = Math.min(bw, bh, crop);
+      const ox = (bw - c) / 2, oy = (bh - c) / 2;
+      const cb = new OffscreenCanvas(c, c); cb.getContext('2d').drawImage(B, ox, oy, c, c, 0, 0, c, c);
+      const full = new OffscreenCanvas(bw, bh), fx = full.getContext('2d'); fx.imageSmoothingQuality = 'high'; fx.drawImage(A, 0, 0, bw, bh);
+      const ca = new OffscreenCanvas(c, c); ca.getContext('2d').drawImage(full, ox, oy, c, c, 0, 0, c, c);
+      const da = fineDetail(ca, c), db = fineDetail(cb, c);
+      if (db.abs < 0.6 || db.rel < 0.004) return null;          // a flat picture: nothing to compare
+      return +(da.rel / db.rel).toFixed(3);
+    } finally { A.close(); B.close(); }
   },
   /** perceptual signature: 8×8 difference hash + 4×4 colour grid of the central 92 % */
   async signature({ blob }) {

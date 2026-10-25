@@ -131,6 +131,7 @@ export default {
  "Исправление общих папок: в Корзину {0}, ошибок {1}": "Shared folder repair: {0} moved to the Recycle Bin, {1} errors",
  "уже есть файл в папке — проверьте шаблоны Album art": "there's already a file in the folder — check the Album art patterns",
  "все кандидаты отклонены": "all candidates rejected",
+ "{0} {1}×{2} растянута из меньшей": "{0} {1}×{2} is a smaller picture stretched",
  "у альбома больше нет обложки": "the album no longer has a cover",
  "та же картинка, но совпадение альбома ниже порога": "same picture, but the album match is below the threshold",
  "найденная картинка похожа, но не идентична": "the picture found is similar but not identical",
