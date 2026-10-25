@@ -4,6 +4,8 @@ All notable changes are listed here. Versions follow [Semantic Versioning](https
 
 ## [Unreleased]
 
+## [1.4.3] — network folders, sharper covers, honest Up next
+
 - **«Open folder…» plays the folder's tracks** (subfolders and network shares too) instead of failing with «Unsupported file format» (#7).
 - Added tracks start playing from the first new one; a folder without music leaves no empty playlist.
 - Covers removed from a network share are kept in the profile first (a share has no Recycle Bin).

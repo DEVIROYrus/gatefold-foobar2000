@@ -21,7 +21,7 @@
 ; ============================================================================
 
 #ifndef AppVersion
-  #define AppVersion "1.4.2"
+  #define AppVersion "1.4.3"
 #endif
 #ifndef RepoUrl
   #define RepoUrl "https://github.com/DEVIROYrus/gatefold-foobar2000"
