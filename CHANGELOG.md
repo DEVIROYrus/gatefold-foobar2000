@@ -4,6 +4,11 @@ All notable changes are listed here. Versions follow [Semantic Versioning](https
 
 ## [Unreleased]
 
+- **«Open folder…» plays the folder's tracks** (subfolders and network shares too) instead of failing with «Unsupported file format» (#7).
+- Added tracks start playing from the first new one; a folder without music leaves no empty playlist.
+- Covers removed from a network share are kept in the profile first (a share has no Recycle Bin).
+- Albums subtitle is right again after switching Library modes.
+
 ## [1.4.2] — every song in one list
 
 - **Library → Tracks:** every song in one list — sort by artist, title, album, year, genre, length or play statistics, filter as you type, a letter index, Shift/Ctrl selection; a double click plays the list from that song (a big list starts at once and fills in the background).

@@ -469,12 +469,28 @@ async def test_welcome(browser, port):
     await pg.click(".welcome [data-welcome=folder]"); await pg.wait_for_timeout(1500)
     c = await calls()
     check(any('playlist.create' in x and 'Lumen Arcade' in x for x in c), 'Open a folder… creates a playlist named after the folder')
-    check(any('playlist.addPathsAsync' in x and 'D:\\\\Music\\\\Lumen Arcade' in x for x in c), 'the folder is added asynchronously')
-    check(any(x.startswith('playlist.playTrack') for x in c), 'and starts playing')
+    check(any(x.startswith('playlist.addPaths ') and 'D:\\\\Music\\\\Lumen Arcade' in x for x in c), 'the folder goes through foobar2000\'s own Add folder, which walks subfolders and network shares')
+    check(not any(x.startswith('playlist.addPathsAsync') for x in c), 'not through addPathsAsync, which takes a folder for one track')
+    check(any(x.startswith('playlist.playTrack') and '"index":0' in x for x in c), 'and starts playing')
     check(await pg.evaluate("document.querySelector('.view.active')?.id") == 'view-playlist', 'the playlist opens')
     check(await pg.evaluate("!document.querySelector('.welcome') && !document.body.classList.contains('no-music')"), 'the welcome is gone once there is music')
     toast = await pg.evaluate("[...document.querySelectorAll('.toast')].map(t => t.innerText).join(' | ')")
     check('Added 12 tracks' in toast and 'Add the folder to the library' in toast, f'the result is reported, with an offer to add the folder to the library {toast[:120]}')
+    # files go asynchronously; into a playlist that has tracks, playing starts at the first new one
+    await pg.evaluate("window.__calls.length = 0; window.__wl.pls[window.__wl.pls.length - 1].trackCount = 5")
+    g = await pg.evaluate("window.__wl.pls[window.__wl.pls.length - 1].guid")
+    await pg.evaluate(f"import('./js/welcome.js').then(m => m.openFiles('{g}'))"); await pg.wait_for_timeout(900)
+    c = await calls()
+    check(any(x.startswith('playlist.addPathsAsync') and 'a.flac' in x for x in c), 'picked files are added asynchronously')
+    check(any(x.startswith('playlist.playTrack') and '"index":5' in x for x in c), f'playing starts at the first added track, not the playlist\'s first {[x for x in c if "playTrack" in x]}')
+    # a folder without music: no empty playlist is left behind
+    await pg.evaluate("window.__calls.length = 0; window.__wl.noMusic = true")
+    await pg.evaluate("import('./js/welcome.js').then(m => m.openFolder())"); await pg.wait_for_timeout(900)
+    c = await calls()
+    check(any(x.startswith('playlist.remove') for x in c) and not any(x.startswith('playlist.playTrack') for x in c), 'a folder without music leaves no empty playlist')
+    toast = await pg.evaluate("[...document.querySelectorAll('.toast')].map(t => t.innerText).join(' | ')")
+    check('No music found' in toast, f'and says so {toast[-80:]}')
+    check(not errs, f'no page errors {errs[:2]}')
     await ctx.close()
     # «Connect your music folder»: native page opens, the theme waits, then opens Library
     ctx, pg, errs2 = await page(browser, port, {'language': 'en'}, pre='window.__emptyMusic = true;')
@@ -1557,6 +1573,11 @@ async def test_folders(browser, port):
     await pg.dblclick('#fdList .vrow.extra .c-title'); await pg.wait_for_timeout(900)
     check(any(c[0] in ('library.addToPlaylist', 'playlist.addPathsSequential') for c in (await pg.evaluate("window.__calls"))[n0:]), 'and can be played')
     if os.environ.get('SHOTS'): await pg.screenshot(path=os.environ['SHOTS'] + '/folders.png')
+    # network shares: a folder path starts with \\server, and a share has no Recycle Bin
+    unc = await pg.evaluate(r"""(async () => { const CF = await import('./js/coverfetch.js'); const p = '\\\\nas\\music\\A\\cover.jpg';
+      window.__fs[p] = 'QUJD'; window.__calls.length = 0; const r = await CF.recycle(p);
+      return { r, kept: Object.keys(window.__fs).some(k => /aurora\\trash\\.*cover\.jpg$/.test(k) && window.__fs[k] === 'QUJD'), del: window.__calls.filter(c => c[0] === 'file.delete').map(c => c[2]) }; })()""")
+    check(unc['r'] and unc['kept'] and unc['del'] == ['trash=false'], f'a file removed from a network share is kept in the profile first {unc}')
     check(not errs, f'no page errors {errs}')
     await ctx.close()
 
@@ -1568,7 +1589,7 @@ TESTS = [*((f'language_{l}', (lambda l: lambda b, p: test_language(b, p, l))(l))
 # seconds each test takes on a CI runner (from the « (N s)» lines of a run); only used to share the tests
 # out evenly between parallel parts — a test missing here counts as DEFAULT_S and still runs
 DURATIONS = {'language_ru': 13, 'language_en': 18, 'language_de': 18, 'language_es': 18, 'language_zh': 18, 'playlists': 10, 'youtube': 14,
-             'youtube_captions': 29, 'columns': 23, 'settings': 6, 'updates': 20, 'tooltips': 9, 'canvas_volume': 4, 'fb2k_prefs': 9, 'welcome': 24,
+             'youtube_captions': 29, 'columns': 23, 'settings': 6, 'updates': 20, 'tooltips': 9, 'canvas_volume': 4, 'fb2k_prefs': 9, 'welcome': 26,
              'playlist_editing': 14, 'windows': 13, 'vu': 32, 'smart_color_radio': 27, 'lyrics_sync': 11, 'album_details': 20, 'level': 7,
              'sound_offer': 14, 'similar_albums': 3, 'editions_artists': 20, 'colors': 16, 'sound_panel': 8, 'cover_pick': 12, 'heavy_library': 22, 'tracks': 30, 'text_clipping': 60, 'canvas_idle': 52, 'folders': 16, 'sound_ai': 58, 'layout': 60, 'stability': 70}
 DEFAULT_S = 20

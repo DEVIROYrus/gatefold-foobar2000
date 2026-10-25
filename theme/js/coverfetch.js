@@ -366,6 +366,16 @@ export async function diagnoseSharedCovers() {
 }
 
 export async function recycle(path) {
+  /* A network share has no Recycle Bin: Windows would delete the file for good (or ask about it).
+     Keep a copy in the profile first, then delete it there. */
+  if (/^\\\\/.test(path || '')) {
+    const rd = await call('file.read', { path, encoding: 'binary' });
+    if (!ok(rd) || !rd.content) return false;
+    const name = String(path).split(/[\\/]/).pop();
+    const w = await call('file.write', { path: `%profile%\\aurora\\trash\\${Date.now().toString(36)}-${name}`, content: 'base64:' + String(rd.content).replace(/^base64:/, ''), encoding: 'binary' });
+    if (!ok(w)) return false;
+    return ok(await call('file.delete', { path, moveToTrash: false }));
+  }
   const r = await call('file.delete', { path, moveToTrash: true });
   if (ok(r)) return true;
   const cmd = `Add-Type -AssemblyName Microsoft.VisualBasic;[Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile(${psq(path)},'OnlyErrorDialogs','SendToRecycleBin')`;

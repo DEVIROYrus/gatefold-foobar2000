@@ -101,29 +101,39 @@ function libraryArrived(n) {
 
 const baseName = (p) => String(p).replace(/[\\/]+$/, '').split(/[\\/]/).pop() || p;
 
-/** paths → a playlist (a new one named after them, or `guid`), then play it */
-async function addAndPlay(paths, { guid = '', name = '' } = {}) {
+/** paths → a playlist (a new one named after them, or `guid`), then play what was added */
+async function addAndPlay(paths, { guid = '', name = '', folder = false } = {}) {
+  let start = 0, made = false;
   if (!guid) {
     const c = await call('playlist.create', { name: name || $t('Моя музыка') });
     if (!ok(c)) { toast($t('Не удалось создать плейлист: {0}', esc(c.error || c.code || ''))); return; }
-    guid = c.guid;
+    guid = c.guid; made = true;
+  } else {
+    const all = await call('playlist.getAll');
+    start = ((ok(all) && all.playlists) || []).find((p) => p.guid === guid)?.trackCount || 0;
   }
   toast($t('Добавляю музыку…'), { ms: 4000 });
   let added = -1;
-  const a = await call('playlist.addPathsAsync', { paths, playlistGuid: guid });
-  if (ok(a) && a.operationId) {
+  /* A folder goes through foobar2000's own «Add folder» (playlist.addPaths): it walks the subfolders and
+     works on network shares. playlist.addPathsAsync takes a folder for a single track that cannot play. */
+  const a = folder ? null : await call('playlist.addPathsAsync', { paths, playlistGuid: guid });
+  if (a && ok(a) && a.operationId) {
     added = await new Promise((resolve) => {
       const off = on('playlist:addComplete', (d) => { if (d.operationId === a.operationId) { off && off(); clearTimeout(t); resolve(d.addedCount ?? 0); } });
       const t = setTimeout(() => { off && off(); resolve(-1); }, 10 * 60e3);
     });
   } else {
     const s = await call('playlist.addPaths', { paths, playlistGuid: guid });
-    if (!ok(s)) { toast($t('foobar2000 не добавил файлы: ') + esc(s.error || s.code || '')); return; }
+    if (!ok(s)) {
+      if (made) call('playlist.remove', { playlistGuid: guid });                   // no empty playlist left behind
+      toast(s.code === 'NOT_FOUND' ? $t('Музыки не найдено') : $t('foobar2000 не добавил файлы: ') + esc(s.error || s.code || '')); return;
+    }
     added = s.addedCount ?? -1;
+    if (s.countBefore != null) start = s.countBefore;
   }
-  if (added === 0) { toast($t('Музыки не найдено')); return; }
+  if (added === 0) { if (made) call('playlist.remove', { playlistGuid: guid }); toast($t('Музыки не найдено')); return; }
   await call('playlist.setActive', { playlistGuid: guid });
-  await call('playlist.playTrack', { playlistGuid: guid, index: 0 });
+  await call('playlist.playTrack', { playlistGuid: guid, index: start });
   hide();
   router.go('playlist', guid);
   if (added > 0) toast($t('Добавлено {0} {1}', added.toLocaleString(), plural(added, 'трек', 'трека', 'треков')), {
@@ -134,7 +144,7 @@ async function addAndPlay(paths, { guid = '', name = '' } = {}) {
 export async function openFolder(guid = '') {
   const r = await call('dialog.openFolder', { title: $t('Папка с музыкой'), defaultPath: '%music%' });
   if (!ok(r) || r.canceled || !r.folderPath) return;
-  await addAndPlay([r.folderPath], { guid, name: baseName(r.folderPath) });
+  await addAndPlay([r.folderPath], { guid, name: baseName(r.folderPath), folder: true });
 }
 export async function openFiles(guid = '') {
   const r = await call('dialog.openFile', { title: $t('Музыкальные файлы'), multiple: true, defaultPath: '%music%',
