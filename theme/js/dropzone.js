@@ -58,6 +58,12 @@ document.addEventListener('drop', (e) => {
 });
 window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && document.body.classList.contains('dragging')) hide(); });
 
+/* a playlist file dropped on «new playlist» gives the playlist its name («Road trip.m3u8» → «Road trip») */
+const PLAYLIST_EXT = /\.(m3u8?|pls|fpl|xspf|wpl|asx)$/i;
+export function importName(paths) {
+  if (!paths || paths.length !== 1 || !PLAYLIST_EXT.test(paths[0])) return '';
+  return String(paths[0]).replace(/[\\/]+$/, '').split(/[\\/]/).pop().replace(PLAYLIST_EXT, '').trim();
+}
 const stamp = () => { const d = new Date(); return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 
 async function handleDrop(target, n) {
@@ -70,7 +76,7 @@ async function handleDrop(target, n) {
   }
   let guid = '', name = '';
   if (target === 'new') {
-    name = $t('Импорт · {0}', stamp());
+    name = importName(paths) || $t('Импорт · {0}', stamp());
     const c = await call('playlist.create', { name });
     guid = ok(c) ? c.guid : '';
   } else if (target === 'current') {

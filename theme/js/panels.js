@@ -1,6 +1,6 @@
 /* Gatefold · panels.js — Settings and Covers screens */
 import * as LYS from './lyrics-sources.js';
-import { esc, fmtTime, plural, call, ok } from './bridge.js';
+import { esc, fmtTime, plural, call, ok, debounce } from './bridge.js';
 import { settings, setSetting, resetSettings, DEFAULTS } from './settings.js';
 import { router, $, h, icon, toast } from './ui.js';
 import { current, FIXED, customPalette } from './theme.js';
@@ -83,7 +83,11 @@ function artistSplitRows() {
   const draft = { ids: [...(settings.artistSplit || [';'])], keep: [...(settings.artistKeep || [])] };
   const chips = h(`<div class="row"><div class="lbl"><b>${$t('Разделители')}</b></div><div class="seg multi" role="group"></div></div>`);
   const note = h(`<div class="row st-note"><div class="lbl"><small>${$t('Значения многозначного тега (несколько полей «album artist») — всегда разные исполнители. Альбом «A; B» появится и у A, и у B.')}</small></div></div>`);
-  const list = h(`<div class="row sep-pv"><div class="lbl"><b class="sep-pv-t"></b><div class="sep-pv-l"></div></div></div>`);
+  const list = h(`<div class="row sep-pv"><div class="lbl"><div class="sep-pv-h"><b class="sep-pv-t"></b><input class="filter sep-pv-q" type="search" placeholder="${$t('Фильтр…')}" spellcheck="false" aria-label="${$t('Фильтр…')}" hidden></div><div class="sep-pv-l"></div></div></div>`);
+  // every name can be reached: a filter for long lists, and «Show more» instead of a silent cut at 80
+  const PAGE = 80, q = list.querySelector('.sep-pv-q');
+  let shown = PAGE;
+  q.oninput = debounce(() => { shown = PAGE; list.querySelector('.sep-pv-l').scrollTop = 0; paint(); }, 150);
   const acts = actions();
   const apply = button($t('Применить'), async () => {
     setSetting('artistSplit', draft.ids); setSetting('artistKeep', draft.keep);
@@ -105,8 +109,11 @@ function artistSplitRows() {
     const pv = Names.preview(Lib.artistNamesSeen(), draft.ids, draft.keep);
     const split = pv.filter((x) => !draft.keep.some((k) => k.toLowerCase() === x.name.toLowerCase()));
     list.querySelector('.sep-pv-t').textContent = pv.length ? $t('Будут разделены: {0}', split.length) : $t('В медиатеке нет имён, которые эти разделители разделят');
-    const l = list.querySelector('.sep-pv-l'); l.innerHTML = '';
-    for (const x of pv.slice(0, 80)) {
+    q.hidden = pv.length <= PAGE;
+    const f = q.hidden ? '' : q.value.trim().toLowerCase();
+    const rows = f ? pv.filter((x) => x.name.toLowerCase().includes(f) || x.parts.some((p) => p.toLowerCase().includes(f))) : pv;
+    const l = list.querySelector('.sep-pv-l'), top = l.scrollTop; l.innerHTML = '';
+    for (const x of rows.slice(0, shown)) {
       const kept = draft.keep.some((k) => k.toLowerCase() === x.name.toLowerCase());
       const it = h(`<label class="sep-pv-i${kept ? ' kept' : ''}"><input type="checkbox"${kept ? '' : ' checked'}><span class="nm"></span><span class="arrow">→</span><span class="parts"></span></label>`);
       it.querySelector('.nm').textContent = x.name;
@@ -115,7 +122,13 @@ function artistSplitRows() {
       it.querySelector('input').onchange = (e) => { draft.keep = draft.keep.filter((k) => k.toLowerCase() !== x.name.toLowerCase()); if (!e.target.checked) draft.keep.push(x.name); paint(); };
       l.append(it);
     }
-    if (pv.length > 80) l.append(h(`<small class="dim">${$t('…и ещё {0}', pv.length - 80)}</small>`));
+    if (rows.length > shown) {
+      const more = h(`<button class="btn sm sep-pv-more">${$t('Показать ещё ({0})', rows.length - shown)}</button>`);
+      more.onclick = () => { shown += 400; paint(); };
+      l.append(more);
+    }
+    if (f && !rows.length) l.append(h(`<small class="dim sep-pv-none">${$t('Ничего не найдено')}</small>`));
+    l.scrollTop = top;
     apply.disabled = same();
   }
   paint();

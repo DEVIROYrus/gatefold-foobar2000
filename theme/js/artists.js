@@ -148,14 +148,27 @@ async function artistMenu(x, px, py) {
     ...(Lib.shared.radioFor ? [{ id: 'radio', label: $t('Радио «Похожее на это»') }] : []),
     { type: 'sep' },
     { id: 'photo', label: $t('Найти фото заново') },
+    ...(AA.hasPhoto(x.name) ? [{ id: 'nophoto', label: $t('Убрать фото') }] : []),
     { id: 'folder', label: $t('Открыть папку с фото') },
   ], px, py);
   if (id === 'open') router.go('artist', x);
   if (id === 'play') playArtist(x, false);
   if (id === 'radio') Lib.shared.radioFor(x.name);
   if (id === 'photo') { AA.refetch(jobOf(x)); toast(`${$t('Ищу фото:')} <b>${esc(x.name)}</b>`); }
+  if (id === 'nophoto') removePhoto(x);
   if (id === 'folder') openFolder();
 }
+
+/* a wrong photo: gone, the album cover stands in, and it is not looked for again until «Find photo again» */
+async function removePhoto(x) {
+  if (await AA.removePhoto(jobOf(x))) toast($t('Фото убрано: <b>{0}</b>. «Найти фото заново» вернёт его', esc(x.name)), { ms: 6000 });
+  else toast($t('Не удалось убрать фото — попробуйте ещё раз'));
+}
+AA.events.addEventListener('removed', (e) => {
+  const key = e.detail.name, el = AR.nodes.get(key);
+  if (el) { el.remove(); AR.nodes.delete(key); schedule(true); }
+  if (router.current === 'artist' && current && current.key === key) openArtist(current);
+});
 
 export async function openFolder() {
   if (!AA.astate.scanned) await AA.scanFolder();
@@ -203,8 +216,9 @@ export async function openArtist(arg) {
   $('arShuffle').onclick = () => playArtist(x, true);
   $('arPhoto').onclick = async (e) => {
     const r = e.currentTarget.getBoundingClientRect();
-    const id = await popupMenu([{ id: 'refetch', label: $t('Найти фото заново') }, { id: 'folder', label: $t('Открыть папку с фото') }, { type: 'sep' }, { id: 'help', label: $t('Как поставить своё фото') }], r.left, r.bottom + 4);
+    const id = await popupMenu([{ id: 'refetch', label: $t('Найти фото заново') }, ...(AA.hasPhoto(x.name) ? [{ id: 'nophoto', label: $t('Убрать фото') }] : []), { id: 'folder', label: $t('Открыть папку с фото') }, { type: 'sep' }, { id: 'help', label: $t('Как поставить своё фото') }], r.left, r.bottom + 4);
     if (id === 'refetch') { AA.refetch(jobOf(x)); toast(`${$t('Ищу фото:')} <b>${esc(x.name)}</b>`); }
+    if (id === 'nophoto') removePhoto(x);
     if (id === 'folder') openFolder();
     if (id === 'help') toast($t('Своё фото: <b>{0}</b> в папке с фото, затем Ctrl+R', esc(AA.fileNameFor(x.name))), { ms: 9000 });
   };

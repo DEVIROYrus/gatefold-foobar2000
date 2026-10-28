@@ -4,6 +4,10 @@ All notable changes are listed here. Versions follow [Semantic Versioning](https
 
 ## [Unreleased]
 
+- **«Remove photo»** on an artist (page and menu): a wrong picture goes away and is not looked for again; «Find photo again» brings it back (#10).
+- **Separators preview lists every name:** a filter and «Show more» instead of a cut at 80, so any name can be kept whole (#10).
+- **A playlist file dropped on «New playlist»** gives the playlist its name (#10).
+
 ## [1.4.3] — network folders, sharper covers, honest Up next
 
 - **«Open folder…» plays the folder's tracks** (subfolders and network shares too) instead of failing with «Unsupported file format» (#7).

@@ -1252,6 +1252,11 @@ body.fullscreen .np-art-wrap.nsq-true { width: calc(min(62vh, 44vw, 860px) * var
 .sep-pv .lbl { display: flex; flex-direction: column; gap: 8px; width: 100%; }
 .sep-pv-l { display: flex; flex-direction: column; max-height: 260px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--hover); }
 .sep-pv-l:empty { display: none; }
+.sep-pv-h { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.sep-pv-h .sep-pv-t { flex: 1; min-width: 0; }
+.sep-pv-h .sep-pv-q { width: 200px; flex: 0 1 200px; min-width: 0; }
+.sep-pv-l .sep-pv-more { align-self: flex-start; margin: 8px 12px; }
+.sep-pv-l .sep-pv-none { padding: 8px 12px; }
 .sep-pv-i { display: grid; grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 10px; padding: 6px 12px; font-size: var(--fs-sm); cursor: pointer; }
 .sep-pv-i + .sep-pv-i { border-top: 1px solid var(--line); }
 .sep-pv-i .nm, .sep-pv-i .parts { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
