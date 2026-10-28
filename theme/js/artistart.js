@@ -62,6 +62,7 @@ function db() {
   return dbp;
 }
 async function idbGet(k) { const d = await db(); if (!d) return null; return new Promise((res) => { const r = d.transaction('img').objectStore('img').get(k); r.onsuccess = () => res(r.result || null); r.onerror = () => res(null); }); }
+async function idbDel(k) { const d = await db(); if (!d) return false; return new Promise((res) => { const t = d.transaction('img', 'readwrite'); t.objectStore('img').delete(k); t.oncomplete = () => res(true); t.onerror = () => res(false); }); }
 async function idbPut(k, v) { const d = await db(); if (!d) return false; return new Promise((res) => { const t = d.transaction('img', 'readwrite'); t.objectStore('img').put(v, k); t.oncomplete = () => res(true); t.onerror = () => res(false); }); }
 
 // ---------------------------------------------------------------- serving
@@ -149,7 +150,7 @@ export function stats() {
   c.files = astate.files.size; c.queue = astate.queue.length;
   return c;
 }
-export function resetNotFound() { for (const [k, v] of Object.entries(idx.data)) if (v.s !== 'ok') idx.delete(k); emit('change'); }
+export function resetNotFound() { for (const [k, v] of Object.entries(idx.data)) if (v.s !== 'ok' && v.s !== 'off') idx.delete(k); emit('change'); }
 export function setPaused(p) { astate.paused = p; emit('change'); if (!p) pump(); }
 
 let pumping = false;
@@ -265,4 +266,28 @@ export function refetch(artist) {
   if (f && f === fileNameFor(artist.name)) { astate.files.delete(stem(f)); IDB.kvDel('av:' + f.toLowerCase()); }
   urls.delete(key);
   return want(artist, true, true);
+}
+
+/** a photo for this artist: found, or a file of the user's in the folder */
+export const hasPhoto = (name) => !!fileFor(name) || !!urls.get(artistKey(name)) || !!idx.get(artistKey(name))?.idb;
+
+/** «No photo»: a wrong picture goes away and is never looked for again («Find photo again» undoes it).
+    The photo Gatefold saved is deleted; a file the user put in the folder goes to the Recycle Bin. */
+export async function removePhoto(artist) {
+  const key = artistKey(artist.name);
+  if (astate.busy && artistKey(astate.busy.name) === key) return false;
+  const i = astate.queue.findIndex((a) => artistKey(a.name) === key);
+  if (i >= 0) astate.queue.splice(i, 1);
+  for (let f = fileFor(artist.name), n = 0; f && n < 4; f = fileFor(artist.name), n++) {   // «Name.jpg» and «name.png» may both be there
+    const r = await bgCall('file.delete', { path: DIR + '\\' + f, moveToTrash: f !== fileNameFor(artist.name) }, 'normal');
+    if (!ok(r) && r.code !== 'NOT_FOUND') { log('artist photo delete refused', f, r); return false; }
+    astate.files.delete(stem(f));
+    IDB.kvDel('av:' + f.toLowerCase());
+  }
+  if (idx.get(key)?.idb) await idbDel(key);
+  idx.set(key, { s: 'off', t: Date.now() });
+  const old = urls.get(key); urls.set(key, '');
+  if (old) setTimeout(() => URL.revokeObjectURL(old), 5000);
+  emit('removed', { name: key });
+  return true;
 }

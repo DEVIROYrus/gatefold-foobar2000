@@ -18,6 +18,9 @@
     ...['Dawn', 'Noon', 'Dusk', 'Night'].map((t, i) => tr('Twin Sun', ['Gamma', 'Delta'], 'Gamma\\Twin Sun', i + 1, t, '2022')),
     ...['Bridge', 'Boxer', 'Cecilia'].map((t, i) => tr('Bridges', 'Simon & Garfunkel', 'Simon & Garfunkel\\Bridges', i + 1, t, '1970')),
   ];
+  // window.__edsMany: 120 more «X & Y» names, more than the separators preview shows at once
+  if (window.__edsMany) for (let n = 1; n <= 120; n++) T.push(tr('Pairs', 'Various Artists', 'Pairs', n, 'Song ' + n, '2020', {}));
+  if (window.__edsMany) T.slice(-120).forEach((t, i) => { t.artists = [`Duo ${i + 1} & Pair ${i + 1}`]; });
   window.__edTracks = T;
   const row = (album, aa, list) => ({ name: album, albumArtist: aa, artist: aa, year: list[0].date, genre: 'Rock', trackCount: list.length, duration: list.reduce((n, t) => n + t.duration, 0), firstTrackAbsolutePath: list[0].absolutePath });
   const groups = new Map();

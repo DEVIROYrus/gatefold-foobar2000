@@ -360,6 +360,8 @@ async def test_updates(browser, port):
     nh = sum(1 for w in written if w[0].endswith('.html'))
     check(written and nh and all(w[0].endswith('.html') for w in written[-nh:]), 'pages are written last')
     check("VERSION = '1.1.0'" in (await pg.evaluate("sessionStorage.getItem('upd.versionjs')") or ''), 'the written version.js is the new one')
+    try: await pg.wait_for_function("[...document.querySelectorAll('.toast')].some(t => t.innerText.includes('Gatefold updated to'))", timeout=8000)
+    except Exception: pass   # a busy machine reloads slower than the fixed wait above
     toast = await pg.evaluate("[...document.querySelectorAll('.toast')].map(t => t.innerText).join(' | ')")
     check('Gatefold updated to 1.1.0' in toast, f'after the reload a note says what was installed {toast[:80]}')
     check(await pg.evaluate("document.querySelector('#updPill').hidden"), 'no pill once up to date')
@@ -1250,6 +1252,58 @@ async def test_editions_artists(browser, port):
     check(not errs, f'no page errors {errs}')
     await ctx.close()
 
+async def test_photo_separators_import(browser, port):
+    print('· «Remove photo» for a wrong artist picture; every name in the separators preview; a dropped playlist file names the playlist')
+    ctx, pg, errs = await page(browser, port, {'language': 'en'}, pre='window.__eds = true; window.__edsMany = true;')
+    import base64
+    jpg = base64.b64encode((FIX / 'covers' / 'forest.jpg').read_bytes()).decode()
+    await pg.evaluate("(b) => { window.__fs['%profile%\\\\aurora\\\\artists\\\\Alpha.jpg'] = b; return import('./js/artistart.js').then((m) => m.scanFolder()); }", jpg)
+    await nav(pg, 'artists', 1500)
+    await pg.evaluate("import('./js/artists.js').then(m => m.artistsState.byKey.get('alpha')).then(x => import('./js/ui.js').then(u => u.router.go('artist', x)))"); await pg.wait_for_timeout(1400)
+    src = await pg.evaluate("(() => { const i = document.querySelector('#artistHero .artist-av img'); return [i.src.slice(0, 5), i.classList.contains('fallback')]; })()")
+    check(src == ['blob:', False], f'the artist page shows the photo from the folder {src}')
+    await pg.click('#arPhoto'); await pg.wait_for_timeout(300)
+    await pg.click("#layer .menu .mi:has-text('Remove photo')"); await pg.wait_for_timeout(1500)
+    dl = await pg.evaluate("window.__calls.filter(c => c[0] === 'file.delete').map(c => c.slice(1))")
+    check(['%profile%\\aurora\\artists\\Alpha.jpg', 'trash=false'] in dl, f'the saved photo is deleted {dl}')
+    r = await pg.evaluate("""(async () => { const AA = await import('./js/artistart.js'); const i = document.querySelector('#artistHero .artist-av img');
+      return { has: AA.hasPhoto('Alpha'), url: await AA.avatarUrl('Alpha'), again: AA.want({ name: 'Alpha', albums: ['Duets'] }, true), fallback: !i.src.startsWith('blob:') || i.classList.contains('fallback') }; })()""")
+    check(r == {'has': False, 'url': '', 'again': False, 'fallback': True}, f'the photo is gone, the album cover stands in, and it is not looked for again {r}')
+    await pg.click('#arPhoto'); await pg.wait_for_timeout(300)
+    items = await pg.evaluate("[...document.querySelectorAll('#layer .menu .mi')].map(m => m.textContent.trim())")
+    check('Remove photo' not in items and 'Find photo again' in items, f'without a photo the menu only offers to find one {items}')
+    await pg.keyboard.press('Escape'); await pg.wait_for_timeout(200)
+    check(await pg.evaluate("import('./js/artistart.js').then(AA => { const q = AA.refetch({ name: 'Alpha', albums: ['Duets'] }); AA.setPaused(true); return q; })"), '«Find photo again» looks for it again')
+    # the separators preview: a long list can be filtered and shown to the end, not cut at 80
+    await nav(pg, 'settings', 900)
+    await pg.evaluate("document.getElementById('st-library').scrollIntoView()"); await pg.wait_for_timeout(300)
+    await pg.evaluate("[...document.querySelectorAll('#st-library .seg.multi button')].find(b => b.textContent === '&').click()"); await pg.wait_for_timeout(300)
+    n0 = await pg.evaluate("document.querySelectorAll('#st-library .sep-pv-i').length")
+    more = await pg.evaluate("document.querySelector('#st-library .sep-pv-more')?.textContent || ''")
+    total = int(re.sub(r'\D', '', await pg.evaluate("document.querySelector('#st-library .sep-pv-t').textContent")) or 0)
+    check(total > 120 and n0 == 80 and f'({total - 80})' in more and await pg.is_visible('#st-library .sep-pv-q'), f'80 names first, «Show more» for the other {total - 80} ({n0}, {more!r})')
+    if os.environ.get('SHOTS'): await pg.screenshot(path=os.environ['SHOTS'] + '/separators-long.png')
+    await pg.click('#st-library .sep-pv-more'); await pg.wait_for_timeout(300)
+    n1 = await pg.evaluate("document.querySelectorAll('#st-library .sep-pv-i').length")
+    check(n1 == total and not await pg.evaluate("!!document.querySelector('#st-library .sep-pv-more')"), f'then every name ({n1})')
+    await pg.fill('#st-library .sep-pv-q', 'duo 117'); await pg.wait_for_timeout(500)
+    found = await pg.evaluate("[...document.querySelectorAll('#st-library .sep-pv-i .nm')].map(e => e.textContent)")
+    check(found == ['Duo 117 & Pair 117'], f'the filter finds a name anywhere in the list {found}')
+    await pg.evaluate("document.querySelector('#st-library .sep-pv-i input').click()"); await pg.wait_for_timeout(300)
+    k = await pg.evaluate("[document.querySelector('#st-library .sep-pv-q').value, document.querySelector('#st-library .sep-pv-i')?.classList.contains('kept'), document.querySelector('#st-library .sep-pv-t').textContent]")
+    check(k[0] == 'duo 117' and k[1] and str(total - 1) in k[2], f'it can be kept whole, and the filter stays {k}')
+    # a playlist file dropped on «new playlist» gives the playlist its name
+    names = await pg.evaluate("""(async () => { const orig = window.fb2k.invoke.bind(window.fb2k), made = [];
+      window.fb2k.invoke = (m, p) => { if (m === 'dnd.getPathsAsync') return Promise.resolve({ success: true, paths: ['D:\\\\Lists\\\\Road trip.m3u8'], resolvedPaths: [null] }); if (m === 'playlist.create') made.push(p.name); return orig(m, p); };
+      const dt = new DataTransfer(); dt.items.add(new File(['x'], 'Road trip.m3u8'));
+      document.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
+      await new Promise((r) => setTimeout(r, 900)); window.fb2k.invoke = orig; return made; })()""")
+    check(names == ['Road trip'], f'a dropped «Road trip.m3u8» makes the playlist «Road trip» {names}')
+    D = await pg.evaluate("import('./js/dropzone.js').then(D => [D.importName(['C:\\\\a.flac']), D.importName(['x.m3u', 'y.m3u']), D.importName(['E:\\\\Mix.FPL'])])")
+    check(D == ['', '', 'Mix'], f'only a single playlist file names it {D}')
+    check(not errs, f'no page errors {errs}')
+    await ctx.close()
+
 async def test_colors(browser, port):
     print('· colours: an album of your colours (with the readability guard), «Своя тема», export and import')
     ctx, pg, errs = await page(browser, port, {'language': 'en'}, pre='window.__themeIo = true;')
@@ -1653,13 +1707,13 @@ TESTS = [*((f'language_{l}', (lambda l: lambda b, p: test_language(b, p, l))(l))
          ('playlists', test_playlists), ('youtube', test_youtube), ('youtube_captions', test_youtube_captions), ('columns', test_columns), ('settings', test_settings), ('updates', test_updates),
          ('tooltips', test_tooltips), ('canvas_volume', test_canvas_volume), ('fb2k_prefs', test_fb2k_prefs), ('welcome', test_welcome),
          ('playlist_editing', test_playlist_editing), ('windows', test_windows), ('vu', test_vu), ('smart_color_radio', test_smart_color_radio),
-         ('lyrics_sync', test_lyrics_sync), ('album_details', test_album_details), ('level', test_level), ('sound_offer', test_sound_offer), ('similar_albums', test_similar_albums), ('editions_artists', test_editions_artists), ('colors', test_colors), ('sound_panel', test_sound_panel), ('cover_pick', test_cover_pick), ('cover_sharpness', test_cover_sharpness), ('up_next', test_up_next), ('heavy_library', test_heavy_library), ('tracks', test_tracks), ('text_clipping', test_text_clipping), ('canvas_idle', test_canvas_idle), ('folders', test_folders), ('sound_ai', test_sound_ai), ('layout', test_layout), ('stability', test_stability)]
+         ('lyrics_sync', test_lyrics_sync), ('album_details', test_album_details), ('level', test_level), ('sound_offer', test_sound_offer), ('similar_albums', test_similar_albums), ('editions_artists', test_editions_artists), ('photo_separators_import', test_photo_separators_import), ('colors', test_colors), ('sound_panel', test_sound_panel), ('cover_pick', test_cover_pick), ('cover_sharpness', test_cover_sharpness), ('up_next', test_up_next), ('heavy_library', test_heavy_library), ('tracks', test_tracks), ('text_clipping', test_text_clipping), ('canvas_idle', test_canvas_idle), ('folders', test_folders), ('sound_ai', test_sound_ai), ('layout', test_layout), ('stability', test_stability)]
 # seconds each test takes on a CI runner (from the « (N s)» lines of a run); only used to share the tests
 # out evenly between parallel parts — a test missing here counts as DEFAULT_S and still runs
 DURATIONS = {'language_ru': 13, 'language_en': 18, 'language_de': 18, 'language_es': 18, 'language_zh': 18, 'playlists': 10, 'youtube': 14,
              'youtube_captions': 29, 'columns': 23, 'settings': 6, 'updates': 20, 'tooltips': 9, 'canvas_volume': 4, 'fb2k_prefs': 9, 'welcome': 26,
              'playlist_editing': 14, 'windows': 13, 'vu': 32, 'smart_color_radio': 27, 'lyrics_sync': 11, 'album_details': 20, 'level': 7,
-             'sound_offer': 14, 'similar_albums': 3, 'editions_artists': 20, 'colors': 16, 'sound_panel': 8, 'cover_pick': 12, 'cover_sharpness': 8, 'up_next': 14, 'heavy_library': 22, 'tracks': 30, 'text_clipping': 60, 'canvas_idle': 52, 'folders': 16, 'sound_ai': 58, 'layout': 60, 'stability': 70}
+             'sound_offer': 14, 'similar_albums': 3, 'editions_artists': 20, 'photo_separators_import': 14, 'colors': 16, 'sound_panel': 8, 'cover_pick': 12, 'cover_sharpness': 8, 'up_next': 14, 'heavy_library': 22, 'tracks': 30, 'text_clipping': 60, 'canvas_idle': 52, 'folders': 16, 'sound_ai': 58, 'layout': 60, 'stability': 70}
 DEFAULT_S = 20
 
 def shards(n):
