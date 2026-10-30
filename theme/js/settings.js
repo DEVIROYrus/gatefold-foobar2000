@@ -48,6 +48,7 @@ export const DEFAULTS = {
   coverCountries: 'US,RU',
   coverSharedDir: 'embed',  // folder shared by several albums: 'embed' into that album's tracks | 'skip'
   // artist photos
+  artistGuests: false,      // Artists also lists those with no album of their own (guests, compilation singers)
   artistAuto: true,         // download missing artist photos into %profile%\\aurora\\artists
   artistSort: 'name',
   // fun mode («экспериментальные функции»): its own data lives under aurora.fun.* and is wiped when off

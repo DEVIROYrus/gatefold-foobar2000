@@ -1225,5 +1225,13 @@ export default {
  "Всё в плейлист": "Todo a una lista",
  "Слушать выбранные ({0})": "Reproducir selección ({0})",
  "Исполнитель: {0}": "Artista: {0}",
- "Показать в папке": "Mostrar en la carpeta"
+ "Показать в папке": "Mostrar en la carpeta",
+ "Участие: {0}": "Aparece en {0}",
+ "Участие в альбомах": "Aparece en",
+ "Свои разделители": "Separadores propios",
+ "Например «x», «vs.» или «+». Слово разделяет имя, только когда стоит между пробелами.": "Por ejemplo «x», «vs.» o «+». Una palabra separa un nombre solo cuando está entre espacios.",
+ "Добавить…": "Añadir…",
+ "Убрать": "Quitar",
+ "Исполнители без своих альбомов": "Artistas sin álbum propio",
+ "Гости и исполнители сборников появятся в «Исполнителях». Их песни на чужих альбомах всегда видны на странице исполнителя, в разделе «Участие в альбомах».": "Los invitados y los artistas de recopilatorios aparecen en Artistas. Sus canciones en álbumes de otros siempre están en la página del artista, en «Aparece en»."
 };

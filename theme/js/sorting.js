@@ -133,7 +133,7 @@ const ARTIST_CMP = {
 };
 function latest(x, kind) {
   let v = 0;
-  for (const a of x.albums) { const r = recOf(kind, a); if (r > v) v = r; }
+  for (const a of (x.albums.length ? x.albums : x.appears || [])) { const r = recOf(kind, a); if (r > v) v = r; }
   return v;
 }
 export function sortArtists(list, by, isVarious) {

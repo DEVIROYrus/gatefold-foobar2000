@@ -1225,5 +1225,13 @@ export default {
  "Всё в плейлист": "All to a playlist",
  "Слушать выбранные ({0})": "Play selected ({0})",
  "Исполнитель: {0}": "Artist: {0}",
- "Показать в папке": "Show in folder"
+ "Показать в папке": "Show in folder",
+ "Участие: {0}": "Appears on {0}",
+ "Участие в альбомах": "Appears on",
+ "Свои разделители": "Your own separators",
+ "Например «x», «vs.» или «+». Слово разделяет имя, только когда стоит между пробелами.": "For example “x”, “vs.” or “+”. A word splits a name only when it stands between spaces.",
+ "Добавить…": "Add…",
+ "Убрать": "Remove",
+ "Исполнители без своих альбомов": "Artists with no album of their own",
+ "Гости и исполнители сборников появятся в «Исполнителях». Их песни на чужих альбомах всегда видны на странице исполнителя, в разделе «Участие в альбомах».": "Guests and the artists of compilations show up in Artists. Their songs on other artists’ albums are always on the artist page, under “Appears on”."
 };
