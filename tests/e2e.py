@@ -1304,6 +1304,77 @@ async def test_photo_separators_import(browser, port):
     check(not errs, f'no page errors {errs}')
     await ctx.close()
 
+async def test_guests_select_separators(browser, port):
+    print('· «Appears on» and artists with no album of their own; your own separators; selecting tracks on an album page')
+    ctx, pg, errs = await page(browser, port, {'language': 'en'}, pre='window.__eds = true; window.__guests = true;')
+    await nav(pg, 'artists', 1500)
+    st = await pg.evaluate("""import('./js/artists.js').then(({ artistsState: A }) => ({ listed: A.list.some(x => x.key === 'omega'),
+      omega: A.byKey.get('omega') && A.byKey.get('omega').appears.map(a => a.name), kite: A.byKey.get('kite lines') && [A.byKey.get('kite lines').albums.map(a => a.name), A.byKey.get('kite lines').appears.map(a => a.name)],
+      struts: A.byKey.get('the struts').appears.length, va: A.byKey.has('various artists') && A.byKey.get('various artists').appears.length }))""")
+    check(st == {'listed': False, 'omega': ['Night Drive', 'Summer Hits'], 'kite': [['Long Way'], ['Summer Hits']], 'struts': 0, 'va': 0}, f'guests know the albums they sing on; an album is not a guest of its own artist {st}')
+    await pg.evaluate("import('./js/ui.js').then(u => u.router.go('artist', 'Omega'))"); await pg.wait_for_timeout(1200)
+    o = await pg.evaluate("""({ meta: document.querySelector('#artistHero .album-meta').textContent, own: document.getElementById('artistAlbums').hidden,
+      head: !document.getElementById('artistAppearsH').hidden && document.getElementById('artistAppearsH').textContent,
+      tiles: [...document.querySelectorAll('#artistAppears .tile')].map(t => t.querySelector('.tt').textContent + ' / ' + t.querySelector('.ta').textContent) })""")
+    check(o['own'] and o['head'] == 'Appears on' and o['tiles'] == ['Night Drive / The Struts · 2018', 'Summer Hits / Various Artists · 2023'] and o['meta'].startswith('Appears on 2 albums · 2 tracks'), f'a link opens the page of an artist with no album: «Appears on» their albums {o}')
+    played = await pg.evaluate("""(async () => { const orig = window.fb2k.invoke.bind(window.fb2k); let got = null;
+      window.fb2k.invoke = (m, p) => { if (m === 'library.addToPlaylist') got = p.paths; return orig(m, p); };
+      document.getElementById('arPlay').click(); await new Promise(r => setTimeout(r, 900)); window.fb2k.invoke = orig; return got; })()""")
+    check(played == ['D:\\Music\\The Struts\\Night Drive\\03.flac', 'D:\\Music\\VA\\Summer Hits\\01.flac'], f'«Play all» plays only their own songs {played}')
+    await pg.evaluate("import('./js/ui.js').then(u => u.router.go('artist', 'Kite Lines'))"); await pg.wait_for_timeout(1200)
+    k = await pg.evaluate("[document.querySelectorAll('#artistAlbums .tile').length, document.getElementById('artistAlbumsH').hidden, document.querySelectorAll('#artistAppears .tile').length]")
+    check(k == [1, False, 1], f'an artist with albums shows them, then «Appears on» {k}')
+    # Settings → Library: list them in Artists too
+    await nav(pg, 'settings', 900)
+    await pg.evaluate("document.getElementById('st-library').scrollIntoView()"); await pg.wait_for_timeout(300)
+    await pg.evaluate("[...document.querySelectorAll('#st-library .row')].find(r => r.textContent.includes('Artists with no album of their own')).querySelector('input').click()"); await pg.wait_for_timeout(300)
+    await nav(pg, 'artists', 1500)
+    t = await pg.evaluate("[...document.querySelectorAll('#artGrid .atile')].filter(t => t.querySelector('.an').textContent === 'Omega').map(t => t.querySelector('.as').textContent)")
+    check(t == ['Appears on 2 albums\n2018–2023'], f'with the setting on, Omega has a tile {t}')
+    # your own separator
+    U = await pg.evaluate("""import('./js/artistnames.js').then(N => { const s = (n, ids) => N.split(n, N.active(ids), new Set());
+      return [s('Sigma x Tau', ['c:x']), s('Xzibit', ['c:x']), s('Max x', ['c:x']), s('A+B', ['c:+']), s('Sigma X Tau', ['c:x']), s('P vs. Q', [';', 'c:vs.']), N.customText('   '), N.customText('x'.repeat(13))]; })""")
+    check(U == [['Sigma', 'Tau'], ['Xzibit'], ['Max x'], ['A', 'B'], ['Sigma', 'Tau'], ['P', 'Q'], '', ''], f'a word splits only between spaces, a sign anywhere {U}')
+    await nav(pg, 'settings', 900)
+    await pg.evaluate("document.getElementById('st-library').scrollIntoView()"); await pg.wait_for_timeout(300)
+    await pg.fill('#st-library .sep-own-in', 'x'); await pg.press('#st-library .sep-own-in', 'Enter'); await pg.wait_for_timeout(300)
+    await pg.fill('#st-library .sep-own-in', '&'); await pg.press('#st-library .sep-own-in', 'Enter'); await pg.wait_for_timeout(300)
+    v = await pg.evaluate("""({ chips: [...document.querySelectorAll('#st-library .sep-own-c')].map(c => c.textContent.trim()),
+      amp: [...document.querySelectorAll('#st-library .seg.multi button')].find(b => b.textContent === '&').getAttribute('aria-pressed'),
+      pv: [...document.querySelectorAll('#st-library .sep-pv-i')].map(i => i.querySelector('.nm').textContent + ' → ' + i.querySelector('.parts').textContent) })""")
+    check(v['chips'] == ['x'] and v['amp'] == 'true' and 'Sigma x Tau → Sigma · Tau' in v['pv'] and not any(p.startswith('Xzibit') for p in v['pv']), f'a typed separator becomes a chip (a built-in one turns on) and the preview shows what it splits {v}')
+    if os.environ.get('SHOTS'): await pg.screenshot(path=os.environ['SHOTS'] + '/separators-own.png')
+    await pg.evaluate("[...document.querySelectorAll('#st-library .seg.multi button')].find(b => b.textContent === '&').click()"); await pg.wait_for_timeout(200)
+    await pg.evaluate("[...document.querySelectorAll('#st-library button')].find(b => b.textContent.trim() === 'Apply').click()"); await pg.wait_for_timeout(2500)
+    sv = await pg.evaluate("JSON.parse(localStorage.getItem('aurora.settings.v1')).artistSplit")
+    ks = await pg.evaluate("import('./js/artists.js').then(({ artistsState: A }) => ['sigma', 'tau', 'sigma x tau'].map(k => A.byKey.has(k)))")
+    check(sv == [';', 'c:x'] and ks == [True, True, False], f'applied: «Sigma x Tau» is two artists {sv} {ks}')
+    await pg.evaluate("document.querySelector('#st-library .sep-own-c').click()"); await pg.wait_for_timeout(200)
+    check(await pg.evaluate("document.querySelectorAll('#st-library .sep-own-c').length") == 0, 'a click on the chip removes it')
+    # selecting tracks on an album page
+    await pg.evaluate("import('./js/library.js').then(L => L.getAllAlbums()).then(l => import('./js/ui.js').then(u => u.router.go('album', l.find(a => a.name === 'Summer Hits'))))"); await pg.wait_for_timeout(1200)
+    rows = '#albumList .vrow'
+    sel = lambda: pg.evaluate("[...document.querySelectorAll('#albumList .vrow.sel')].map(r => +r.dataset.i)")
+    await pg.click(f'{rows}[data-i="0"] .c-title'); await pg.click(f'{rows}[data-i="2"] .c-title', modifiers=['Shift']); await pg.wait_for_timeout(100)
+    a1 = await sel()
+    await pg.click(f'{rows}[data-i="1"] .c-title', modifiers=['Control']); await pg.wait_for_timeout(100)
+    a2 = await sel()
+    check(a1 == [0, 1, 2] and a2 == [0, 2], f'click, Shift+click and Ctrl+click select tracks {a1} {a2}')
+    menu = await pg.evaluate("""(async () => { const orig = window.fb2k.invoke.bind(window.fb2k); let got = null;
+      window.fb2k.invoke = (m, p) => { if (m === 'menu.showNativePopup') { got = p; return Promise.resolve({ success: true }); } return orig(m, p); };
+      document.querySelector('#albumList .vrow[data-i="2"] .c-title').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+      await new Promise(r => setTimeout(r, 200)); window.fb2k.invoke = orig; return got && [got.mode, got.handles]; })()""")
+    check(menu == ['handles', ['D:\\Music\\VA\\Summer Hits\\01.flac', 'D:\\Music\\VA\\Summer Hits\\03.flac']], f'the context menu acts on every selected track {menu}')
+    await pg.mouse.move(5, 5); await pg.keyboard.press('Control+a'); await pg.wait_for_timeout(100)
+    a3 = await sel()
+    await pg.keyboard.press('Escape'); await pg.wait_for_timeout(200)
+    a4 = await sel(); still = await pg.evaluate("import('./js/ui.js').then(u => u.router.current)")
+    check(a3 == [0, 1, 2, 3] and a4 == [] and still == 'album', f'Ctrl+A selects all, Esc clears and stays on the page {a3} {a4} {still}')
+    await pg.click(f'{rows}[data-i="3"] .c-title'); await pg.wait_for_timeout(100)
+    check(await sel() == [3], 'a plain click selects one track')
+    check(not errs, f'no page errors {errs}')
+    await ctx.close()
+
 async def test_colors(browser, port):
     print('· colours: an album of your colours (with the readability guard), «Своя тема», export and import')
     ctx, pg, errs = await page(browser, port, {'language': 'en'}, pre='window.__themeIo = true;')
@@ -1707,13 +1778,13 @@ TESTS = [*((f'language_{l}', (lambda l: lambda b, p: test_language(b, p, l))(l))
          ('playlists', test_playlists), ('youtube', test_youtube), ('youtube_captions', test_youtube_captions), ('columns', test_columns), ('settings', test_settings), ('updates', test_updates),
          ('tooltips', test_tooltips), ('canvas_volume', test_canvas_volume), ('fb2k_prefs', test_fb2k_prefs), ('welcome', test_welcome),
          ('playlist_editing', test_playlist_editing), ('windows', test_windows), ('vu', test_vu), ('smart_color_radio', test_smart_color_radio),
-         ('lyrics_sync', test_lyrics_sync), ('album_details', test_album_details), ('level', test_level), ('sound_offer', test_sound_offer), ('similar_albums', test_similar_albums), ('editions_artists', test_editions_artists), ('photo_separators_import', test_photo_separators_import), ('colors', test_colors), ('sound_panel', test_sound_panel), ('cover_pick', test_cover_pick), ('cover_sharpness', test_cover_sharpness), ('up_next', test_up_next), ('heavy_library', test_heavy_library), ('tracks', test_tracks), ('text_clipping', test_text_clipping), ('canvas_idle', test_canvas_idle), ('folders', test_folders), ('sound_ai', test_sound_ai), ('layout', test_layout), ('stability', test_stability)]
+         ('lyrics_sync', test_lyrics_sync), ('album_details', test_album_details), ('level', test_level), ('sound_offer', test_sound_offer), ('similar_albums', test_similar_albums), ('editions_artists', test_editions_artists), ('photo_separators_import', test_photo_separators_import), ('guests_select_separators', test_guests_select_separators), ('colors', test_colors), ('sound_panel', test_sound_panel), ('cover_pick', test_cover_pick), ('cover_sharpness', test_cover_sharpness), ('up_next', test_up_next), ('heavy_library', test_heavy_library), ('tracks', test_tracks), ('text_clipping', test_text_clipping), ('canvas_idle', test_canvas_idle), ('folders', test_folders), ('sound_ai', test_sound_ai), ('layout', test_layout), ('stability', test_stability)]
 # seconds each test takes on a CI runner (from the « (N s)» lines of a run); only used to share the tests
 # out evenly between parallel parts — a test missing here counts as DEFAULT_S and still runs
 DURATIONS = {'language_ru': 13, 'language_en': 18, 'language_de': 18, 'language_es': 18, 'language_zh': 18, 'playlists': 10, 'youtube': 14,
              'youtube_captions': 29, 'columns': 23, 'settings': 6, 'updates': 20, 'tooltips': 9, 'canvas_volume': 4, 'fb2k_prefs': 9, 'welcome': 26,
              'playlist_editing': 14, 'windows': 13, 'vu': 32, 'smart_color_radio': 27, 'lyrics_sync': 11, 'album_details': 20, 'level': 7,
-             'sound_offer': 14, 'similar_albums': 3, 'editions_artists': 20, 'photo_separators_import': 14, 'colors': 16, 'sound_panel': 8, 'cover_pick': 12, 'cover_sharpness': 8, 'up_next': 14, 'heavy_library': 22, 'tracks': 30, 'text_clipping': 60, 'canvas_idle': 52, 'folders': 16, 'sound_ai': 58, 'layout': 60, 'stability': 70}
+             'sound_offer': 14, 'similar_albums': 3, 'editions_artists': 20, 'photo_separators_import': 14, 'guests_select_separators': 16, 'colors': 16, 'sound_panel': 8, 'cover_pick': 12, 'cover_sharpness': 8, 'up_next': 14, 'heavy_library': 22, 'tracks': 30, 'text_clipping': 60, 'canvas_idle': 52, 'folders': 16, 'sound_ai': 58, 'layout': 60, 'stability': 70}
 DEFAULT_S = 20
 
 def shards(n):

@@ -1043,11 +1043,14 @@ async function enrichAlbums(rows) {
     let l = byRow.get(row); if (!l) byRow.set(row, (l = [])); l.push(t);
   }
   const out = []; let split = false;
+  const namesOf = new Map(), t0 = performance.now();
+  let yieldAt = t0 + 40;
   for (const row0 of rows) {
     const list = byRow.get(row0);
     const row = withNames(row0, list);
+    if (performance.now() > yieldAt) { await new Promise((r) => setTimeout(r, 0)); yieldAt = performance.now() + 40; } // a big library: no long task
     const eds = settings.splitEditions !== false && list && list.length >= 4 ? editionsOf(row, list) : null;
-    if (!eds) { out.push(row); continue; }
+    if (!eds) { out.push(withGuests(row, list, namesOf)); continue; }
     // the edition tags, for the names (only these few albums are asked)
     const tf = await bgCall('titleformat.evalFieldsBatch', { paths: eds.map((e) => e.tracks[0].absolutePath), fields: { ed: '[$if2(%edition%,$if2(%version%,%releasecomment%))]', mb: '[%musicbrainz_albumid%]' } }, 'normal');
     const tags = ok(tf) ? tf.results || [] : [];
@@ -1065,7 +1068,7 @@ async function enrichAlbums(rows) {
     const keys = eds.map((e) => albumKeyOf(row.albumArtist || row.artist, row.name) + '\u0002' + e.id);
     eds.forEach((e, i) => {
       const t0 = e.tracks.slice().sort((x, y) => (x.discNumber || 1) - (y.discNumber || 1) || String(x.absolutePath).localeCompare(String(y.absolutePath)))[0];
-      out.push({ ...row, edition: label(e, i), edKey: keys[i], edSiblings: keys, edPaths: e.tracks.map(trackHandle),
+      out.push({ ...withGuests(row, e.tracks, namesOf), edition: label(e, i), edKey: keys[i], edSiblings: keys, edPaths: e.tracks.map(trackHandle),
         trackCount: e.tracks.length, duration: e.tracks.reduce((n, t) => n + (t.duration || 0), 0), year: e.year || row.year, firstTrackAbsolutePath: t0.absolutePath });
     });
     split = true;
@@ -1089,6 +1092,23 @@ function withNames(row, tracks) {
   // a multi-value tag shows all its names, not only the first one foobar2000 groups by
   const shown = vals.length > 1 && row.artist === vals[0] ? vals.join(', ') : row.artist;
   return { ...row, artists: names, artist: shown };
+}
+/** the artists who sing on an album without being its artist (a guest, the singers of a compilation):
+    guests: [[name, tracks]] — the album is listed under them in Artists as «Appears on» */
+function withGuests(row, tracks, namesOf) {
+  if (!tracks || !tracks.length) return row.guests ? { ...row, guests: undefined } : row;
+  const own = new Set((row.artists && row.artists.length ? row.artists : Names.splitAll([row.albumArtist || row.artist])).map((n) => n.toLowerCase()));
+  const n = new Map();
+  for (const t of tracks) {
+    const vals = t.artists && t.artists.length ? t.artists : [t.artist];
+    const key = vals.join('\u0001');
+    let names = namesOf.get(key); if (!names) namesOf.set(key, (names = Names.splitAll(vals)));
+    for (const nm of names) {
+      const k = nm.toLowerCase(); if (own.has(k)) continue;
+      const g = n.get(k); if (g) g[1]++; else n.set(k, [nm, 1]);
+    }
+  }
+  return n.size ? { ...row, guests: [...n.values()] } : row;
 }
 /** the editions of one album's tracks, or null when it is one release */
 function editionsOf(row, list) {
@@ -1146,7 +1166,7 @@ export async function loadLibrary(force, background = false) {
   // tells Artists not to rebuild either).
   if (!out.length && LIB.loaded && LIB.albums.length) { LIB.loading = false; return; } // host hiccup: keep what we show
   // the settings that shape the rows (editions, artist separators) are part of the signature
-  const shape = JSON.stringify(['e1', settings.splitEditions !== false, settings.artistSplit || [';'], settings.artistKeep || []]);
+  const shape = JSON.stringify(['e1g', settings.splitEditions !== false, settings.artistSplit || [';'], settings.artistKeep || []]);
   const sig = fnv(shape + out.length + '\u0002' + out.map((a) => `${a.name}\u0001${a.albumArtist || a.artist}\u0001${a.year || ''}\u0001${a.trackCount || 0}\u0001${a.firstTrackAbsolutePath}\u0001${a.genre || ''}`).sort().join('\u0003'));
   LIB.fromSnap = false;
   if (LIB.loaded && sig === LIB.sig) { LIB.stale = false; LIB.loading = false; layoutLib(); return; }
@@ -1415,7 +1435,7 @@ export async function openAlbum(a) {
   $('albumHero').querySelectorAll('.al-eds [data-ed]').forEach((b) => { b.onclick = () => { const o = LIB.index && LIB.index.get(b.dataset.ed); if (o) router.go('album', o); }; });
   $('albumMore').onclick = toggleAlbumDetails;
   $('albumMore').onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleAlbumDetails(); } };
-  ALB.a = a; ALB.tracks = null; ALB.ext = null; ALB.token = token; ALB.loading = null; ALB.plainOnce = false; ALB.cx = null; ALB.cxv = null;
+  ALB.a = a; ALB.tracks = null; ALB.ext = null; ALB.token = token; ALB.loading = null; ALB.plainOnce = false; ALB.cx = null; ALB.cxv = null; ALB.sel = new Set(); ALB.anchor = -1;
   paintDetailsState();
   if (a.firstTrackAbsolutePath) {
     const get = await coversFor([a.firstTrackAbsolutePath], Math.round(220 * dpr()));
@@ -1429,9 +1449,18 @@ export async function openAlbum(a) {
   const list = $('albumList');
   ALB.tracks = tracks;
   renderAlbumRows();
-  list.onclick = (e) => { const lk = e.target.closest('.lnk[data-go=artist]'); if (lk && !e.shiftKey && !e.ctrlKey) { router.go('artist', lk.textContent); return; } heartClick(e, (r) => tracks[+r.dataset.i]); };
-  list.ondblclick = (e) => { if (e.target.closest('.row-like')) return; const r = e.target.closest('.vrow'); if (r) playPaths(tracks.map((t) => t.handle || t.absolutePath), +r.dataset.i, a.name); };
-  list.oncontextmenu = (e) => { const r = e.target.closest('.vrow'); if (!r) return; e.preventDefault(); const t = tracks[+r.dataset.i]; call('menu.showNativePopup', { mode: 'handles', handles: [trackHandle(t)] }); };
+  list.onclick = (e) => {
+    const lk = e.target.closest('.lnk[data-go=artist]'); if (lk && !e.shiftKey && !e.ctrlKey && !e.metaKey) { router.go('artist', lk.textContent); return; }
+    if (heartClick(e, (r) => tracks[+r.dataset.i])) return;
+    const r = e.target.closest('.vrow'); if (r) albumSelect(+r.dataset.i, e);
+  };
+  list.ondblclick = (e) => { if (e.target.closest('.row-like') || e.shiftKey || e.ctrlKey || e.metaKey) return; const r = e.target.closest('.vrow'); if (r) playPaths(tracks.map((t) => t.handle || t.absolutePath), +r.dataset.i, a.name); };
+  // the menu acts on every selected track (foobar2000's own context menu: queue, properties, convert…)
+  list.oncontextmenu = (e) => {
+    const r = e.target.closest('.vrow'); if (!r) return; e.preventDefault();
+    const i = +r.dataset.i; if (!ALB.sel.has(i)) albumSelect(i, null);
+    call('menu.showNativePopup', { mode: 'handles', handles: [...ALB.sel].sort((x, y) => x - y).map((k) => trackHandle(tracks[k])) });
+  };
   $('albumScroller').scrollTop = 0;
   renderSimilar(a, token);
 }
@@ -1451,7 +1480,25 @@ setEditionKeyResolver((t) => (editionOfPath(t.handle) || editionOfPath(t.path) |
 
 /* ---------------------------------------------------------------- album details (album-details.js)
    Off by default; «Details», a click on the track count, or I. The choice is remembered. */
-const ALB = { a: null, tracks: null, ext: null, token: 0, loading: null, plainOnce: false, cx: null, cxv: null, focus: '' };
+const ALB = { a: null, tracks: null, ext: null, token: 0, loading: null, plainOnce: false, cx: null, cxv: null, focus: '', sel: new Set(), anchor: -1 };
+/* tracks on the album page are selected like in a playlist: a click, Ctrl+click, Shift+click, Ctrl+A */
+function albumSelect(i, e) {
+  if (e && e.shiftKey && ALB.anchor >= 0) {
+    if (!(e.ctrlKey || e.metaKey)) ALB.sel = new Set();
+    for (let k = Math.min(ALB.anchor, i); k <= Math.max(ALB.anchor, i); k++) ALB.sel.add(k);
+  } else if (e && (e.ctrlKey || e.metaKey)) { if (ALB.sel.has(i)) ALB.sel.delete(i); else ALB.sel.add(i); ALB.anchor = i; }
+  else { ALB.sel = new Set([i]); ALB.anchor = i; }
+  paintAlbumSel();
+}
+function paintAlbumSel() {
+  $('albumList').querySelectorAll('.vrow').forEach((r) => { const on = ALB.sel.has(+r.dataset.i); r.classList.toggle('sel', on); r.setAttribute('aria-selected', String(on)); });
+}
+document.addEventListener('keydown', (e) => {
+  if (router.current !== 'album' || !ALB.tracks || (e.target.closest && e.target.closest('input, textarea, select, [contenteditable]'))) return;
+  const k = e.key.toLowerCase();
+  if ((e.ctrlKey || e.metaKey) && !e.altKey && (k === 'a' || k === 'ф')) { e.preventDefault(); e.stopImmediatePropagation(); ALB.sel = new Set(ALB.tracks.map((_, i) => i)); ALB.anchor = 0; paintAlbumSel(); }
+  else if (k === 'escape' && ALB.sel.size && !document.querySelector('#layer .menu')) { e.preventDefault(); e.stopImmediatePropagation(); ALB.sel = new Set(); ALB.anchor = -1; paintAlbumSel(); }
+}, true);
 /** open the album page with this track marked (a song link in a playlist) */
 export function focusNextAlbumTrack(handle) { ALB.focus = String(handle || '').toLowerCase(); }
 const albumHeadEl = albumView.querySelector('.list-head');
@@ -1523,6 +1570,7 @@ function renderAlbumRows() {
   }
   list.dataset.album = String(ALB.token);
   list.querySelectorAll('.vrow').forEach(likeRow);
+  if (ALB.sel.size) paintAlbumSel();
   if (ALB.focus) {
     // a song link: its row, marked and in view
     const i = tracks.findIndex((t) => String(trackHandle(t)).toLowerCase() === ALB.focus);
@@ -1530,7 +1578,7 @@ function renderAlbumRows() {
     const row = i >= 0 && list.querySelector(`.vrow[data-i="${i}"]`);
     if (row) {
       const sc = $('albumScroller');
-      requestAnimationFrame(() => { sc.scrollTop = Math.max(0, list.offsetTop + i * ROW - sc.clientHeight / 3); row.classList.add('sel', 'flash'); setTimeout(() => row.classList.remove('flash'), 1600); });
+      requestAnimationFrame(() => { sc.scrollTop = Math.max(0, list.offsetTop + i * ROW - sc.clientHeight / 3); ALB.sel = new Set([i]); ALB.anchor = i; row.classList.add('sel', 'flash'); setTimeout(() => row.classList.remove('flash'), 1600); });
     }
   }
 }

@@ -21,6 +21,13 @@
   // window.__edsMany: 120 more «X & Y» names, more than the separators preview shows at once
   if (window.__edsMany) for (let n = 1; n <= 120; n++) T.push(tr('Pairs', 'Various Artists', 'Pairs', n, 'Song ' + n, '2020', {}));
   if (window.__edsMany) T.slice(-120).forEach((t, i) => { t.artists = [`Duo ${i + 1} & Pair ${i + 1}`]; });
+  // window.__guests: Omega sings on an album of The Struts and on a compilation, and has no album of their own
+  if (window.__guests) {
+    T.push(...['Run', 'Hide', 'Seek'].map((t, i) => tr('Night Drive', 'The Struts', 'The Struts\\Night Drive', i + 1, t, '2018')));
+    T[T.length - 1].artists = ['The Struts', 'Omega'];
+    T.push(...['Sun', 'Sea', 'Sand', 'Sky'].map((t, i) => tr('Summer Hits', 'Various Artists', 'VA\\Summer Hits', i + 1, t, '2023')));
+    [['Omega'], ['Sigma x Tau'], ['Kite Lines'], ['Xzibit']].forEach((a, i) => { T[T.length - 4 + i].artists = a; });
+  }
   window.__edTracks = T;
   const row = (album, aa, list) => ({ name: album, albumArtist: aa, artist: aa, year: list[0].date, genre: 'Rock', trackCount: list.length, duration: list.reduce((n, t) => n + t.duration, 0), firstTrackAbsolutePath: list[0].absolutePath });
   const groups = new Map();

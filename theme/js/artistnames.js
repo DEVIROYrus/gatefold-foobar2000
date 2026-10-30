@@ -18,10 +18,30 @@ export const SEPARATORS = [
 ];
 const lc = (s) => String(s || '').trim().toLowerCase();
 
+/* your own separators («x», «vs.», «+», «×»…) are kept with the others as 'c:<text>'. A word (letters or
+   digits at an edge) splits only between spaces — «x» splits «A x B», never «Xzibit»; a sign may touch the names. */
+export const CUSTOM = 'c:';
+const reEsc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** a separator typed by the user, cleaned: '' when it is not one */
+export function customText(s) {
+  const t = String(s || '').replace(/\s+/g, ' ').trim();
+  return t.length && t.length <= 12 ? t : '';
+}
+const customCache = new Map();
+export function custom(text) {
+  let sp = customCache.get(text);
+  if (!sp) {
+    const word = /^[\p{L}\p{N}]|[\p{L}\p{N}]$/u.test(text), body = reEsc(text).replace(/ /g, '\\s+');
+    sp = { id: CUSTOM + text, label: text, custom: true, re: new RegExp(word ? `\\s+${body}\\s+` : `\\s*${body}\\s*`, 'giu') };
+    customCache.set(text, sp);
+  }
+  return sp;
+}
 /** the separators in use (from the settings, or the ones given) */
 export function active(ids = settings.artistSplit) {
-  const on = new Set(Array.isArray(ids) ? ids : [';']);
-  return SEPARATORS.filter((s) => on.has(s.id));
+  const list = Array.isArray(ids) ? ids : [';'], on = new Set(list);
+  const own = list.filter((id) => typeof id === 'string' && id.startsWith(CUSTOM)).map((id) => customText(id.slice(CUSTOM.length))).filter(Boolean);
+  return [...SEPARATORS.filter((s) => on.has(s.id)), ...[...new Set(own)].map(custom)];
 }
 let keepFor = null, keepSet = new Set();
 const kept = () => { if (keepFor !== settings.artistKeep) { keepFor = settings.artistKeep; keepSet = new Set((settings.artistKeep || []).map(lc)); } return keepSet; };

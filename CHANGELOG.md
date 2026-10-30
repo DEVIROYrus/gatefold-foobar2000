@@ -4,6 +4,10 @@ All notable changes are listed here. Versions follow [Semantic Versioning](https
 
 ## [Unreleased]
 
+- **Appears on:** an artist page also lists the albums where the artist only sings a song or two (a guest, a compilation); artists with no album of their own get a page too, and a tile in Artists if you turn it on in Settings → Library (#10).
+- **Your own artist separators** («x», «vs.», «+»…) next to the built-in ones in Settings → Library (#10).
+- **Tracks on an album page can be selected:** click, Shift/Ctrl+click, Ctrl+A; the context menu acts on all of them (#10).
+
 ## [1.4.4] — removable artist photos, full separators preview
 
 - **«Remove photo»** on an artist (page and menu): a wrong picture goes away and is not looked for again; «Find photo again» brings it back (#10).

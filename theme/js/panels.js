@@ -6,7 +6,7 @@ import { router, $, h, icon, toast } from './ui.js';
 import { current, FIXED, customPalette } from './theme.js';
 import * as CF from './coverfetch.js';
 import * as AA from './artistart.js';
-import { openFolder as openArtistFolder, loadArtists, artistsState } from './artists.js';
+import { openFolder as openArtistFolder, loadArtists, artistsState, jobOf as artistJob } from './artists.js';
 import * as Q from './coverquality.js';
 import { artDiag } from './artbytes.js';
 import * as Lib from './library.js';
@@ -82,6 +82,20 @@ function lsToggle(label, hint, get, set) {
 function artistSplitRows() {
   const draft = { ids: [...(settings.artistSplit || [';'])], keep: [...(settings.artistKeep || [])] };
   const chips = h(`<div class="row"><div class="lbl"><b>${$t('Разделители')}</b></div><div class="seg multi" role="group"></div></div>`);
+  // your own separators («x», «vs.», «+»…): typed in, shown as chips that a click removes
+  const own = h(`<div class="row sep-own"><div class="lbl"><b>${$t('Свои разделители')}</b><small class="dim">${$t('Например «x», «vs.» или «+». Слово разделяет имя, только когда стоит между пробелами.')}</small></div><div class="sep-own-box"><span class="sep-own-l"></span><input class="filter sep-own-in" type="text" maxlength="12" spellcheck="false" placeholder="${$t('Добавить…')}" aria-label="${$t('Свои разделители')}"></div></div>`);
+  const ownIn = own.querySelector('.sep-own-in');
+  const addOwn = () => {
+    const t = Names.customText(ownIn.value); ownIn.value = '';
+    if (!t) return;
+    const lt = t.toLowerCase();
+    const built = Names.SEPARATORS.find((sp) => sp.id === lt || sp.label === lt || (sp.id === 'feat' && /^(feat\.?|ft\.?|featuring)$/.test(lt)));
+    const id = built ? built.id : Names.CUSTOM + t;
+    if (!draft.ids.some((x) => x.toLowerCase() === id.toLowerCase())) draft.ids.push(id);
+    paint();
+  };
+  ownIn.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); addOwn(); } };
+  ownIn.onchange = addOwn;
   const note = h(`<div class="row st-note"><div class="lbl"><small>${$t('Значения многозначного тега (несколько полей «album artist») — всегда разные исполнители. Альбом «A; B» появится и у A, и у B.')}</small></div></div>`);
   const list = h(`<div class="row sep-pv"><div class="lbl"><div class="sep-pv-h"><b class="sep-pv-t"></b><input class="filter sep-pv-q" type="search" placeholder="${$t('Фильтр…')}" spellcheck="false" aria-label="${$t('Фильтр…')}" hidden></div><div class="sep-pv-l"></div></div></div>`);
   // every name can be reached: a filter for long lists, and «Show more» instead of a silent cut at 80
@@ -106,6 +120,13 @@ function artistSplitRows() {
   }
   function paint() {
     box.querySelectorAll('button').forEach((b) => { const on = draft.ids.includes(b.dataset.id); b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+    const ol = own.querySelector('.sep-own-l'); ol.innerHTML = '';
+    for (const id of draft.ids.filter((x) => String(x).startsWith(Names.CUSTOM))) {
+      const b = h(`<button class="sep-own-c" title="${$t('Убрать')}"><span></span>${icon('x', 12)}</button>`);
+      b.querySelector('span').textContent = id.slice(Names.CUSTOM.length);
+      b.onclick = () => { draft.ids = draft.ids.filter((x) => x !== id); paint(); };
+      ol.append(b);
+    }
     const pv = Names.preview(Lib.artistNamesSeen(), draft.ids, draft.keep);
     const split = pv.filter((x) => !draft.keep.some((k) => k.toLowerCase() === x.name.toLowerCase()));
     list.querySelector('.sep-pv-t').textContent = pv.length ? $t('Будут разделены: {0}', split.length) : $t('В медиатеке нет имён, которые эти разделители разделят');
@@ -134,7 +155,7 @@ function artistSplitRows() {
   paint();
   // the names of every track arrive with the library: paint again once it is read
   if (!Lib.artistNamesSeen().length) Lib.getAllAlbums().then(paint);
-  return [chips, note, list, acts];
+  return [chips, own, note, list, acts];
 }
 /* «Своя тема»: your background and accents; the palette builder keeps text readable and moves an accent
    that would vanish on the background (and says so). Export / import as a small .json file. */
@@ -317,6 +338,9 @@ export function renderSettings() {
   section('library', 'grid', $t('Медиатека'), '',
     group($t('Альбомы'),
       toggle('splitEditions', $t('Разные издания — отдельными альбомами'), '' /* Альбом 2014 года и его переиздание 2016-го с другими треками — две плитки с подписью издания */, () => Lib.rebuildLibrary().then(() => loadArtists(true)))),
+    group($t('Исполнители'),
+      toggle('artistGuests', $t('Исполнители без своих альбомов'), '' /* Гости и исполнители сборников — тоже плитками в «Исполнителях»; их альбомы — в разделе «Участие в альбомах» */, () => { artistsState.src = null; artistsState.loaded = false; if (router.current === 'artists') loadArtists(true); }),
+      h(`<div class="row st-note"><div class="lbl"><small class="dim">${$t('Гости и исполнители сборников появятся в «Исполнителях». Их песни на чужих альбомах всегда видны на странице исполнителя, в разделе «Участие в альбомах».')}</small></div></div>`)),
     group($t('Несколько исполнителей в одном имени'), ...artistSplitRows()),
   );
 
@@ -536,7 +560,7 @@ export function renderCovers(arg) {
   if (ast.lastError) ac.append(h(`<div class="desc">${$t('Последняя ошибка:')} ${esc(ast.lastError)}</div>`));
   const aact = h('<div class="row" style="gap:8px;flex-wrap:wrap;border:0"></div>');
   const ab = (txt, fn, cls = '') => { const e = h(`<button class="btn ${cls}">${txt}</button>`); e.onclick = fn; aact.append(e); };
-  ab($t('{0}Скачать для всех', icon('search')), async () => { await loadArtists(false); for (const x of artistsState.list) AA.want({ name: x.name, albums: x.albums.map((a) => a.name) }); toast($t('Ищу фото для всех исполнителей')); renderCovers(); }, 'primary');
+  ab($t('{0}Скачать для всех', icon('search')), async () => { await loadArtists(false); for (const x of artistsState.list) AA.want(artistJob(x)); toast($t('Ищу фото для всех исполнителей')); renderCovers(); }, 'primary');
   ab(ast.paused ? $t('Продолжить') : $t('Приостановить'), () => AA.setPaused(!ast.paused));
   ab($t('Повторить ненайденные'), () => { AA.resetNotFound(); toast($t('Статусы сброшены — откройте «Исполнители» или нажмите «Скачать для всех»')); });
   ab($t('{0}Открыть папку', icon('folder')), () => openArtistFolder());
