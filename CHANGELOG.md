@@ -4,6 +4,8 @@ All notable changes are listed here. Versions follow [Semantic Versioning](https
 
 ## [Unreleased]
 
+## [1.4.5] — appears on, own separators, selectable album tracks
+
 - **Appears on:** an artist page also lists the albums where the artist only sings a song or two (a guest, a compilation); artists with no album of their own get a page too, and a tile in Artists if you turn it on in Settings → Library (#10).
 - **Your own artist separators** («x», «vs.», «+»…) next to the built-in ones in Settings → Library (#10).
 - **Tracks on an album page can be selected:** click, Shift/Ctrl+click, Ctrl+A; the context menu acts on all of them (#10).
