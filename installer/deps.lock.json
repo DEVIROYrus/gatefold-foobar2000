@@ -1,6 +1,6 @@
 {
   "_comment": "Versions bundled into the installer. Updated by .github/workflows/deps-watch.yml (pull request) — releases always build from these.",
-  "foobar2000": "2.26.1",
-  "foo_ui_webview2": "v2.0.0",
-  "foobar2000_sha256": "72fe15a88b085ee4e49d68114e2bb9655000c2e0fdf40dcc128bbef8bcaf3600"
+  "foobar2000": "2.26.2",
+  "foo_ui_webview2": "v2.1.0",
+  "foobar2000_sha256": "ffa739f87d9c374cb030426a2ab4bfb37959d0dbb892fdc742654c14d127f795"
 }
