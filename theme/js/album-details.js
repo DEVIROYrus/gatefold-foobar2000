@@ -10,7 +10,7 @@
  *            this album has values for; the artist column goes when every track has the album's artist.
  * Everything comes from one titleformat.evalFieldsBatch call for the album's tracks.
  */
-import { call, ok, esc, fmtTime } from './bridge.js';
+import { call, ok, esc, fmtTime, inArchive, archiveFile, dirOfTrack } from './bridge.js';
 import { $t, num, locale, plural } from './i18n.js';
 
 /* title formatting: [...] leaves a field that is not there empty (instead of «?») */
@@ -138,7 +138,7 @@ export function facts(a, tracks, ext) {
   const shown = out.slice(0, 9);
   // the folder, as wide as the card: the end of the path, the whole one on hover, a click opens it
   const p = String(a.firstTrackAbsolutePath || tracks[0]?.absolutePath || '');
-  const dir = p.replace(/[\\/][^\\/]*$/, '');
+  const dir = inArchive(p) ? archiveFile(p) : dirOfTrack(p);      // an album in an archive: the archive file
   if (dir) {
     const parts = dir.split(/[\\/]/).filter(Boolean);
     const tail = parts.length > 2 ? '…\\' + parts.slice(-2).join('\\') : dir;

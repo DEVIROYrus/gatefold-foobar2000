@@ -29,7 +29,7 @@
  *              retried. The album that is playing is written only once playback leaves it, so its
  *              loudness never changes halfway through.
  */
-import { call, ok, on, log, sleep } from './bridge.js';
+import { call, ok, on, log, sleep, dirOfTrack } from './bridge.js';
 import { settings, setSetting } from './settings.js';
 import { slot, spent, userIdleFor } from './sched.js';
 import * as IDB from './idb.js';
@@ -104,7 +104,7 @@ const pathOf = (t) => (t.subsong > 0 ? `${t.absolutePath}|subsong:${t.subsong}` 
 const keyOf = (t) => pathOf(t).toLowerCase();
 const extOf = (p) => (String(p).split('|')[0].match(/\.([a-z0-9]+)$/i) || [, ''])[1].toLowerCase();
 const norm = (s) => String(s || '').toLowerCase().normalize('NFKC').replace(/\s+/g, ' ').trim();
-const dirOf = (p) => String(p).split('|')[0].replace(/[\\/][^\\/]*$/, '');
+const dirOf = dirOfTrack;          // (tracks in archives are not levelled: their tags cannot be written)
 const DISC = /^(cd|disc|disk|диск|диск №|vol\.?|volume|side)\s*[-_.#№]?\s*\d+\b/i;
 /** the album's folder: a «CD1» / «Disc 2» sub-folder belongs to its parent */
 const rootOf = (p) => { const d = dirOf(p); return DISC.test(d.split(/[\\/]/).pop() || '') ? dirOf(d) : d; };

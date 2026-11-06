@@ -1218,6 +1218,7 @@ select.sel-native { display: none !important; }
 .cp-w:hover { background: var(--hover); }
 .cp-w input { margin-top: 3px; accent-color: var(--accent); }
 .cp-w span { display: flex; flex-direction: column; min-width: 0; }
+.cp-w.off { opacity: .5; cursor: default; }
 .cp-w small { color: var(--text-3); font-size: var(--fs-xs); }
 .cp-fname { display: flex; align-items: center; gap: 6px; padding-left: 30px; }
 .cp-fname .st-input { width: 100%; max-width: 260px; }
@@ -1363,6 +1364,8 @@ body.fullscreen .np-art-wrap.nsq-true { width: calc(min(62vh, 44vw, 860px) * var
 .fd-grid { padding: 4px 6px 14px; grid-template-columns: repeat(auto-fill, minmax(calc(150px + (var(--fs, 14px) - 14px) * 8), 1fr)); }
 .fd-grid[hidden] { display: none; }
 .fd-tile { cursor: pointer; outline-offset: -2px; }
+.fd-tile .fd-arc { position: absolute; top: 8px; left: 8px; z-index: 2; padding: 2px 7px; border-radius: 6px; font-size: var(--fs-xs); font-weight: 700; letter-spacing: .04em;
+  color: #fff; background: rgb(0 0 0 / .55); backdrop-filter: blur(6px); pointer-events: auto; }
 .fd-tile .cov .ph { color: rgb(255 255 255 / .55); }
 .fd-tile .cov .fd-ph { background: linear-gradient(160deg, var(--surface-2), var(--surface)); color: var(--text-3); }
 /* a folder with folders inside: two cards peek out behind its cover */

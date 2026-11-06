@@ -15,7 +15,7 @@
  *     the last folder is remembered, and an album or a track can be shown in its folder.
  * Gatefold never copies, moves, renames or deletes files here — that is what Explorer is for.
  */
-import { call, ok, esc, fmtTime, fmtDuration, plural, log } from './bridge.js';
+import { call, ok, esc, fmtTime, fmtDuration, plural, log, viewPath, archiveFile, inArchive, explorerPath } from './bridge.js';
 import { router, $, h, icon, toast, placeholder, popupMenu } from './ui.js';
 import { settings, setSetting } from './settings.js';
 import { $t } from './i18n.js';
@@ -42,8 +42,8 @@ const F = {
 const mk = (name, path, parent) => ({ name, path, parent, kids: new Map(), files: [], n: 0, dur: 0, first: -1, dirsN: 0 });
 /** the folder segments of a path: «D:\Music\A\x.flac» → ['D:', 'Music', 'A']; «\\server\share\…» keeps «\\server» */
 function segs(path) {
-  const p = String(path || '');
-  if (!p || /^[a-z][a-z0-9+.-]+:\/\//i.test(p)) return null;          // a stream, not a file
+  const p = viewPath(path);                                             // a track in an archive: the archive is a folder
+  if (!p) return null;                                                  // a stream, not a file
   const unc = p.startsWith('\\\\') ? '\\\\' : '';
   const parts = p.slice(unc.length).split(SEP).filter(Boolean);
   parts.pop();                                                          // the file name
@@ -59,12 +59,14 @@ async function load() {
     const root = mk('', '', null);
     tracks.forEach((t, i) => {
       const parts = segs(t.absolutePath); if (!parts) return;
+      const arc = inArchive(t.absolutePath) ? lc(archiveFile(t.absolutePath)) : '';
       let n = root;
       for (const s of parts) {
         const k = lc(s);
         let c = n.kids.get(k);
         if (!c) { c = mk(s, join(n.path, s), n); n.kids.set(k, c); }
         n = c;
+        if (arc && !n.arc && (lc(n.path) === arc || lc(n.path).startsWith(arc + '\\'))) n.arc = archiveFile(t.absolutePath);   // the archive and the folders inside it
       }
       n.files.push(i);
     });
@@ -157,7 +159,7 @@ export function invalidate() { F.stale = true; if (active()) show(F.node ? F.nod
 
 /* files of the folder that the library does not have, read from the disk (optional) */
 async function extrasOf(n) {
-  if (!settings.folderExtras || !n.path) return { files: [], dirs: [] };
+  if (!settings.folderExtras || !n.path || n.arc) return { files: [], dirs: [] };   // inside an archive: nothing on disk to list
   const r = await call('file.list', { path: n.path });
   if (!ok(r)) return { files: [], dirs: [] };
   const have = new Set(n.files.map((i) => lc(F.tree.tracks[i].absolutePath).split(SEP).pop()));
@@ -265,7 +267,7 @@ function paintDirs() {
     const ph = placeholder(d.label, '');
     const sub = d.extra ? $t('не в медиатеке') : d.sub && d.sub !== d.label ? d.sub : albumLine(n) || countLine(n);
     const el = h(`<div class="tile static fd-tile${d.extra ? ' extra' : ''}${n && n.kids.size ? ' stack' : ''}" data-i="${i}" tabindex="0" role="button">
-      <div class="cov">${cover ? `<div class="ph" style="background:${ph.bg}">${icon('folder', 34)}</div><img alt="">` : `<div class="ph fd-ph">${icon('folder', 40)}</div>`}${d.extra ? '' : `<button class="play" title="${$t('Слушать')}" tabindex="-1">${icon('play', 18)}</button>`}</div>
+      <div class="cov">${cover ? `<div class="ph" style="background:${ph.bg}">${icon('folder', 34)}</div><img alt="">` : `<div class="ph fd-ph">${icon('folder', 40)}</div>`}${n && n.arc && lc(n.arc) === lc(n.path) ? `<span class="fd-arc" title="${$t('Архив: foobar2000 играет музыку прямо из него')}">${esc((n.path.match(/\.([^.\\]+)$/) || ['', ''])[1].toUpperCase())}</span>` : ''}${d.extra ? '' : `<button class="play" title="${$t('Слушать')}" tabindex="-1">${icon('play', 18)}</button>`}</div>
       <div class="tt"></div><div class="ta"></div></div>`);
     el.querySelector('.tt').textContent = d.label; el.querySelector('.tt').title = d.path;
     el.querySelector('.ta').textContent = sub;
@@ -394,7 +396,8 @@ async function folderMenu(n, x, y) {
   if (id === 'playlist') toPlaylist(n, x, y);
   if (id === 'explorer' && n.path) {
     const first = !n.extra && n.first >= 0 ? F.tree.tracks[n.first].absolutePath : '';
-    call('shell.showInExplorer', { path: first && first.toLowerCase().startsWith(lc(n.path) + '\\') && n.files && n.files.length ? first : n.path });
+    // an archive or a folder inside one: Explorer shows the archive file
+    call('shell.showInExplorer', { path: n.arc || (first && lc(viewPath(first)).startsWith(lc(n.path) + '\\') && n.files && n.files.length ? explorerPath(first) : n.path) });
   }
   if (id === 'extras') { setSetting('folderExtras', !settings.folderExtras); show(F.node.path || ''); }
 }

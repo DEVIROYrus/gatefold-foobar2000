@@ -14,7 +14,7 @@
  * And for libraries where covers live elsewhere by a fixed rule: a path pattern in title formatting
  * («D:\Covers\%album artist% - %album%») finds them for the whole library (patternScan).
  */
-import { call, ok, esc, log } from './bridge.js';
+import { call, ok, esc, log, inArchive, archiveFile } from './bridge.js';
 import { h, icon, toast } from './ui.js';
 import { settings, setSetting } from './settings.js';
 import { $t } from './i18n.js';
@@ -24,6 +24,8 @@ import * as Own from './ownart.js';
 
 const IMG_EXT = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'];
 const dirOf = (p) => String(p || '').split('|')[0].replace(/[\\/][^\\/]*$/, '');
+/** the folder on disk of an album's track: for one inside an archive, the folder that holds the archive */
+const diskDir = (p) => dirOf(inArchive(p) ? archiveFile(p) : p);
 const extOf = (mime) => ({ 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/bmp': 'bmp' }[mime] || 'jpg');
 let veil = null, S = null;
 
@@ -119,8 +121,10 @@ function render() {
 }
 const tile = (x, i) => `<button class="cp-tile${S.pick && S.pick.url === x.url ? ' on' : ''}" data-i="${i}" title="${esc(x.label || '')}"><img src="${esc(x.thumb || x.url)}" alt="" loading="lazy"><span>${x.w ? `${x.w}×${x.h}` : esc(x.res ? $t('до {0}px', x.res) : '')}${x.src ? ' · ' + esc(x.srcName || x.src) : ''}</span></button>`;
 function whereHtml() {
-  const last = settings.coverPickTarget || 'gatefold';
-  const opt = (v, title, sub) => `<label class="cp-w"><input type="radio" name="cpw" value="${v}"${last === v ? ' checked' : ''}><span><b>${title}</b><small>${sub}</small></span></label>`;
+  // an album inside a zip/7z/rar: nothing can be written into the archive — only Gatefold keeps the cover
+  const arc = inArchive(S.job.path);
+  const last = arc ? 'gatefold' : settings.coverPickTarget || 'gatefold';
+  const opt = (v, title, sub) => { const off = arc && v !== 'gatefold'; return `<label class="cp-w${off ? ' off' : ''}"><input type="radio" name="cpw" value="${v}"${last === v ? ' checked' : ''}${off ? ' disabled' : ''}><span><b>${title}</b><small>${off ? $t('Альбом лежит в архиве — записать в него нельзя') : sub}</small></span></label>`; };
   return `<div class="cp-where"><div class="cp-wh">${$t('Куда сохранить')}</div>
     ${opt('gatefold', $t('Только в Gatefold'), $t('Файлы и папки с музыкой не меняются'))}
     ${opt('embedded', $t('В теги треков'), $t('Обложка внутри файлов — её увидят и другие программы'))}
@@ -140,7 +144,7 @@ async function takeTile(g, i) {
 }
 
 async function fromPc() {
-  const r = await call('dialog.openFile', { title: $t('Обложка для «{0}»', S.a.name), defaultPath: settings.coverPickDir || dirOf(S.job.path), filters: [{ name: $t('Картинки'), extensions: IMG_EXT }] });
+  const r = await call('dialog.openFile', { title: $t('Обложка для «{0}»', S.a.name), defaultPath: settings.coverPickDir || diskDir(S.job.path), filters: [{ name: $t('Картинки'), extensions: IMG_EXT }] });
   if (!ok(r) || r.canceled || !(r.filePaths || []).length) return;
   const path = r.filePaths[0];
   setSetting('coverPickDir', dirOf(path));
@@ -160,7 +164,7 @@ async function loadAlbumImages(token) {
     }
   }
   // image files in the album's folder (and its disc folders' parent)
-  for (const dir of [...new Set([dirOf(S.job.path), dirOf(dirOf(S.job.path))])]) {
+  for (const dir of [...new Set([diskDir(S.job.path), dirOf(diskDir(S.job.path))])]) {
     const r = await call('artwork.getFolderImages', { directory: dir });
     if (!S || token !== S.token) return;
     for (const im of (ok(r) && r.images) || []) {
@@ -184,8 +188,9 @@ async function searchWeb() {
 
 async function commit(where, fname) {
   const { job, pick, a } = S;
+  if (inArchive(job.path)) where = 'gatefold';
   const btn = veil.querySelector('[data-a=save]'); btn.disabled = true; btn.classList.add('busy');
-  setSetting('coverPickTarget', where);
+  if (!inArchive(job.path)) setSetting('coverPickTarget', where);
   try {
     const paths = await CF.albumPaths(job);
     const album = { key: job.key, name: job.album, artist: job.artist, paths, dirs: [] };

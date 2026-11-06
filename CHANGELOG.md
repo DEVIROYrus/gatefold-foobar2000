@@ -4,7 +4,9 @@ All notable changes are listed here. Versions follow [Semantic Versioning](https
 
 ## [Unreleased]
 
-- **Mood playlists are different every time:** «Energetic», «Calm» and the others pick from every track that fits (the best ones likelier) and keep the last picks aside, so new playlists go round the whole library instead of the same top 50.
+- **Music in zip, 7z and rar archives:** foobar2000 plays it without unpacking, and Gatefold now shows it too. The file picker offers archives and opens them like a folder, Library → Folders shows each archive as a folder (marked ZIP / 7Z / RAR), «Show in Explorer» selects the archive, and covers of such albums are kept in Gatefold, since nothing can be written into an archive.
+
+- **Mood playlists are different every time:** «Energetic», «Calm» and the others pick from every track that fits (the best ones likelier) and keep the last picks aside, so new playlists go round the whole library instead of the same top 50; one artist never plays twice in a row.
 
 ## [1.4.5] — appears on, own separators, selectable album tracks
 

@@ -17,7 +17,7 @@
  * line is found by binary search each frame (no DOM work unless it changes).
  * Enhanced LRC (<mm:ss.xx> word stamps) lights words up one by one.
  */
-import { call, ok, log, esc } from './bridge.js';
+import { call, ok, log, esc, inArchive } from './bridge.js';
 import { settings } from './settings.js';
 import * as IDB from './idb.js';
 import * as SRC from './lyrics-sources.js';
@@ -116,7 +116,7 @@ export function getLyrics(t, opts = {}) {
           : { s: 'nf', t: Date.now() };
         IDB.kvSet(CK(t), cached);
         const top = cached.alts && cached.alts[0];
-        if (top && (top.synced || top.plain) && settings.lyricsSave !== 'none') saveToTrack(t, top.synced || top.plain).catch(() => {});
+        if (top && (top.synced || top.plain) && settings.lyricsSave !== 'none' && !inArchive(t.handle || t.path || t.absolutePath)) saveToTrack(t, top.synced || top.plain).catch(() => {});
       }
       const alts = cached && cached.s === 'ok' ? cached.alts : [];
       const cur = alts[cached?.pick || 0] || alts[0];
@@ -144,6 +144,8 @@ export async function choose(t, i) {
 
 /** Write lyrics beside the track (.lrc) or into its tags. */
 export async function saveToTrack(t, text, target = settings.lyricsSave === 'embedded' ? 'embedded' : 'file') {
+  // nothing can be written into an archive: the lyrics stay in Gatefold's cache
+  if (inArchive(t.handle || t.path || t.absolutePath)) throw new Error($t('трек лежит в архиве — записать в него нельзя'));
   const doc = parseLRC(text);
   const r = await call('lyrics.save', { path: t.handle || t.path, lyrics: text, target: [target], ...(target === 'file' ? { format: doc.synced ? 'lrc' : 'txt' } : {}) });
   if (!ok(r)) throw new Error(r.error || r.code || $t('не удалось сохранить'));

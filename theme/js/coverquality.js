@@ -22,7 +22,7 @@
  * asking foobar for the cover again — if foobar still shows the old one
  * (embedded art preferred), the sidecar is removed and the art embedded instead.
  */
-import { call, ok, log, sleep, albumKeyOf, bumpArtFor, plural } from './bridge.js';
+import { call, ok, log, sleep, albumKeyOf, bumpArtFor, plural, inArchive, dirOfTrack } from './bridge.js';
 import { settings } from './settings.js';
 import * as IDB from './idb.js';
 import * as CF from './coverfetch.js';
@@ -40,7 +40,7 @@ export let rows = [];                 // flagged + processed albums (unflagged o
 let journal = [];
 const BACKUP_DIR = '%profile%\\aurora\\backup\\covers';
 
-const dirOf = (p) => String(p || '').replace(/[\\/][^\\/]*$/, '');
+const dirOf = dirOfTrack;          // an archive counts as a folder (bridge.js)
 
 // ---------------------------------------------------------------- persistence
 let saveT = 0;
@@ -370,6 +370,13 @@ async function install(r, img, cand, oldBlob) {
     const w = await call('file.write', { path: backup, content: 'base64:' + (await CF.blobToB64(oldBlob)), encoding: 'binary' });
     if (!ok(w)) throw new Error($t('не удалось сохранить резервную копию — замена отменена ({0})', w.error || w.code));
   }
+  if (inArchive(r.path)) {
+    // an album inside an archive: nothing can be written into it — the better cover is kept in Gatefold
+    const had = Own.keyForPath(r.path) === r.key;
+    await Own.set({ key: r.key, name: r.album, artist: r.artist, paths: await CF.albumPaths({ ...r, path: r.path }), dirs: (await CF.otherAlbumsInDir(job)) === 0 ? [dirOf(r.path)] : [] }, { blob: img.blob }, { where: 'gatefold', src: 'web', lock: false });
+    const entry = { id: Date.now().toString(36) + hash8(r.key).slice(0, 4), t: Date.now(), key: r.key, artist: r.artist, album: r.album, path: r.path, backup, from: `${r.w}×${r.h}`, to: `${img.w}×${img.h}`, src: cand.src, mode: 'own', had, via: 'gatefold' };
+    return done(r, img, cand, entry);
+  }
   // 2. where does foobar take the current cover from?
   const av = await call('artwork.getAvailableArtwork', { path: r.path });
   const sources = ok(av) ? (av.sources || []).map(String) : [];
@@ -403,6 +410,10 @@ async function install(r, img, cand, oldBlob) {
       Object.assign(entry, { mode: 'embed', tracks: e.tracks, via: 'embedded' });
     }
   }
+  return done(r, img, cand, entry);
+}
+function done(r, img, cand, entry) {
+  const job = { key: r.key, artist: r.artist, album: r.album, year: r.year, tracks: r.tracks, path: r.path };
   journal.unshift(entry); saveJournal();
   r.st = 'upgraded'; r.cands = null; r.note = `${r.w}×${r.h} → ${img.w}×${img.h} · ${cand.src}${entry.warn ? ' · ⚠ ' + entry.warn : ''}`; r.jid = entry.id;
   r.w0 = r.w0 || r.w; r.h0 = r.h0 || r.h;
@@ -427,6 +438,10 @@ export async function undo(id) {
     if (e.dest && e.dest.toLowerCase() !== e.orig.toLowerCase()) await CF.recycle(e.dest);
   } else if (e.mode === 'add-file') {
     await CF.recycle(e.dest);
+  } else if (e.mode === 'own') {
+    // kept in Gatefold (an album in an archive): back to the picture it had, or to foobar2000's own
+    if (e.had && b64) await Own.set({ key: e.key, name: e.album, artist: e.artist, paths: await CF.albumPaths({ key: e.key, album: e.album, artist: e.artist, path: e.path }), dirs: [] }, { blob: await imgOp('fromDataUrl', { dataUrl: b64 }) }, { where: 'gatefold', src: 'web', lock: false });
+    else await Own.remove(e.key);
   } else if (e.mode === 'embed') {
     if (!b64) throw new Error($t('резервная копия не найдена: ') + e.backup);
     for (const p of e.tracks || []) await bgCall('metadata.embedArtwork', { path: p, imageData: b64, type: 'front', target: ['embedded'] }, 'normal');

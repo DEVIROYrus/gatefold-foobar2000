@@ -12,7 +12,7 @@
  *      needed. (Dragging a folder onto the window does the same — dropzone.js.)
  * The empty Library, Artists and playlist screens offer the same buttons (emptyActions()).
  */
-import { call, ok, on, esc, plural, debounce, log } from './bridge.js';
+import { call, ok, on, esc, plural, debounce, log, ARCHIVE_EXT, isArchiveFile } from './bridge.js';
 import { router, h, icon, toast } from './ui.js';
 import { $t } from './i18n.js';
 
@@ -114,8 +114,9 @@ async function addAndPlay(paths, { guid = '', name = '', folder = false } = {}) 
   }
   toast($t('Добавляю музыку…'), { ms: 4000 });
   let added = -1;
-  /* A folder goes through foobar2000's own «Add folder» (playlist.addPaths): it walks the subfolders and
-     works on network shares. playlist.addPathsAsync takes a folder for a single track that cannot play. */
+  /* A folder or an archive goes through foobar2000's own «Add» (playlist.addPaths): it walks subfolders,
+     looks inside zip/7z/rar and works on network shares. playlist.addPathsAsync takes a folder or an
+     archive for a single track that cannot play. */
   const a = folder ? null : await call('playlist.addPathsAsync', { paths, playlistGuid: guid });
   if (a && ok(a) && a.operationId) {
     added = await new Promise((resolve) => {
@@ -148,9 +149,12 @@ export async function openFolder(guid = '') {
 }
 export async function openFiles(guid = '') {
   const r = await call('dialog.openFile', { title: $t('Музыкальные файлы'), multiple: true, defaultPath: '%music%',
-    filters: [{ name: $t('Музыка'), extensions: AUDIO }, { name: $t('Все файлы'), extensions: ['*'] }] });
+    // archives too: foobar2000 plays an album straight out of a zip, 7z or rar, without unpacking it
+    filters: [{ name: $t('Музыка'), extensions: [...AUDIO, ...ARCHIVE_EXT] }, { name: $t('Архивы с музыкой'), extensions: ARCHIVE_EXT }, { name: $t('Все файлы'), extensions: ['*'] }] });
   if (!ok(r) || r.canceled || !(r.filePaths || []).length) return;
-  await addAndPlay(r.filePaths, { guid, name: r.filePaths.length === 1 ? baseName(r.filePaths[0]).replace(/\.[^.]+$/, '') : $t('Моя музыка') });
+  // an archive is opened like a folder (foobar2000's own «Add files» looks inside it); addPathsAsync
+  // would take the archive for one track that cannot play
+  await addAndPlay(r.filePaths, { guid, name: r.filePaths.length === 1 ? baseName(r.filePaths[0]).replace(/\.[^.]+$/, '') : $t('Моя музыка'), folder: r.filePaths.some(isArchiveFile) });
 }
 
 /** buttons for an empty screen; `guid` makes them fill that playlist instead of a new one */

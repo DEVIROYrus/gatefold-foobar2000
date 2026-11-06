@@ -296,15 +296,23 @@ export function sample(pool, n, seen = new Set(), rnd = Math.random) {
   keyed.sort((a, b) => b.key - a.key);
   return vary(keyed.map((x) => x.r), n, 4);
 }
-/** an order to listen in: random, without one artist twice in a row where it can be helped */
+/** an order to listen in: random, without one artist twice in a row where it can be helped. Each step
+    takes an artist other than the last one, the one with most tracks left first (otherwise the end of the
+    list could be one artist's leftovers in a row), ties broken at random. */
 export function spread(list, rnd = Math.random) {
-  const left = list.slice();
-  for (let i = left.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [left[i], left[j]] = [left[j], left[i]]; }
-  const out = [];
-  while (left.length) {
-    const prev = out.length ? artistKey(out[out.length - 1]) : null;
-    const i = Math.max(0, left.findIndex((r) => artistKey(r) !== prev));
-    out.push(left.splice(i, 1)[0]);
+  const by = new Map();
+  for (const r of list) { const k = artistKey(r); if (!by.has(k)) by.set(k, []); by.get(k).push(r); }
+  for (const g of by.values()) for (let i = g.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [g[i], g[j]] = [g[j], g[i]]; }
+  const out = []; let prev = null;
+  while (out.length < list.length) {
+    let best = null, bestN = -1, ties = 0;
+    const other = [...by].some(([k, g]) => g.length && k !== prev);
+    for (const [k, g] of by) {
+      if (!g.length || (k === prev && other)) continue;
+      if (g.length > bestN) { best = k; bestN = g.length; ties = 1; } else if (g.length === bestN && rnd() < 1 / ++ties) best = k;
+    }
+    if (best === null) best = prev;
+    out.push(by.get(best).pop()); prev = best;
   }
   return out;
 }

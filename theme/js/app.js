@@ -15,7 +15,7 @@ import * as Ambient from './ambient.js';
 import * as Sound from './ml/sound.js';
 import * as SoundUI from './ml/sound-ui.js';
 import * as Genres from './ml/genres.js';
-import { waitForBridge, call, on, ok, normTrack, esc, fmtTime, debounce, log, albumKeyOf, hasBridge, artUrl, plural, coverPx } from './bridge.js';
+import { waitForBridge, call, on, ok, normTrack, esc, fmtTime, debounce, log, albumKeyOf, hasBridge, artUrl, plural, coverPx, dirOfTrack } from './bridge.js';
 import { settings, setSetting, onSettings } from './settings.js';
 import { router, onRoute, $, h, icon, toast, popupMenu, closeMenus } from './ui.js';
 import * as Theme from './theme.js';
@@ -483,7 +483,7 @@ async function refreshPlayingIndex() {
    «random» and «shuffle tracks» foobar2000 picks the track itself when the time comes and tells no one
    beforehand, so there is nothing true to list: the panel says so instead of showing the playlist order. */
 const UPF = ['title', 'artist', 'album', 'albumArtist', 'duration', 'absolutePath', 'path', 'subsong'];
-const dirOfPath = (p) => String(p || '').replace(/[\\/][^\\/]*$/, '').toLowerCase();
+const dirOfPath = (p) => dirOfTrack(p).toLowerCase();
 async function upNext(ci, limit = 15, ask = call) {
   const ord = ORDERS[app.order] ? ORDERS[app.order][0] : 'default';
   const rows = [];

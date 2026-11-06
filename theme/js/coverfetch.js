@@ -9,7 +9,7 @@
  *         fallback: PowerShell Invoke-WebRequest straight into the album folder
  * Triggers: the playing album (immediately) + an idle background sweep of the library.
  */
-import { call, ok, on, log, sleep, albumKeyOf, plural, bumpArtV, artUrl, httpGet } from './bridge.js';
+import { call, ok, on, log, sleep, albumKeyOf, plural, bumpArtV, artUrl, httpGet, inArchive, dirOfTrack } from './bridge.js';
 import { bgCall, slot, spent } from './sched.js';
 import { img as imgOp } from './imgw.js';
 import * as IDB from './idb.js';
@@ -258,7 +258,7 @@ export function fileSettled(path, since = 0) {
  * belong to exactly one album. Shared folders get the art embedded into the
  * album's own tracks instead.
  */
-const dirOf = (p) => String(p || '').replace(/[\\/][^\\/]*$/, '');
+const dirOf = dirOfTrack;          // an archive counts as a folder (bridge.js)
 const lc = (x) => String(x || '').toLowerCase();
 let dirIdx = null, dirIdxT = 0, dirIdxP = null;
 export async function getDirIndex(fresh = false) {
@@ -337,6 +337,8 @@ async function keepInGatefold(job, img, { lock = false, src = 'web' } = {}) {
 
 async function save(job, img, url) {
   if (settings.coverTarget === 'gatefold') return keepInGatefold(job, img);
+  // an album inside a zip/7z/rar: nothing can be written into the archive, so the cover is kept in Gatefold
+  if (inArchive(job.path)) return keepInGatefold(job, img);
   if (settings.coverTarget === 'embedded') {
     if (job.fromSweep) return keepInGatefold(job, img);          // the sweep does not rewrite tracks (see below)
     if (!img.b64) img = { ...img, b64: await blobToB64(img.blob) }; return embedIntoAlbum(job, img);
@@ -629,7 +631,8 @@ export async function forgetSeen(keys) { await loadSeen(); let n = 0; for (const
 
 /** Images that foobar's default patterns would pick up already sitting in the folder. */
 async function folderHasCover(path) {
-  const dir = path.replace(/[\\/][^\\/]*$/, '');
+  if (inArchive(path)) return false;                       // no folder to look in
+  const dir = dirOf(path);
   const r = await bgCall('artwork.getFolderImages', { directory: dir }, 'normal');
   const imgs = ok(r) ? (r.images || []) : [];
   return imgs.some((x) => /^(cover|folder|front|albumart\w*)\.(jpe?g|png|webp|gif|bmp)$/i.test(String(typeof x === 'string' ? x : x.name || x.path || '').split(/[\\/]/).pop()));
