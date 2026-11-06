@@ -12,6 +12,7 @@ import { settings, setSetting } from '../settings.js';
 import { $t } from '../i18n.js';
 import * as Sound from './sound.js';
 import * as Genres from './genres.js';
+import * as IDB from '../idb.js';
 
 export const MOOD_LABEL = () => ({ aggressive: $t('агрессивное'), relaxed: $t('спокойное'), sad: $t('грустное'), happy: $t('радостное'), party: $t('для вечеринки'),
   danceable: $t('танцевальное'), instrumental: $t('инструментальное'), acoustic: $t('акустическое'), electronic: $t('электронное') });
@@ -277,14 +278,51 @@ export function matching(kind, style) {
   const list = ranked(kind, style);
   return { n: list.length, top: vary(list, 6, 1).map((r) => ({ artist: r.aa || r.ar || '', title: r.ti || '' })) };
 }
+/* ---------------------------------------------------------------- picking from all that fits
+   The ranking alone made every «Energetic» the same: the top 50 of a fixed order. Now every track that
+   passes the recipe's gate can be picked; a better rank only makes it likelier (weighted sampling without
+   replacement, Efraimidis–Spirakis: key = u^(1/w), the biggest keys win). The tracks of the last
+   playlists of the same kind are kept aside (much less likely, not banned), as many as the pool can spare
+   while still leaving 1.5× the playlist fresh, so repeated playlists go round the whole library. */
+const RECENT = 'mood.recent.v1';
+const W_RANK = 0.75, W_SEEN = 0.08;
+export function sample(pool, n, seen = new Set(), rnd = Math.random) {
+  const N = pool.length;
+  const keyed = pool.map((r, i) => {
+    let w = 1 - W_RANK * (N > 1 ? i / (N - 1) : 0);           // 1 for the best, 0.25 for the last that still fits
+    if (seen.has(r.k)) w *= W_SEEN;
+    return { r, key: Math.pow(rnd() || 1e-12, 1 / w) };
+  });
+  keyed.sort((a, b) => b.key - a.key);
+  return vary(keyed.map((x) => x.r), n, 4);
+}
+/** an order to listen in: random, without one artist twice in a row where it can be helped */
+export function spread(list, rnd = Math.random) {
+  const left = list.slice();
+  for (let i = left.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [left[i], left[j]] = [left[j], left[i]]; }
+  const out = [];
+  while (left.length) {
+    const prev = out.length ? artistKey(out[out.length - 1]) : null;
+    const i = Math.max(0, left.findIndex((r) => artistKey(r) !== prev));
+    out.push(left.splice(i, 1)[0]);
+  }
+  return out;
+}
 export async function moodPlaylist(kind, name, n = 50, style = '') {
   if (!Sound.ready()) return needSound();
-  const list = vary(ranked(kind, style), n, 4);
-  if (!list.length) { toast($t('Пока ничего не подходит') + coverNote(), { ms: 6000 }); return; }
-  // a little shuffle within the best ones so that the same playlist is not made twice
-  for (let i = list.length - 1; i > 0; i--) { const j = Math.max(0, i - 6 + Math.floor(Math.random() * 7)); [list[i], list[j]] = [list[j], list[i]]; }
+  const pool = ranked(kind, style);
+  if (!pool.length) { toast($t('Пока ничего не подходит') + coverNote(), { ms: 6000 }); return; }
+  const id = kind === 'style' ? 'style:' + norm(style) : kind;
+  const mem = (await IDB.kvGet(RECENT, null).catch(() => null)) || {};
+  const seen = new Set(mem[id] || []);
+  const list = spread(sample(pool, n, seen));
+  // what to keep aside next time: these first, then the older ones, as many as leave 1.5× n fresh
+  const room = Math.max(0, Math.min(3000, pool.length - Math.ceil(n * 1.5)));
+  const picked = list.map((r) => r.k), was = new Set(picked);
+  const inPool = new Set(pool.map((r) => r.k));
+  mem[id] = [...picked, ...(mem[id] || []).filter((k) => inPool.has(k) && !was.has(k))].slice(0, room);
+  IDB.kvSet(RECENT, mem).catch(() => {});
   await makePlaylist(name, list);
-  
 }
 
 /** the genres of the analysed library: [{ name, n }] (tracks whose first two genres include it) */
