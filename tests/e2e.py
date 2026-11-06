@@ -877,6 +877,24 @@ async def test_sound_ai(browser, port):
     await pg.click('.sp-go'); await pg.wait_for_timeout(1200)
     made = await pg.evaluate("window.__ml.created")
     check(made and made[-1]['name'] == 'Calm' and len(made[-1]['handles']) > 0, f'and makes the playlist ({made[-1:] and made[-1]["name"]})')
+    # the same mood twice is not the same playlist: everything that fits can be picked, the best likelier
+    smp = await pg.evaluate("""(async () => { const U = await import('/theme/js/ml/sound-ui.js');
+      const pool = Array.from({ length: 1200 }, (_, i) => ({ k: 'k' + i, aa: 'Artist ' + (i % 300), ti: 'Song ' + i, al: 'Album ' + (i % 600) }));
+      let seen = new Set(); const runs = [];
+      for (let t = 0; t < 12; t++) { const l = U.sample(pool, 50, seen); runs.push(l.map(r => +r.k.slice(1))); seen = new Set([...l.map(r => r.k), ...seen]); }
+      const fresh = U.sample(pool, 50);
+      const overlap = runs[0].filter(i => runs[1].includes(i)).length;
+      const covered = new Set(runs.flat()).size;
+      const topHalf = fresh.filter(r => +r.k.slice(1) < 600).length;
+      const small = U.sample(pool.slice(0, 60), 50).length;
+      const order = U.spread(U.sample(pool.slice(0, 200).map((r, i) => ({ ...r, aa: 'A' + (i % 5) })), 20));
+      const twice = order.slice(1).filter((r, i) => r.aa === order[i].aa).length;
+      return { overlap, covered, topHalf, small, twice, n: runs[0].length }; })()""")
+    check(smp['n'] == 50 and smp['overlap'] <= 5, f'the next playlist of the same mood is (almost) all new tracks {smp}')
+    check(smp['covered'] >= 550, f'a dozen playlists go round the library, not the same top {smp["covered"]}')
+    check(smp['topHalf'] >= 30, f'better matches are still likelier {smp["topHalf"]} of 50')
+    check(smp['small'] >= 40, f'a small pool still fills the playlist {smp["small"]}')
+    check(smp['twice'] == 0, f'no artist twice in a row {smp["twice"]}')
     await pg.click('#btnNewPl'); await pg.wait_for_timeout(300)
     await pg.click("#layer .menu .mi:has-text('Smart playlist')"); await pg.wait_for_timeout(400)
     await pg.click(".sp-card[data-id=ai-style]"); await pg.wait_for_timeout(400)

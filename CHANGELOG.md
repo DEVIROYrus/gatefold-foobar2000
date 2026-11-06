@@ -4,6 +4,8 @@ All notable changes are listed here. Versions follow [Semantic Versioning](https
 
 ## [Unreleased]
 
+- **Mood playlists are different every time:** «Energetic», «Calm» and the others pick from every track that fits (the best ones likelier) and keep the last picks aside, so new playlists go round the whole library instead of the same top 50.
+
 ## [1.4.5] — appears on, own separators, selectable album tracks
 
 - **Appears on:** an artist page also lists the albums where the artist only sings a song or two (a guest, a compilation); artists with no album of their own get a page too, and a tile in Artists if you turn it on in Settings → Library (#10).
