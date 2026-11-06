@@ -5,7 +5,7 @@
  * Virtualisation keeps the DOM at ~40–80 nodes regardless of list size, so a
  * 50 000-track playlist scrolls exactly like a 50-track one.
  */
-import { call, on, ok, normTrack, esc, fmtTime, fmtDuration, plural, debounce, settle, log, sleep, artUrl, albumKeyOf } from './bridge.js';
+import { call, on, ok, normTrack, esc, fmtTime, fmtDuration, plural, debounce, settle, log, sleep, artUrl, albumKeyOf, viewPath, dirOfTrack, explorerPath } from './bridge.js';
 import { settings, setSetting } from './settings.js';
 import { router, onRoute, $, h, icon, toast, placeholder, popupMenu, backButton } from './ui.js';
 import { idle, slot, spent } from './sched.js';
@@ -280,7 +280,7 @@ async function collage(guid) {
   const r = await call('playlist.getTracks', { playlistGuid: guid, start: 0, count: 120, fields: ['absolutePath', 'album'] });
   if (!ok(r) || PL.guid !== guid) return;
   const seen = new Set(), paths = [];
-  for (const t of r.tracks || []) { const k = (t.album || '') + '|' + String(t.absolutePath || '').replace(/[\\/][^\\/]*$/, ''); if (!seen.has(k)) { seen.add(k); paths.push(t.absolutePath); } if (paths.length >= 4) break; }
+  for (const t of r.tracks || []) { const k = (t.album || '') + '|' + dirOfTrack(t.absolutePath); if (!seen.has(k)) { seen.add(k); paths.push(t.absolutePath); } if (paths.length >= 4) break; }
   if (!paths.length) return;
   const get = await coversFor(paths, Math.round(96 * dpr()));
   const urls = paths.map(get).filter(Boolean);
@@ -928,6 +928,7 @@ const DISC_DIR = /^(cd|disc|disk|диск|диск\s*№?)\s*\d+\b|^(cd|disc)\d+
 const normTitle = (s) => String(s || '').normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
 const dirOf = (p) => String(p || '').replace(/[\\/][^\\/]*$/, '');
 function releaseDir(p) {
+  p = viewPath(p);                   // an album in an archive: the archive is its folder
   let d = dirOf(p); if (!d) return '';
   const last = d.split(/[\\/]/).pop();
   if (DISC_DIR.test(last.trim())) d = dirOf(d);
@@ -1342,7 +1343,7 @@ async function albumMenu(a, x, y) {
   if (id === 'queue') queueAlbum(a);
   if (id === 'radio') shared.radioFor(a.albumArtist || a.artist);
   if (id === 'cover') CoverPick.open(a);
-  if (id === 'explorer' && a.firstTrackAbsolutePath) call('shell.showInExplorer', { path: a.firstTrackAbsolutePath });
+  if (id === 'explorer' && a.firstTrackAbsolutePath) call('shell.showInExplorer', { path: explorerPath(a.firstTrackAbsolutePath) });
 }
 
 /** Tracks of an album, from every part of a merged one, in disc/track order. */
@@ -1429,7 +1430,7 @@ export async function openAlbum(a) {
   $('alQueue').onclick = () => queueAlbum(a);
   $('alCover').onclick = () => CoverPick.open(a);
   $('alColors').onclick = () => AC.open(a);
-  $('alFolder').onclick = () => call('shell.showInExplorer', { path: a.firstTrackAbsolutePath });
+  $('alFolder').onclick = () => call('shell.showInExplorer', { path: explorerPath(a.firstTrackAbsolutePath) });
   $('albumArtistLink').onclick = (e) => { const l = e.target.closest('[data-ar]'); if (l) router.go('artist', a.artists && a.artists.length > 1 ? l.dataset.ar : a.albumArtist || a.artist); };
   $('alDetails').onclick = toggleAlbumDetails;
   $('albumHero').querySelectorAll('.al-eds [data-ed]').forEach((b) => { b.onclick = () => { const o = LIB.index && LIB.index.get(b.dataset.ed); if (o) router.go('album', o); }; });

@@ -13,7 +13,7 @@
  * playlist row, a tile, Now Playing, the Canvas and the mini player all show the same picture.
  * Other Gatefold windows hear about changes through a BroadcastChannel.
  */
-import { call, ok, log } from './bridge.js';
+import { call, ok, log, dirOfTrack } from './bridge.js';
 import * as IDB from './idb.js';
 import { img as imgOp } from './imgw.js';
 
@@ -25,7 +25,7 @@ const byPath = new Map(), byDir = new Map();
 const urls = new Map();                                    // `${kind}:${key}` → object URL
 const bc = (() => { try { return new BroadcastChannel('gatefold-ownart'); } catch { return null; } })();
 const lc = (s) => String(s || '').toLowerCase();
-const dirOf = (p) => lc(String(p || '').split('|')[0].replace(/[\\/][^\\/]*$/, ''));
+const dirOf = (p) => lc(dirOfTrack(p));       // an archive counts as a folder (bridge.js)
 
 function index() {
   byPath.clear(); byDir.clear();

@@ -123,6 +123,45 @@ export { plural } from './i18n.js';
 
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+// ---------------------------------------------------------------- tracks inside archives
+/* foobar2000 plays music straight out of zip, 7z, rar and gz archives (its bundled «Archive support»).
+   Such a track's path is  unpack://<type>|<length>|<the archive's path>|<the path inside it>
+   where the length counts the archive path's UTF-8 bytes, and the archive's path may be file://…, or
+   another unpack:// for an archive inside an archive. Gatefold shows an archive as a folder
+   («D:\Music\Album.zip\CD1\01.flac»), opens Explorer at the archive file, and never tries to write
+   anything into one (covers of such albums are kept in Gatefold). */
+export const ARCHIVE_EXT = ['zip', '7z', 'rar', 'gz'];
+export const isArchiveFile = (p) => new RegExp(`\\.(${ARCHIVE_EXT.join('|')})$`, 'i').test(String(p || ''));
+export const inArchive = (p) => /^(unpack|archive):\/\//i.test(String(p || ''));
+export const stripSubsong = (p) => String(p || '').replace(/\|subsong:\d+$/i, '');
+const u8 = new TextEncoder(), u8d = new TextDecoder();
+function splitArchive(p) {
+  const m = /^unpack:\/\/[^|]*\|(\d+)\|/i.exec(p); if (!m) return null;
+  const rest = p.slice(m[0].length), b = u8.encode(rest), len = +m[1];
+  if (b[len] === 0x7c) return { arc: u8d.decode(b.slice(0, len)), inner: u8d.decode(b.slice(len + 1)) };
+  const i = rest.lastIndexOf('|');                       // a length that does not fit: the last «|» then
+  return i > 0 ? { arc: rest.slice(0, i), inner: rest.slice(i + 1) } : null;
+}
+const fileOf = (p) => String(p).replace(/^file:\/\//i, '');
+/** the path as Gatefold shows it: an archive is a folder; '' for a path that has no place on disk */
+export function viewPath(p) {
+  p = stripSubsong(p);
+  if (!inArchive(p)) return /^[a-z][a-z0-9+.-]+:\/\//i.test(p) && !/^file:\/\//i.test(p) ? '' : fileOf(p);
+  const s = splitArchive(p); if (!s) return '';
+  const outer = viewPath(fileOf(s.arc)); if (!outer) return '';
+  return outer + '\\' + s.inner.replace(/\//g, '\\').replace(/^\\+/, '');
+}
+/** the archive file on disk that holds the track ('' when it is not in one) */
+export function archiveFile(p) {
+  p = stripSubsong(p); let out = '';
+  while (inArchive(p)) { const s = splitArchive(p); if (!s) return ''; p = out = fileOf(s.arc); }
+  return out;
+}
+/** the folder of a track, as shown (an archive counts as a folder) */
+export const dirOfTrack = (p) => viewPath(p).replace(/[\\/][^\\/]*$/, '');
+/** what to select in Explorer for a track: the track's file, or the archive that holds it */
+export const explorerPath = (p) => archiveFile(p) || stripSubsong(p);
+
 // ---------------------------------------------------------------- artwork URL versioning
 /* The host serves fb2k://artwork with Cache-Control max-age=86400. After covers
    change on disk we bump a version that is appended to every artwork URL the UI
@@ -131,7 +170,7 @@ let artV = 0;
 try { artV = +localStorage.getItem('aurora.artv') || 0; } catch {}
 export function bumpArtV() { artV++; try { localStorage.setItem('aurora.artv', String(artV)); } catch {} }
 /* Per-folder versions: replacing ONE album's cover must not refetch all 2000. */
-const lcDir = (p) => String(p || '').replace(/[\\/][^\\/]*$/, '').toLowerCase();
+const lcDir = (p) => dirOfTrack(p).toLowerCase();
 let dirV = {}, dirN = 0;
 try { dirV = JSON.parse(localStorage.getItem('aurora.artv.dir') || '{}') || {}; dirN = Object.keys(dirV).length; } catch {}
 export function bumpArtFor(path) {

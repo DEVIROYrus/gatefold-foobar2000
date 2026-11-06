@@ -9,7 +9,7 @@
  * (menu.getContextMenu mode:'handles') — Convert ▸ presets, ReplayGain,
  * Masstagger, DR Meter… run on the dropped tracks, not on the playing one.
  */
-import { call, ok, esc, plural, log } from './bridge.js';
+import { call, ok, esc, plural, log, isArchiveFile } from './bridge.js';
 import { router, $, h, icon, toast, popupMenu } from './ui.js';
 
 import { $t } from './i18n.js';
@@ -61,8 +61,9 @@ window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && document.b
 /* a playlist file dropped on «new playlist» gives the playlist its name («Road trip.m3u8» → «Road trip») */
 const PLAYLIST_EXT = /\.(m3u8?|pls|fpl|xspf|wpl|asx)$/i;
 export function importName(paths) {
-  if (!paths || paths.length !== 1 || !PLAYLIST_EXT.test(paths[0])) return '';
-  return String(paths[0]).replace(/[\\/]+$/, '').split(/[\\/]/).pop().replace(PLAYLIST_EXT, '').trim();
+  if (!paths || paths.length !== 1) return '';
+  const ext = PLAYLIST_EXT.test(paths[0]) ? PLAYLIST_EXT : isArchiveFile(paths[0]) ? /\.[^.]+$/ : null;   // an album in an archive too
+  return ext ? String(paths[0]).replace(/[\\/]+$/, '').split(/[\\/]/).pop().replace(ext, '').replace(/\.tar$/i, '').trim() : '';
 }
 const stamp = () => { const d = new Date(); return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 
