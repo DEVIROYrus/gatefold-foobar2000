@@ -4,7 +4,7 @@
 
 <h1 align="center">Gatefold</h1>
 
-<p align="center">A modern interface for foobar2000 that takes on the colours of the album you're playing.</p>
+<p align="center">A modern, full-featured interface for foobar2000 that takes on the colours of the album you're playing.</p>
 
 <p align="center">
   <a href="../../releases/latest"><img src="https://img.shields.io/badge/version-2.0-e5484d?style=flat-square" alt="Version 2.0"></a>
@@ -19,7 +19,7 @@
 </p>
 
 <p align="center">
-  <sub><a href="#-highlights">Highlights</a> · <a href="#-install">Install</a> · <a href="#-faq">FAQ</a> · <a href="README.ru.md">Читать по-русски</a></sub>
+  <sub><a href="#-highlights">Highlights</a> · <a href="#-install">Install</a> · <a href="README.ru.md">Читать по-русски</a></sub>
 </p>
 
 <br>
@@ -72,7 +72,7 @@
 ## 📥 Install
 
 1. Download the `foo_gatefold` `.fb2k-component` file from the [latest release](../../releases/latest).
-2. Open it: foobar2000 installs it and restarts.
+2. Double-click it, or in foobar2000 open **Preferences → Components → Install…**; foobar2000 restarts.
 3. Choose **Gatefold** when foobar2000 offers the new interface.
 
 **On Gatefold 1.x:** press **Update now** in Gatefold, then **Install Gatefold 2.0**.
@@ -128,40 +128,13 @@ In lists: Shift/Ctrl+click, Ctrl+A, Delete, Ctrl+Z / Ctrl+Y, Alt+↑/↓, Enter,
 
 </details>
 
-## ❓ FAQ
-
 <details>
-<summary><b>Does it change how my music sounds?</b></summary>
+<summary><b>License</b></summary>
 
-No. Playback is foobar2000's own; the equalizer and levelling are off until you turn them on.
-
-</details>
-
-<details>
-<summary><b>Will my playlists and components survive?</b></summary>
-
-Yes. Gatefold is one more interface module; switch back to Default UI or Columns UI any time.
-
-</details>
-
-<details>
-<summary><b>Do I still need foo_ui_webview2?</b></summary>
-
-No.
-
-</details>
-
-<details>
-<summary><b>Is it free? Is it open source?</b></summary>
-
-Free. Not open source since 2.0: see [License](#-license).
-
-</details>
-
-## 📄 License
-
-Gatefold 2.0 is **free to use but not open source**: © 2026 DEVIROYrus, all rights reserved, under the [Gatefold End-User License Agreement](EULA.md) ([in Russian](EULA.ru.md)). You may install and use it and share the unchanged official package. You may not modify it, reuse its code or design, or sell it. Gatefold 1.x, the source in this repository, remains under the [MIT License](LICENSE). Third-party components keep their own licenses ([THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)).
+Gatefold 2.0 is free to use, at home or at work, under the [Gatefold License Agreement](EULA.md) ([in Russian](EULA.ru.md)). Feel free to share the official package as it is. The Gatefold 1.x source in this repository remains under the [MIT License](LICENSE). Third-party components keep their own licenses ([THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)).
 
 foobar2000 is freeware by Peter Pawłowski. Gatefold is an independent project, not affiliated with foobar2000. Album covers in the screenshots belong to their respective owners.
+
+</details>
 
 <p align="center"><br><img src="docs/media/logo.svg" width="36" alt=""><br><sub>Made for people who still have a music library.</sub></p>
