@@ -71,11 +71,13 @@
 
 ## 📥 Install
 
-1. Download the `foo_gatefold` `.fb2k-component` file from the [latest release](../../releases/latest).
-2. Double-click it, or in foobar2000 open **Preferences → Components → Install…**; foobar2000 restarts.
-3. Choose **Gatefold** when foobar2000 offers the new interface.
+**Installer (recommended):** download `Gatefold-Setup` from the [latest release](../../releases/latest) and run it. It installs foobar2000 too if you don't have it, and foobar2000 opens straight in Gatefold.
+
+**Already have foobar2000:** download the `.fb2k-component` file and double-click it (or in foobar2000: **Preferences → Components → Install…**), then choose **Gatefold** when foobar2000 offers the new interface.
 
 **On Gatefold 1.x:** press **Update now** in Gatefold, then **Install Gatefold 2.0**.
+
+<sub>The installer is not code-signed yet, so Windows SmartScreen may warn on first run: **More info → Run anyway**.</sub>
 
 <details>
 <summary><b>Requirements</b></summary>
