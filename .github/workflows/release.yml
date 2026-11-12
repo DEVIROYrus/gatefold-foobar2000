@@ -6,6 +6,11 @@ name: Release
 on:
   push:
     tags: ['v2.*', 'v3.*']
+  workflow_dispatch:   # by hand: Actions → Release → Run workflow, with the version (2.0.1); the tag is made on main
+    inputs:
+      version:
+        description: 'Version to publish (a folder v<version> on the branch release-files)'
+        required: true
 permissions:
   contents: write
 jobs:
@@ -18,7 +23,7 @@ jobs:
       - name: Check the files against SHA256SUMS.txt
         run: |
           set -euo pipefail
-          tag='${{ github.ref_name }}'; v="${tag#v}"
+          tag='${{ github.ref_type == 'tag' && github.ref_name || format('v{0}', inputs.version) }}'; v="${tag#v}"
           cd "files/$tag"
           for f in "Gatefold-Setup-$v.exe" "foo_gatefold-$v.fb2k-component" "gatefold-theme-$v.zip" SHA256SUMS.txt release-notes.md; do
             test -s "$f" || { echo "missing $f"; exit 1; }
@@ -26,16 +31,17 @@ jobs:
           sha256sum -c SHA256SUMS.txt
           unzip -p "gatefold-theme-$v.zip" gatefold/js/version.js | grep -q "VERSION = '$v'"
           grep -q 'gatefold:end' release-notes.md
-          echo "V=$v" >> "$GITHUB_ENV"
+          echo "V=$v" >> "$GITHUB_ENV"; echo "TAG=$tag" >> "$GITHUB_ENV"
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
+          tag_name: ${{ env.TAG }}
+          target_commitish: ${{ github.sha }}
           name: Gatefold ${{ env.V }}
-          body_path: files/${{ github.ref_name }}/release-notes.md
+          body_path: files/${{ env.TAG }}/release-notes.md
           prerelease: false
           make_latest: 'true'
           files: |
-            files/${{ github.ref_name }}/Gatefold-Setup-*.exe
-            files/${{ github.ref_name }}/foo_gatefold-*.fb2k-component
-            files/${{ github.ref_name }}/gatefold-theme-*.zip
-            files/${{ github.ref_name }}/SHA256SUMS.txt
+            files/${{ env.TAG }}/Gatefold-Setup-*.exe
+            files/${{ env.TAG }}/foo_gatefold-*.fb2k-component
+            files/${{ env.TAG }}/gatefold-theme-*.zip
+            files/${{ env.TAG }}/SHA256SUMS.txt
