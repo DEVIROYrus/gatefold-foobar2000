@@ -1,0 +1,3 @@
+28be438aa8c0ee5490378221ccaadeae21e5cb39f1ba775deadb7d14f27f745f  Gatefold-Setup-2.1.0-beta.1.exe
+67e56c90c458df5da39752273460524843060542069dab383c5d185d44d3537b  foo_gatefold-2.1.0-beta.1.fb2k-component
+d01b1981b0b517e3d73247ed162c4b9e9a87858a2ef049ab6f9a33c60cbc2407  gatefold-theme-2.1.0-beta.1.zip
