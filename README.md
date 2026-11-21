@@ -36,7 +36,7 @@
 - Full artist discographies
 - Any album playable via YouTube
 - Smart search that forgives typos
-- Built-in graphic and parametric equalizer
+- Built-in graphic and parametric equalizer, with tuning for 4800+ headphone models
 - Volume levelling to EBU R128
 - Synced lyrics
 - Mixes of the day by how your music sounds

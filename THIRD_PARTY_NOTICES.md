@@ -1,6 +1,6 @@
 # Third-party notices
 
-Gatefold itself is MIT-licensed (see `LICENSE`). It ships the following third-party files, each under its own license:
+Gatefold 2.0 is proprietary software (see `LICENSE`; Gatefold 1.x remains under the MIT License). It ships the following third-party files, each under its own license:
 
 | Files | Project | License | License text |
 |---|---|---|---|
@@ -28,5 +28,11 @@ Downloaded by the theme only when you turn on «Sound analysis (AI)» (not bundl
 |---|---|---|
 | Discogs-EffNet and its classification heads (mood, danceability, voice/instrumental, …) — Music Technology Group, Universitat Pompeu Fabra; heads converted to ONNX, weights unchanged | **CC BY-NC-SA 4.0** — non-commercial use only | https://essentia.upf.edu/models.html |
 | ONNX Runtime Web WebAssembly binary — Microsoft | MIT | https://github.com/microsoft/onnxruntime |
+
+Downloaded by the theme only when you open «Equalizer → Headphones» (not bundled; kept in the `eq-db` branch of the releases repository):
+
+| Data | License | Source |
+|---|---|---|
+| Headphone frequency-response measurements, targets and the parametric equalizer settings computed from them with AutoEq — © Jaakko Pasanen and the measurement authors (oratory1990, Rtings, Innerfidelity, HypetheSonics, Headphone.com and others) | MIT (AutoEq) | https://github.com/jaakkopasanen/AutoEq |
 
 Online services are used only through their public APIs, or — when you turn them on yourself — through unofficial interfaces described in the README. Trademarks belong to their owners. Gatefold is not affiliated with foobar2000, foo_ui_webview2, YouTube/Google, Apple, Deezer, MusicBrainz, LRCLIB, Musixmatch, NetEase, Tencent or Kugou.
