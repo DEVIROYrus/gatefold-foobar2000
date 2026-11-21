@@ -2,6 +2,7 @@
 # here): they arrive on the branch `release-files` in a folder named after the tag (v2.0.1/: the installer, the
 # component, the theme archive, SHA256SUMS.txt, release-notes.md). Pushing the tag publishes them as the
 # repository's latest release (what the in-app update reads), then the branch's folder is no longer needed.
+# A tag with a hyphen (v2.1.0-beta.1) is published as a pre-release, for the beta channel only.
 name: Release
 on:
   push:
@@ -38,8 +39,10 @@ jobs:
           target_commitish: ${{ github.sha }}
           name: Gatefold ${{ env.V }}
           body_path: files/${{ env.TAG }}/release-notes.md
-          prerelease: false
-          make_latest: 'true'
+          # a version with a hyphen (2.1.0-beta.1) is a pre-release: /releases/latest — the page people are sent to
+          # and the stable channel's update check — stays on the last stable version; the beta channel sees it
+          prerelease: ${{ contains(env.TAG, '-') }}
+          make_latest: ${{ contains(env.TAG, '-') && 'false' || 'true' }}
           files: |
             files/${{ env.TAG }}/Gatefold-Setup-*.exe
             files/${{ env.TAG }}/foo_gatefold-*.fb2k-component
