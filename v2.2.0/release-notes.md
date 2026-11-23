@@ -31,7 +31,9 @@ The installer is not code-signed yet: if SmartScreen warns, **More info → Run 
 ### SHA-256
 
 ```
-3ae49f7b420ed44ac411672d5de553edd1621c92de4c53dee6934d822540127e  Gatefold-Setup-2.2.0.exe
-513c9ceefd91f4d8f607149a13a36ae7f79bda27c44c04f377d720fef254faa2  foo_gatefold-2.2.0.fb2k-component
-c3c486c13e8e2eafbb577dd48832b23a7042590ae37444101dd02e9a4a98dacd  gatefold-theme-2.2.0.zip
+a15fd882495f8540917bdb5688e7c6a5ef47fd7725ffdb43ddec5e86036f89e6  Gatefold-Setup-2.2.0.exe
+f07a58576b70a64907ca58b073310fcbab84f502d704e28ce14fe1081d06e1f3  foo_gatefold-2.2.0.fb2k-component
+1b6d6ad10c2749c2b8b59c189447cc24af88762e3d8a645ae8d5bcf2db774e11  gatefold-theme-2.2.0.zip
 ```
+
+<!-- gatefold:build=20261123171748-7b981d4260be -->
